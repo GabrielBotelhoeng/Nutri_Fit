@@ -1,0 +1,128 @@
+version: "3.8"
+
+services:
+  # Postgres local com pgvector — paridade com Supabase Cloud
+  postgres-local:
+    image: pgvector/pgvector:pg16
+    container_name: nutrichat_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: nutrichat
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - nutrichat_postgres_data:/var/lib/postgresql/data
+      - ./docker/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - nutrichat-net
+
+  # Evolution API — WhatsApp
+  evolution-api:
+    image: evoapicloud/evolution-api:latest
+    container_name: nutrichat_evolution
+    restart: unless-stopped
+    depends_on:
+      - redis
+    ports:
+      - "8081:8080"
+    environment:
+      SERVER_URL: http://localhost:8081
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://postgres:postgres@postgres-local:5432/evolution_api
+      CACHE_REDIS_ENABLED: "true"
+      CACHE_REDIS_URI: redis://redis:6379
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY:-nutrichat_local_key}
+      QRCODE_COLOR: "#2D5016"
+    volumes:
+      - evolution_instances:/evolution/instances
+    networks:
+      - nutrichat-net
+
+  # Redis — cache da Evolution API
+  redis:
+    image: redis:7-alpine
+    container_name: nutrichat_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - nutrichat_redis_data:/data
+    networks:
+      - nutrichat-net
+
+  # N8N — orquestracao de workflows
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: nutrichat_n8n
+    restart: unless-stopped
+    depends_on:
+      postgres-local:
+        condition: service_healthy
+    ports:
+      - "5678:5678"
+    environment:
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres-local
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: n8n
+      DB_POSTGRESDB_USER: postgres
+      DB_POSTGRESDB_PASSWORD: postgres
+      N8N_BASIC_AUTH_ACTIVE: "true"
+      N8N_BASIC_AUTH_USER: admin
+      N8N_BASIC_AUTH_PASSWORD: ${N8N_BASIC_AUTH_PASSWORD:-nutrichat123}
+      WEBHOOK_URL: http://localhost:5678
+      GENERIC_TIMEZONE: America/Sao_Paulo
+      N8N_INTERNAL_TOKEN: ${INTERNAL_API_KEY:-nutrichat_internal_dev_key_2026}
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      - nutrichat-net
+
+  # Backend Express — desenvolvimento local
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: nutrichat_backend
+    restart: unless-stopped
+    depends_on:
+      postgres-local:
+        condition: service_healthy
+    ports:
+      - "3001:3001"
+    environment:
+      PORT: 3001
+      NODE_ENV: development
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
+      EVOLUTION_API_URL: http://evolution-api:8080
+      EVOLUTION_API_KEY: ${EVOLUTION_API_KEY:-nutrichat_local_key}
+      N8N_WEBHOOK_URL: http://n8n:5678
+      CLAUDE_API_KEY: ${CLAUDE_API_KEY}
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-nutrichat_internal_dev_key_2026}
+      PANEL_API_KEY: ${PANEL_API_KEY:-nutrichat_panel_key_dev}
+    volumes:
+      - ./backend/src:/app/src
+    networks:
+      - nutrichat-net
+
+volumes:
+  nutrichat_postgres_data:
+  evolution_instances:
+  nutrichat_redis_data:
+  n8n_data:
+
+networks:
+  nutrichat-net:
+    driver: bridge

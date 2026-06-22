@@ -1,0 +1,74 @@
+{
+  "name": "NutriChat — Alertas de Refeicao, Agua e Suplementos (Cron 15min)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "*/15 * * * *"
+            }
+          ]
+        }
+      },
+      "id": "cron-alertas",
+      "name": "Cron a cada 15 minutos",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// N8N usa GENERIC_TIMEZONE=America/Sao_Paulo\n// new Date() no Code node retorna UTC; formatar para horario de Brasilia\nconst now = new Date();\n// Ajuste UTC-3 (Brasilia)\nconst brasiliaOffset = -3 * 60;\nconst localTime = new Date(now.getTime() + brasiliaOffset * 60 * 1000);\nconst horas = String(localTime.getUTCHours()).padStart(2, '0');\nconst minutos = String(localTime.getUTCMinutes()).padStart(2, '0');\nreturn [{ json: { horario: `${horas}:${minutos}` } }];"
+      },
+      "id": "calcular-horario",
+      "name": "Calcular Horario Atual (Brasilia)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://backend:3001/api/alertas/disparar",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-internal-key",
+              "value": "nutrichat_internal_dev_key_2026"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "horario",
+              "value": "={{ $json.horario }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "disparar-alertas",
+      "name": "Disparar Alertas no Backend",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [600, 300]
+    }
+  ],
+  "connections": {
+    "Cron a cada 15 minutos": {
+      "main": [[{ "node": "Calcular Horario Atual (Brasilia)", "type": "main", "index": 0 }]]
+    },
+    "Calcular Horario Atual (Brasilia)": {
+      "main": [[{ "node": "Disparar Alertas no Backend", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

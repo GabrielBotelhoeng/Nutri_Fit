@@ -1,0 +1,10 @@
+@import "tailwindcss";
+
+@theme {
+  --color-floresta: #2D5016;
+  --color-offwhite: #F0F7EC;
+  --color-terra: #6B3D1E;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; font-family: sans-serif; }

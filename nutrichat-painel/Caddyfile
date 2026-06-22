@@ -1,0 +1,8 @@
+:80 {
+    root * dist
+    file_server
+    try_files {path} /index.html
+    encode gzip
+    auto_https off
+    trusted_proxies static private_ranges 100.0.0.0/8
+}

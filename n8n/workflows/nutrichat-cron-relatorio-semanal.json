@@ -1,0 +1,52 @@
+{
+  "name": "NutriChat — Relatorio Semanal (Domingo 08h)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 0"
+            }
+          ]
+        }
+      },
+      "id": "cron-relatorio",
+      "name": "Cron Domingo 08h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://backend:3001/api/relatorio/semanal",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-internal-key",
+              "value": "nutrichat_internal_dev_key_2026"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "gerar-relatorio",
+      "name": "Gerar Relatorio Semanal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [400, 300]
+    }
+  ],
+  "connections": {
+    "Cron Domingo 08h": {
+      "main": [[{ "node": "Gerar Relatorio Semanal", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

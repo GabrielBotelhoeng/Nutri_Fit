@@ -1,0 +1,52 @@
+{
+  "name": "NutriChat — Verificacao de Expiracao (Cron Diario)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "Cron 09h diario",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://backend:3001/api/expiracao/verificar",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-internal-key",
+              "value": "nutrichat_internal_dev_key_2026"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "verificar-expiracao",
+      "name": "Chamar Verificacao de Expiracao",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [400, 300]
+    }
+  ],
+  "connections": {
+    "Cron 09h diario": {
+      "main": [[{ "node": "Chamar Verificacao de Expiracao", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

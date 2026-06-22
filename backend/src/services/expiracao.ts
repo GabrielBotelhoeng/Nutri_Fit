@@ -1,0 +1,62 @@
+import { createClient } from '@supabase/supabase-js';
+import { env } from '../config/env';
+import { sendText } from './evolution';
+
+const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
+
+export async function verificarExpiracoes(): Promise<void> {
+  const hoje = new Date().toISOString().slice(0, 10);
+
+  // AGENT-19: Bloquear pacientes cujo plano venceu hoje ou antes
+  const { data: vencidos, error: errVencidos } = await supabase
+    .from('pacientes')
+    .select('id, nome, whatsapp')
+    .lte('data_expiracao', hoje)
+    .eq('ativo', true);
+
+  if (errVencidos) {
+    console.error('[expiracao] Erro ao buscar vencidos:', errVencidos.message);
+  } else if (vencidos && vencidos.length > 0) {
+    for (const p of vencidos) {
+      await supabase.from('pacientes').update({ ativo: false }).eq('id', p.id);
+      await sendText(
+        p.whatsapp as string,
+        `⏰ Seu plano NutriChat venceu hoje. Para continuar contando com o acompanhamento nutricional, entre em contato com seu nutricionista para renovar. 💚`,
+      );
+      console.log(`[expiracao] Paciente ${p.nome} bloqueado (plano vencido)`);
+    }
+  }
+
+  // AGENT-18: Avisar pacientes que vencem em 1, 2 ou 3 dias
+  const em3Dias = new Date();
+  em3Dias.setDate(em3Dias.getDate() + 3);
+  const dataLimite = em3Dias.toISOString().slice(0, 10);
+
+  const amanha = new Date();
+  amanha.setDate(amanha.getDate() + 1);
+  const dataAmanha = amanha.toISOString().slice(0, 10);
+
+  const { data: expirando, error: errExpirando } = await supabase
+    .from('pacientes')
+    .select('id, nome, whatsapp, data_expiracao')
+    .gte('data_expiracao', dataAmanha)
+    .lte('data_expiracao', dataLimite)
+    .eq('ativo', true);
+
+  if (errExpirando) {
+    console.error('[expiracao] Erro ao buscar expirando:', errExpirando.message);
+  } else if (expirando && expirando.length > 0) {
+    for (const p of expirando) {
+      const dataExp = new Date(p.data_expiracao as string);
+      const diffDias = Math.ceil((dataExp.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+      const diasStr = diffDias === 1 ? '1 dia' : `${diffDias} dias`;
+      await sendText(
+        p.whatsapp as string,
+        `⚠️ Atenção, ${p.nome}! Seu plano NutriChat vence em *${diasStr}*.\n\nPara continuar acompanhando sua dieta, renove com seu nutricionista. 💚`,
+      );
+      console.log(`[expiracao] Aviso enviado para ${p.nome} — vence em ${diasStr}`);
+    }
+  }
+
+  console.log('[expiracao] Verificacao concluida');
+}
