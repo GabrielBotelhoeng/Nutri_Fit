@@ -25,8 +25,11 @@ import { sincronizarAlertasDaEntrevista } from './alertas';
 
 const claude = new Anthropic({ apiKey: env.CLAUDE_API_KEY });
 
-// D-03: Acumular agua via RPC
-async function registrarAgua(pacienteId: string, aguaMl: number): Promise<string> {
+// D-03: Acumular agua via RPC. Versao silenciosa — usada tanto pelo handler
+// dedicado quanto quando a agua vem misturada numa mensagem de refeicao
+// ("comi X com 500ml de agua"), sem enviar mensagem propria pra nao duplicar
+// o card da refeicao.
+async function registrarAguaContador(pacienteId: string, aguaMl: number): Promise<boolean> {
   const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
   const hoje = new Date().toISOString().slice(0, 10);
   const { error } = await supabase.rpc('registrar_agua_diaria', {
@@ -36,9 +39,27 @@ async function registrarAgua(pacienteId: string, aguaMl: number): Promise<string
   });
   if (error) {
     console.error('[agent] Erro ao registrar agua:', error.message);
-    return `⚠️ Erro ao registrar hidratação. Tente novamente.`;
+    return false;
   }
+  return true;
+}
+
+async function registrarAgua(pacienteId: string, aguaMl: number): Promise<string> {
+  const ok = await registrarAguaContador(pacienteId, aguaMl);
+  if (!ok) return `⚠️ Erro ao registrar hidratação. Tente novamente.`;
   return `💧 *${aguaMl}ml* de água registrados! Continue se hidratando. 💚`;
+}
+
+// Extrai ml de agua de uma mensagem. Suporta "500ml", "2 litros", "3 copos"
+// (copo = 250ml). Retorna 0 se nao detectar quantidade.
+function extrairAguaMl(texto: string): number {
+  const matchMl = texto.match(/(\d+)\s*ml/i);
+  if (matchMl) return parseInt(matchMl[1], 10);
+  const matchLitro = texto.match(/(\d+(?:[.,]\d+)?)\s*litros?/i);
+  if (matchLitro) return Math.round(parseFloat(matchLitro[1].replace(',', '.')) * 1000);
+  const matchCopo = texto.match(/(\d+)\s*copos?/i);
+  if (matchCopo) return parseInt(matchCopo[1], 10) * 250;
+  return 0;
 }
 
 const TOTAL_ETAPAS = 14;
@@ -551,29 +572,63 @@ export async function processarMensagem(phone: string, texto: string): Promise<v
     }
   }
 
+  // P0-2: paciente respondendo pergunta "quantas gramas de X?" — TTL 10 min,
+  // gerenciado em meal.ts. Tem que vir antes do roteamento normal pra resposta
+  // curta ("estima", "100g") nao cair no ehRegistro=false e sumir.
+  const refeicaoPendente = mealService.obterRefeicaoPendenteSeValida(dadosEstado);
+  if (refeicaoPendente) {
+    await mealService.processarRespostaQuantidade(phone, texto, paciente, refeicaoPendente);
+    return;
+  }
+
   // Detectar intenção antes de despachar
   const textoLower = texto.toLowerCase();
   const ehSubstituicao = /substitu|nao tenho|não tenho|alternativa|trocar/.test(textoLower);
   // Verbos no passado + medidas indicam registro. Substantivos puros (cafe, lanche,
   // refeicao, prato) caem em perguntas tipo "o que comer no cafe?" — nao sao gatilho.
-  const ehRegistro = /\bcomi\b|\btomei\b|\bbebi\b|\balmocei\b|\bjantei\b|\bg de\b|\bml de\b|\bcolher|\bgramas\b/.test(textoLower);
+  // \d+\s*g\b / \d+\s*ml\b cobrem "200g de frango", "100 ml de leite". O \bg de\b
+  // antigo nao casava porque em "200g" nao ha word boundary entre digito e letra.
+  const ehRegistro = /\bcomi\b|\btomei\b|\bbebi\b|\balmocei\b|\bjantei\b|\d+\s*g\b|\d+\s*ml\b|\bcolher|\bgramas\b/.test(textoLower);
 
-  // D-03: Detectar registro de agua — verificar ANTES de ehRegistro para extrair
+  // P0-1: fast-path regex de correcao da ultima refeicao (P1-3 troca por
+  // classificador estruturado). Aceita "a verdade" (autocorretor do WhatsApp
+  // come o "n" o tempo todo) e "esqueci" sozinho (a gate ehRegistro/ehSubstituicao
+  // ja impede que "esqueci o que comi" sem quantidade dispare correcao).
+  const ehCorrecao = /\b(na\s+verdade|a\s+verdade|foram|esqueci|corrige|corrigir|corre[çc][aã]o|na\s+real|era\s+pra\s+ser)\b/i.test(textoLower);
+
+  // D-03: Detectar mencao a agua. Quando a msg e SO agua ("bebi 500ml") manda
+  // resposta dedicada. Quando vem combinada com refeicao ("comi pao com 500ml
+  // de agua"), incrementa o contador silenciosamente e segue pro pipeline de
+  // refeicao — a barra 💧 do card mostra o impacto. Sem o silencioso, o
+  // paciente perdia o registro da comida (bug P1-3 emergindo).
   const AGUA_RE = /(\d+)\s*(ml|litros?|copos?)|bebi\s+\d+\s*(ml|litros?|copos?)/i;
   const ehAguaMsg = AGUA_RE.test(textoLower) && /agua|bebi|hidrat|bebo/i.test(textoLower);
 
-  if (ehAguaMsg) {
-    const matchMl = texto.match(/(\d+)\s*ml/i);
-    const matchLitro = texto.match(/(\d+)\s*litros?/i);
-    const matchCopo = texto.match(/(\d+)\s*copos?/i);
-    let aguaMl = 0;
-    if (matchMl) aguaMl = parseInt(matchMl[1], 10);
-    else if (matchLitro) aguaMl = parseInt(matchLitro[1], 10) * 1000;
-    else if (matchCopo) aguaMl = parseInt(matchCopo[1], 10) * 250;
-
+  if (ehAguaMsg && !ehRegistro) {
+    const aguaMl = extrairAguaMl(texto);
     if (aguaMl > 0 && aguaMl <= 5000) {
       const resposta = await registrarAgua(paciente.id, aguaMl);
       await sendText(phone, resposta);
+      return;
+    }
+  }
+
+  if (ehAguaMsg && ehRegistro) {
+    const aguaMl = extrairAguaMl(texto);
+    if (aguaMl > 0 && aguaMl <= 5000) {
+      await registrarAguaContador(paciente.id, aguaMl);
+      // Sem return — segue pro pipeline de refeicao abaixo.
+    }
+  }
+
+  // P0-1: correcao da ultima refeicao — substitui (UPDATE + delta), nao soma.
+  // So aciona se existe ultima_refeicao dentro do TTL e o texto cita comida
+  // (precisa ter algo pra recalcular — frase de correcao sem refeicao cai no
+  // fluxo normal).
+  if (ehCorrecao && (ehRegistro || ehSubstituicao)) {
+    const ultima = mealService.obterUltimaRefeicaoSeRecente(dadosEstado);
+    if (ultima) {
+      await mealService.processarTextoCorrecao(phone, texto, paciente, ultima);
       return;
     }
   }

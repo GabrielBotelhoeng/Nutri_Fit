@@ -5,6 +5,28 @@ const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
 
 export type ObjetivoNutricional = 'emagrecer' | 'ganhar_massa' | 'manter' | 'saude_geral';
 
+// Snapshot da ultima refeicao registrada no dia — base para o fluxo
+// "corrigir ultima refeicao" (P0-1). Guarda o id da linha em `refeicoes`
+// pra fazer UPDATE in-place + os macros antigos pra calcular o delta que
+// vai pra `corrigir_registro_diario`. registrado_em alimenta o TTL: fora
+// da janela, "na verdade foi assim" volta a ser registro novo.
+export interface UltimaRefeicao {
+  id: string;
+  descricao: string;
+  macros: {
+    kcal: number;
+    proteina_g: number;
+    carbo_g: number;
+    gordura_g: number;
+  };
+  itens?: Array<{
+    nome: string;
+    quantidade_g: number;
+    quantidade_informada: boolean;
+  }>;
+  registrado_em: string;
+}
+
 export interface EstadoEntrevista {
   status: 'pendente' | 'em_andamento' | 'completa';
   etapa: number;

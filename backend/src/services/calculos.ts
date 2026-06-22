@@ -22,6 +22,7 @@ export interface MacrosDiarios {
   proteina_pct: number;
   carbo_pct: number;
   gordura_pct: number;
+  agua_ml?: number;
 }
 
 export interface ResultadoTMB {
@@ -210,6 +211,8 @@ export function obterMetas(dados: Record<string, unknown>): MacrosDiarios {
   const prot = dados['metas_proteina_g'] as number | undefined;
   const carb = dados['metas_carbo_g'] as number | undefined;
   const gord = dados['metas_gordura_g'] as number | undefined;
+  const aguaRaw = dados['hidratacao_ml'] as number | undefined;
+  const agua_ml = typeof aguaRaw === 'number' && aguaRaw > 0 ? aguaRaw : undefined;
 
   if (kcal !== undefined && prot !== undefined && carb !== undefined && gord !== undefined) {
     const kcalTotal = prot * 4 + carb * 4 + gord * 9 || 1;
@@ -221,6 +224,7 @@ export function obterMetas(dados: Record<string, unknown>): MacrosDiarios {
       proteina_pct: Math.round(((prot * 4) / kcalTotal) * 100),
       carbo_pct: Math.round(((carb * 4) / kcalTotal) * 100),
       gordura_pct: Math.round(((gord * 9) / kcalTotal) * 100),
+      agua_ml,
     };
   }
 
@@ -234,6 +238,7 @@ export function obterMetas(dados: Record<string, unknown>): MacrosDiarios {
     proteina_pct: 30,
     carbo_pct: 40,
     gordura_pct: 30,
+    agua_ml,
   };
 }
 
