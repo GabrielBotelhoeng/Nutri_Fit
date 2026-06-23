@@ -23,6 +23,7 @@ import {
 } from './calculos';
 import { sincronizarAlertasDaEntrevista } from './alertas';
 import { classificarIntencao, mencionaAguaCombinada, removerMencaoAgua } from './intent';
+import { analisarSuplementos, formatarAvisoControlados } from './suplementos';
 
 const claude = new Anthropic({ apiKey: env.CLAUDE_API_KEY });
 
@@ -483,6 +484,36 @@ export async function processarMensagem(phone: string, texto: string): Promise<v
 
       // Msg 1: numeros (TMB/TDEE + macros + hidratacao + creatina)
       await sendText(phone, formatarMensagemCalculos(tmb, macros, hidratacao, creatina));
+
+      // P0-3: flag de suplementos controlados (anabolizantes, hormonios, doping).
+      // Se ha algum, envia aviso ao paciente e persiste em entrevista_dados pro
+      // nutricionista ver no painel. Try/catch isolado — nao bloqueia a entrevista.
+      try {
+        const analise = analisarSuplementos(dadosCompletos.suplementos);
+        if (analise.controlados.length > 0) {
+          await sendText(phone, formatarAvisoControlados(analise.controlados, paciente.nome));
+          await atualizarEstado(paciente.id, {
+            dados: {
+              ...dadosCompletos,
+              tmb_kcal: tmb.tmb_kcal,
+              tdee_kcal: tmb.tdee_kcal,
+              hidratacao_ml: hidratacao.meta_ml,
+              creatina_g: creatina.dose_g,
+              metas_kcal: macros.kcal,
+              metas_proteina_g: macros.proteina_g,
+              metas_carbo_g: macros.carbo_g,
+              metas_gordura_g: macros.gordura_g,
+              suplementos_controlados: analise.controlados,
+            },
+          });
+          console.warn(
+            `[agent] Suplementos controlados detectados em ${paciente.nome}:`,
+            analise.controlados.map((c) => c.nome).join(', '),
+          );
+        }
+      } catch (err) {
+        console.error('[agent] Falha ao analisar suplementos:', err);
+      }
 
       // Msg 2: explicacao personalizada via Haiku 4.5. Try/catch isolado —
       // se o Haiku falhar, o paciente ja recebeu os numeros e seguimos com as instrucoes.
