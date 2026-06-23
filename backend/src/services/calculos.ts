@@ -43,25 +43,122 @@ export interface ResultadoCreatina {
   mensagem: string;
 }
 
-// Fatores de atividade (Mifflin-St Jeor / Harris-Benedict)
-const FATORES_ATIVIDADE: Array<{ palavras: string[]; fator: number; nivel: string }> = [
-  { palavras: ['sedentario', 'sedentária', 'nao pratico', 'nao faco'], fator: 1.2, nivel: 'Sedentario' },
-  { palavras: ['caminhada', 'leve', '1x', '2x', 'uma vez', 'duas vezes'], fator: 1.375, nivel: 'Levemente ativo' },
-  { palavras: ['3x', '4x', 'tres', 'quatro', 'moderado', 'musculacao', 'musculação'], fator: 1.55, nivel: 'Moderadamente ativo' },
-  { palavras: ['5x', '6x', 'cinco', 'seis', 'intenso', 'diario', 'diário'], fator: 1.725, nivel: 'Muito ativo' },
-  { palavras: ['7x', 'todo dia', 'duas vezes ao dia', 'atletismo'], fator: 1.9, nivel: 'Extremamente ativo' },
-];
+// Fatores de atividade (Mifflin-St Jeor / Harris-Benedict).
+// Separados em dois eixos (P1-4): frequência semanal domina, tipo orienta o
+// default quando a frequência não está clara. Antes era first-match-wins numa
+// lista achatada — "musculacao 5x" batia em "musculacao" (1.55) sem ler o "5x".
 
-function detectarFatorAtividade(atividadeTipo: string, frequencia?: string): { fator: number; nivel: string } {
-  const texto = `${atividadeTipo} ${frequencia ?? ''}`.toLowerCase();
+type Nivel = {
+  fator: number;
+  nivel: string;
+};
 
-  for (const entry of FATORES_ATIVIDADE) {
-    if (entry.palavras.some((p) => texto.includes(p))) {
-      return { fator: entry.fator, nivel: entry.nivel };
-    }
+const NIVEL_SEDENTARIO: Nivel = { fator: 1.2, nivel: 'Sedentario' };
+const NIVEL_LEVE: Nivel = { fator: 1.375, nivel: 'Levemente ativo' };
+const NIVEL_MODERADO: Nivel = { fator: 1.55, nivel: 'Moderadamente ativo' };
+const NIVEL_MUITO_ATIVO: Nivel = { fator: 1.725, nivel: 'Muito ativo' };
+const NIVEL_EXTREMO: Nivel = { fator: 1.9, nivel: 'Extremamente ativo' };
+
+const NUMEROS_PT: Record<string, number> = {
+  zero: 0,
+  uma: 1, um: 1,
+  duas: 2, dois: 2,
+  tres: 3, três: 3,
+  quatro: 4,
+  cinco: 5,
+  seis: 6,
+  sete: 7,
+};
+
+// Extrai frequência semanal do texto. Retorna `null` se não detectar (deixa o
+// tipo orientar o default).
+export function extrairFrequenciaSemanal(texto: string): number | null {
+  const t = texto.toLowerCase();
+
+  // Sinais de "todo dia / diário / 2x ao dia" → 7+ (cap em 7 pra contagem)
+  if (/(2|duas)\s*(x|vezes)\s*(ao|por|no)\s*dia/.test(t)) return 7;
+  if (/\btodo(s)?\s+(o\s+)?dia/.test(t) || /\bdiari[oa]\b/.test(t) || /\btodos os dias\b/.test(t)) return 7;
+
+  // "Nx" / "N vezes" / "N x semana"
+  const matchDigito = t.match(/(\d+)\s*(x|vezes)(?:\s*(?:por|na|\/|\s)\s*(?:semana|sem))?/);
+  if (matchDigito) return parseInt(matchDigito[1], 10);
+
+  // "N x na semana" sem palavra "vezes"
+  const matchSlashSemana = t.match(/(\d+)\s*\/?\s*semana/);
+  if (matchSlashSemana) return parseInt(matchSlashSemana[1], 10);
+
+  // Números por extenso ("cinco vezes", "tres x", "duas vezes na semana")
+  for (const [palavra, n] of Object.entries(NUMEROS_PT)) {
+    const re = new RegExp(`\\b${palavra}\\s*(x|vezes)`);
+    if (re.test(t)) return n;
   }
-  // Default moderado (musculacao sem frequencia especificada)
-  return { fator: 1.55, nivel: 'Moderadamente ativo' };
+
+  // "Não pratico / nada / sedentário" → freq 0
+  if (/\bnao\s+(pratico|faco|faço|treino)/.test(t) || /\bnenhuma\b/.test(t) || /\bsedentari[oa]\b/.test(t)) {
+    return 0;
+  }
+
+  return null;
+}
+
+type TipoAtividade = 'sedentario' | 'leve' | 'moderado' | 'intenso' | 'desconhecido';
+
+// Classifica o tipo de atividade. "Intenso" inclui atletismo, crossfit e
+// menções explícitas de "intenso/pesado". "Moderado" cobre musculação, corrida,
+// natação típicas. "Leve" é caminhada, yoga, alongamento.
+export function classificarTipoAtividade(texto: string): TipoAtividade {
+  const t = texto.toLowerCase();
+  if (/\bsedentari[oa]\b/.test(t) || /\bnao\s+(pratico|faco|faço|treino)/.test(t) || /\bnenhuma\b/.test(t)) {
+    return 'sedentario';
+  }
+  if (/\b(atletismo|atleta|crossfit|cross\s*fit|profissional|competi(c|ç)ao)\b/.test(t) || /\bintens[oa]\b/.test(t) || /\bpesad[oa]\b/.test(t)) {
+    return 'intenso';
+  }
+  if (/\b(musculacao|musculação|corrida|correr|natacao|natação|ciclismo|bike|pedal|futebol|crossfit|treino|academia|moderad[oa])\b/.test(t)) {
+    return 'moderado';
+  }
+  if (/\b(caminhada|caminhar|yoga|alongamento|pilates|leve)\b/.test(t)) {
+    return 'leve';
+  }
+  return 'desconhecido';
+}
+
+// Combina frequência + tipo no fator final.
+// Regra: sedentário no tipo sobrescreve frequência (paciente disse "não
+// pratico"). Caso contrário a frequência domina; o tipo só decide o default
+// quando a frequência é desconhecida.
+export function detectarFatorAtividade(
+  atividadeTipo: string,
+  frequencia?: string,
+): { fator: number; nivel: string } {
+  const textoTipo = atividadeTipo || '';
+  const textoFreq = frequencia ?? '';
+  const tipo = classificarTipoAtividade(textoTipo);
+
+  // Sedentário sobrescreve qualquer frequência.
+  if (tipo === 'sedentario') return NIVEL_SEDENTARIO;
+
+  const freq = extrairFrequenciaSemanal(`${textoTipo} ${textoFreq}`);
+
+  if (freq !== null) {
+    if (freq <= 0) return NIVEL_SEDENTARIO;
+    if (freq <= 2) {
+      // Treino pesado mesmo só 2x pode justificar leve a moderado; mantemos
+      // 1.375 que é o padrão para 1-2x na maioria das referências.
+      return NIVEL_LEVE;
+    }
+    if (freq <= 4) return NIVEL_MODERADO;
+    if (freq <= 6) return NIVEL_MUITO_ATIVO;
+    return NIVEL_EXTREMO;
+  }
+
+  // Sem frequência clara — tipo orienta o default.
+  switch (tipo) {
+    case 'leve': return NIVEL_LEVE;
+    case 'intenso': return NIVEL_MUITO_ATIVO;
+    case 'moderado': return NIVEL_MODERADO;
+    default: return NIVEL_MODERADO; // mantém compat com versão antiga
+  }
 }
 
 export function calcularTMB(dados: DadosEntrevista): ResultadoTMB {
