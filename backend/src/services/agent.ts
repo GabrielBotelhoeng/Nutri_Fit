@@ -2,7 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@supabase/supabase-js';
 import { env } from '../config/env';
 import { sendText } from './evolution';
-import { query as ragQuery } from './rag';
+import { query as ragQuery, buscarHorariosDietaPaciente } from './rag';
 import {
   buscarPacientePorWhatsapp,
   getEstado,
@@ -223,6 +223,195 @@ function parseHorariosRefeicoes(texto: string): Record<string, string> {
   return resultado;
 }
 
+// Extrai todos os horarios validos do texto em ordem de aparicao, sem mapear
+// para refeicoes. Usado pelo fluxo "parcial" da etapa 14 (P1-6) quando o
+// paciente envia so as horas dos faltantes — ex: "10h e 16h" quando faltam
+// lanche_manha e lanche_tarde. Aceita "7h", "7:00", "7h00", "19h30", "12:30".
+function extrairHorariosEmOrdem(texto: string): string[] {
+  const horaRe = /(\d{1,2})[:hH](?:(\d{2}))?/g;
+  return [...texto.toLowerCase().matchAll(horaRe)]
+    .map((m) => {
+      const h = parseInt(m[1], 10);
+      const mm = m[2] ? parseInt(m[2], 10) : 0;
+      return formatarHoraValida(h, mm);
+    })
+    .filter((x): x is string => x !== null);
+}
+
+// === P1-6: helpers da etapa 14 quando o PDF da dieta ja traz horarios ===
+
+type RefeicaoKey = 'cafe' | 'lanche_manha' | 'almoco' | 'lanche_tarde' | 'jantar';
+
+const LABEL_REFEICAO: Record<RefeicaoKey, string> = {
+  cafe: '☕ Cafe',
+  lanche_manha: '🥪 Lanche da manha',
+  almoco: '🍽️ Almoco',
+  lanche_tarde: '🍎 Lanche da tarde',
+  jantar: '🌙 Jantar',
+};
+
+// "07:00" → "7h"; "07:30" → "7h30"; "12:30" → "12h30"
+function formatarHoraLabel(hhmm: string): string {
+  const m = hhmm.match(/^(\d{2}):(\d{2})$/);
+  if (!m) return hhmm;
+  const h = parseInt(m[1], 10);
+  const mm = parseInt(m[2], 10);
+  return mm === 0 ? `${h}h` : `${h}h${m[2]}`;
+}
+
+const REFEICAO_KEYS_ORDEM: RefeicaoKey[] = ['cafe', 'lanche_manha', 'almoco', 'lanche_tarde', 'jantar'];
+
+interface PerguntaEtapa14 {
+  mensagem: string;
+  // Campos pra mesclar em entrevista_dados antes de mandar a pergunta.
+  // confirmacao_horarios_pendente = true → "sim" usa pre_extraidos; "nao" cai
+  // em pergunta aberta. confirmacao_horarios_pendente = 'parcial' → o paciente
+  // responde so os faltantes, o parser mescla com horarios_pre_extraidos.
+  dadosExtras: Record<string, unknown>;
+}
+
+export async function prepararPerguntaEtapa14(pacienteId: string): Promise<PerguntaEtapa14> {
+  const horarios = await buscarHorariosDietaPaciente(pacienteId);
+  if (!horarios) {
+    return { mensagem: PERGUNTAS_ENTREVISTA[14], dadosExtras: {} };
+  }
+
+  const preenchidos: Array<[RefeicaoKey, string]> = [];
+  const faltantes: RefeicaoKey[] = [];
+  for (const k of REFEICAO_KEYS_ORDEM) {
+    const v = horarios[k];
+    if (typeof v === 'string' && v.length > 0) preenchidos.push([k, v]);
+    else faltantes.push(k);
+  }
+
+  if (faltantes.length === 0) {
+    const linhas = preenchidos.map(([k, h]) => `${LABEL_REFEICAO[k]} — ${formatarHoraLabel(h)}`);
+    const mensagem =
+      `🍽️ *Vi na sua dieta os seguintes horarios:*\n\n` +
+      linhas.join('\n') +
+      `\n\nConfere? (responda *sim* ou *nao*)`;
+    return {
+      mensagem,
+      dadosExtras: {
+        confirmacao_horarios_pendente: 'completa',
+        horarios_pre_extraidos: Object.fromEntries(preenchidos),
+      },
+    };
+  }
+
+  // Parcial: confirmar o que tem + pedir o que falta numa frase so
+  const linhasPreenchidas = preenchidos
+    .map(([k, h]) => `${LABEL_REFEICAO[k]} — ${formatarHoraLabel(h)}`)
+    .join(', ');
+  const labelsFaltantes = faltantes
+    .map((k) => LABEL_REFEICAO[k].replace(/^[^\s]+\s/, ''))
+    .join(', ');
+  const mensagem =
+    `🍽️ *Vi na sua dieta:* ${linhasPreenchidas}.\n\n` +
+    `Que horas voce costuma fazer *${labelsFaltantes}*?\n` +
+    `(ex: "10h e 16h")`;
+  return {
+    mensagem,
+    dadosExtras: {
+      confirmacao_horarios_pendente: 'parcial',
+      horarios_pre_extraidos: Object.fromEntries(preenchidos),
+    },
+  };
+}
+
+const SIM_RE = /^(sim|s|yes|confirmo|confere|ok|certo)\b/i;
+const NAO_RE = /^(n[aã]o|n|no|nao confere|errado)\b/i;
+
+interface RespostaEtapa14Especial {
+  handled: boolean;
+  // Quando handled=true, o caller usa esses campos pro fluxo.
+  // novoDado: dados a serem mesclados (horarios_refeicoes + limpeza de flags).
+  // mensagemRepetir: se preenchido, repete sem avancar etapa.
+  novoDado?: Partial<EstadoEntrevista['dados']>;
+  mensagemRepetir?: string;
+}
+
+// Retorna handled=true quando o caso e "confirmacao do PDF". handled=false
+// significa "cai no parser tradicional" (texto livre na pergunta aberta).
+export function tratarRespostaConfirmacaoHorarios(
+  texto: string,
+  dados: EstadoEntrevista['dados'],
+): RespostaEtapa14Especial {
+  const flag = (dados as Record<string, unknown>)['confirmacao_horarios_pendente'];
+  const pre = (dados as Record<string, unknown>)['horarios_pre_extraidos'] as
+    | Record<string, string>
+    | undefined;
+  if (!flag || !pre) return { handled: false };
+
+  const t = texto.trim();
+
+  if (flag === 'completa') {
+    if (SIM_RE.test(t)) {
+      return {
+        handled: true,
+        novoDado: {
+          horarios_refeicoes: pre,
+          // limpar flags do estado
+          confirmacao_horarios_pendente: null,
+          horarios_pre_extraidos: null,
+        } as Partial<EstadoEntrevista['dados']>,
+      };
+    }
+    if (NAO_RE.test(t)) {
+      // Sinaliza: limpar flag e mandar pergunta aberta agora, sem avancar
+      return {
+        handled: true,
+        mensagemRepetir: PERGUNTAS_ENTREVISTA[14],
+        novoDado: {
+          confirmacao_horarios_pendente: null,
+          horarios_pre_extraidos: null,
+        } as Partial<EstadoEntrevista['dados']>,
+      };
+    }
+    // resposta nao reconhecida → pedir sim/nao explicito
+    return {
+      handled: true,
+      mensagemRepetir: '❓ Responda *sim* se os horarios conferem ou *nao* para informar diferentes.',
+    };
+  }
+
+  if (flag === 'parcial') {
+    // Esperamos os faltantes em texto livre. Estrategia em camadas:
+    // 1. parseHorariosRefeicoes (rotulado ou ordem-3/5 — cobre "cafe 8h",
+    //    "lanche da manha 10h, lanche da tarde 16h").
+    // 2. Fallback: extrair todos os horarios em ordem e mapear nos faltantes
+    //    quando a quantidade bate. Cobre "10h e 16h" quando faltam dois (a
+    //    sugestao da mensagem parcial implica exatamente isso).
+    const faltantes = REFEICAO_KEYS_ORDEM.filter((k) => !(k in pre));
+    const rotulados = parseHorariosRefeicoes(texto);
+    let novos: Record<string, string> = rotulados;
+    if (Object.keys(rotulados).length === 0) {
+      const horasEmOrdem = extrairHorariosEmOrdem(texto);
+      if (horasEmOrdem.length === faltantes.length && faltantes.length > 0) {
+        novos = {};
+        faltantes.forEach((k, i) => { novos[k] = horasEmOrdem[i]; });
+      }
+    }
+    if (Object.keys(novos).length === 0) {
+      return {
+        handled: true,
+        mensagemRepetir: '❓ Nao entendi os horarios. Tente algo como "10h e 16h".',
+      };
+    }
+    const mesclado: Record<string, string> = { ...pre, ...novos };
+    return {
+      handled: true,
+      novoDado: {
+        horarios_refeicoes: mesclado,
+        confirmacao_horarios_pendente: null,
+        horarios_pre_extraidos: null,
+      } as Partial<EstadoEntrevista['dados']>,
+    };
+  }
+
+  return { handled: false };
+}
+
 async function processarRespostaEntrevista(
   _pacienteId: string,
   etapa: number,
@@ -422,7 +611,31 @@ export async function processarMensagem(phone: string, texto: string): Promise<v
   // 4. Entrevista em andamento — coletar dados
   if (estado.status === 'em_andamento') {
     const etapa = estado.etapa;
-    const novoDado = await processarRespostaEntrevista(paciente.id, etapa, texto, estado.dados);
+
+    // P1-6: na etapa 14 podemos estar em modo de confirmacao do PDF da dieta
+    // ou em modo de coleta dos faltantes. tratarRespostaConfirmacaoHorarios
+    // resolve esses dois caminhos; handled=false delega ao parser tradicional.
+    let novoDado: Partial<EstadoEntrevista['dados']> = {};
+    let pulouProximaEtapa = false;
+    if (etapa === 14) {
+      const especial = tratarRespostaConfirmacaoHorarios(texto, estado.dados);
+      if (especial.handled) {
+        if (especial.mensagemRepetir) {
+          // Limpa flags se houver e repete (nao avanca etapa)
+          if (especial.novoDado) {
+            await atualizarEstado(paciente.id, { dados: especial.novoDado });
+          }
+          await sendText(phone, especial.mensagemRepetir);
+          return;
+        }
+        novoDado = especial.novoDado ?? {};
+        pulouProximaEtapa = true; // ja temos horarios_refeicoes
+      }
+    }
+
+    if (!pulouProximaEtapa) {
+      novoDado = await processarRespostaEntrevista(paciente.id, etapa, texto, estado.dados);
+    }
 
     if (Object.keys(novoDado).length === 0) {
       // Resposta invalida — repetir pergunta
@@ -546,8 +759,19 @@ export async function processarMensagem(phone: string, texto: string): Promise<v
         `Vamos la! 🚀`,
       );
     } else {
-      await atualizarEstado(paciente.id, { etapa: proximaEtapa, dados: novoDado });
-      await sendText(phone, PERGUNTAS_ENTREVISTA[proximaEtapa]);
+      // P1-6: quando avancamos para a etapa 14 e a dieta ja tem horarios
+      // extraidos do PDF, mandamos confirmacao em vez da pergunta aberta.
+      if (proximaEtapa === 14) {
+        const prep = await prepararPerguntaEtapa14(paciente.id);
+        await atualizarEstado(paciente.id, {
+          etapa: proximaEtapa,
+          dados: { ...novoDado, ...prep.dadosExtras } as Partial<EstadoEntrevista['dados']>,
+        });
+        await sendText(phone, prep.mensagem);
+      } else {
+        await atualizarEstado(paciente.id, { etapa: proximaEtapa, dados: novoDado });
+        await sendText(phone, PERGUNTAS_ENTREVISTA[proximaEtapa]);
+      }
     }
     return;
   }

@@ -2,7 +2,12 @@ import { Router, Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import { createClient } from '@supabase/supabase-js';
 import { env } from '../config/env';
-import { processarDieta } from '../services/rag';
+import {
+  processarDieta,
+  baixarTextoPDF,
+  extrairHorariosDieta,
+  salvarHorariosDieta,
+} from '../services/rag';
 import { enviarBoasVindas } from '../services/agent';
 
 export const pacientesRouter = Router();
@@ -97,13 +102,28 @@ pacientesRouter.post('/', upload.single('dieta'), async (req: Request, res: Resp
     return;
   }
 
+  // P1-6: extrair horarios literais do PDF ANTES da entrevista comecar.
+  // Faz uma so descida do PDF (baixarTextoPDF) e usa pra dois fluxos:
+  //  - extrairHorariosDieta (sincrono, ~2s) → guarda em dietas.horarios_refeicoes
+  //  - processarDieta (em background) → chunking + embeddings RAG
+  // Falha nao bloqueia o cadastro: paciente ainda recebe boas-vindas e cai na
+  // pergunta aberta da etapa 14 como antes.
+  let textoPDF: string | null = null;
+  try {
+    textoPDF = await baixarTextoPDF(pdfUrl);
+    const horarios = await extrairHorariosDieta(textoPDF);
+    await salvarHorariosDieta(dieta.id, horarios);
+  } catch (err) {
+    console.error('[pacientes] Falha na extracao de horarios do PDF (nao critico):', err);
+  }
+
   await enviarBoasVindas(paciente.id).catch((err) => {
     console.error('[pacientes] Falha ao enviar boas-vindas (nao critico):', err);
   });
 
   res.status(201).json({ sucesso: true, paciente_id: paciente.id });
 
-  processarDieta(paciente.id, dieta.id, pdfUrl).catch((err) => {
+  processarDieta(paciente.id, dieta.id, pdfUrl, textoPDF ?? undefined).catch((err) => {
     console.error('[pacientes] Falha no processamento RAG (background):', err);
   });
 });
@@ -318,9 +338,19 @@ pacientesRouter.post('/:id/dieta', upload.single('dieta'), async (req: Request, 
 
   res.json({ sucesso: true, dieta_id: dietaId, processando: true });
 
-  processarDieta(id, dietaId, novoPdfUrl).catch((err) => {
-    console.error('[pacientes] Falha no reprocessamento RAG (background):', err);
-  });
+  // P1-6: re-extrair horarios e re-processar RAG em background (paciente ja
+  // pode estar com entrevista completa — alertas_config ja foi sincronizado;
+  // os horarios novos servem se o nutricionista re-disparar entrevista futura).
+  (async () => {
+    try {
+      const texto = await baixarTextoPDF(novoPdfUrl);
+      const horarios = await extrairHorariosDieta(texto);
+      await salvarHorariosDieta(dietaId, horarios);
+      await processarDieta(id, dietaId, novoPdfUrl, texto);
+    } catch (err) {
+      console.error('[pacientes] Falha no reprocessamento (horarios + RAG):', err);
+    }
+  })();
 });
 
 pacientesRouter.delete('/:id', async (req: Request, res: Response) => {
