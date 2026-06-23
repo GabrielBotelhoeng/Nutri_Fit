@@ -22,6 +22,7 @@ import {
   DadosEntrevista,
 } from './calculos';
 import { sincronizarAlertasDaEntrevista } from './alertas';
+import { classificarIntencao, mencionaAguaCombinada, removerMencaoAgua } from './intent';
 
 const claude = new Anthropic({ apiKey: env.CLAUDE_API_KEY });
 
@@ -581,71 +582,65 @@ export async function processarMensagem(phone: string, texto: string): Promise<v
     return;
   }
 
-  // Detectar intenção antes de despachar
-  const textoLower = texto.toLowerCase();
-  const ehSubstituicao = /substitu|nao tenho|não tenho|alternativa|trocar/.test(textoLower);
-  // Verbos no passado + medidas indicam registro. Substantivos puros (cafe, lanche,
-  // refeicao, prato) caem em perguntas tipo "o que comer no cafe?" — nao sao gatilho.
-  // \d+\s*g\b / \d+\s*ml\b cobrem "200g de frango", "100 ml de leite". O \bg de\b
-  // antigo nao casava porque em "200g" nao ha word boundary entre digito e letra.
-  const ehRegistro = /\bcomi\b|\btomei\b|\bbebi\b|\balmocei\b|\bjantei\b|\d+\s*g\b|\d+\s*ml\b|\bcolher|\bgramas\b/.test(textoLower);
+  // P1-3: classificador de intencao (fast-path regex + Haiku fallback).
+  // Substituiu o empilhamento ehRegistro/ehSubstituicao/ehCorrecao/ehAguaMsg
+  // que falhava em "bebi 300ml de suco" (caia em agua) e "comi bem hoje, qual
+  // minha dieta?" (caia em registro). O fast-path resolve casos obvios sem
+  // latencia; o Haiku trata o resto; fallback seguro = 'consulta'.
+  const { intent, fonte } = await classificarIntencao(texto);
+  console.log(`[agent] intent=${intent} fonte=${fonte} texto="${texto.slice(0, 80)}"`);
 
-  // P0-1: fast-path regex de correcao da ultima refeicao (P1-3 troca por
-  // classificador estruturado). Aceita "a verdade" (autocorretor do WhatsApp
-  // come o "n" o tempo todo) e "esqueci" sozinho (a gate ehRegistro/ehSubstituicao
-  // ja impede que "esqueci o que comi" sem quantidade dispare correcao).
-  const ehCorrecao = /\b(na\s+verdade|a\s+verdade|foram|esqueci|corrige|corrigir|corre[çc][aã]o|na\s+real|era\s+pra\s+ser)\b/i.test(textoLower);
+  // Agua combinada com refeicao ("comi pao com 500ml de agua"): incrementa
+  // contador silenciosamente antes do card. Cobre o caso em que a intencao
+  // primaria e 'registrar' (comida) mas o paciente tambem mencionou agua.
+  // P1-3.1: stripa a mencao de agua do texto que vai pro processarTextoRefeicao
+  // pra evitar double-count (agua listada como item alem do contador).
+  let textoParaRefeicao = texto;
+  if (intent === 'registrar' && mencionaAguaCombinada(texto)) {
+    const aguaMl = extrairAguaMl(texto);
+    if (aguaMl > 0 && aguaMl <= 5000) {
+      await registrarAguaContador(paciente.id, aguaMl);
+    }
+    textoParaRefeicao = removerMencaoAgua(texto);
+  }
 
-  // D-03: Detectar mencao a agua. Quando a msg e SO agua ("bebi 500ml") manda
-  // resposta dedicada. Quando vem combinada com refeicao ("comi pao com 500ml
-  // de agua"), incrementa o contador silenciosamente e segue pro pipeline de
-  // refeicao — a barra 💧 do card mostra o impacto. Sem o silencioso, o
-  // paciente perdia o registro da comida (bug P1-3 emergindo).
-  const AGUA_RE = /(\d+)\s*(ml|litros?|copos?)|bebi\s+\d+\s*(ml|litros?|copos?)/i;
-  const ehAguaMsg = AGUA_RE.test(textoLower) && /agua|bebi|hidrat|bebo/i.test(textoLower);
-
-  if (ehAguaMsg && !ehRegistro) {
+  if (intent === 'agua') {
     const aguaMl = extrairAguaMl(texto);
     if (aguaMl > 0 && aguaMl <= 5000) {
       const resposta = await registrarAgua(paciente.id, aguaMl);
       await sendText(phone, resposta);
       return;
     }
-  }
-
-  if (ehAguaMsg && ehRegistro) {
-    const aguaMl = extrairAguaMl(texto);
-    if (aguaMl > 0 && aguaMl <= 5000) {
-      await registrarAguaContador(paciente.id, aguaMl);
-      // Sem return — segue pro pipeline de refeicao abaixo.
-    }
+    // Sem volume valido — segue pro RAG/consulta como fallback ("bebi pouca agua")
   }
 
   // P0-1: correcao da ultima refeicao — substitui (UPDATE + delta), nao soma.
-  // So aciona se existe ultima_refeicao dentro do TTL e o texto cita comida
-  // (precisa ter algo pra recalcular — frase de correcao sem refeicao cai no
-  // fluxo normal).
-  if (ehCorrecao && (ehRegistro || ehSubstituicao)) {
+  if (intent === 'corrigir') {
     const ultima = mealService.obterUltimaRefeicaoSeRecente(dadosEstado);
     if (ultima) {
       await mealService.processarTextoCorrecao(phone, texto, paciente, ultima);
       return;
     }
+    // Sem ultima refeicao recente: cai em registro novo (processarTextoRefeicao
+    // ignora silenciosamente se o texto nao tem comida).
+    await mealService.processarTextoRefeicao(phone, texto, paciente);
+    return;
   }
 
-  if (ehRegistro || ehSubstituicao) {
-    await mealService.processarTextoRefeicao(phone, texto, paciente);
-  } else {
-    // Consulta sobre dieta — responder via RAG
-    const contextoRag = await ragQuery(paciente.id, texto);
-    const perfil: PerfilNutricional = {
-      objetivo: dadosEstado['objetivo'] as ObjetivoNutricional | undefined,
-      restricoes: (dadosEstado['restricoes'] as string[] | undefined) ?? [],
-      preferencias_recusas: (dadosEstado['preferencias_recusas'] as string[] | undefined) ?? [],
-    };
-    const resposta = await responderComClaude(texto, contextoRag, paciente.nome, perfil);
-    await sendText(phone, resposta);
+  if (intent === 'registrar' || intent === 'substituicao') {
+    await mealService.processarTextoRefeicao(phone, textoParaRefeicao, paciente);
+    return;
   }
+
+  // intent === 'consulta' (ou 'agua' sem volume valido) — responder via RAG
+  const contextoRag = await ragQuery(paciente.id, texto);
+  const perfil: PerfilNutricional = {
+    objetivo: dadosEstado['objetivo'] as ObjetivoNutricional | undefined,
+    restricoes: (dadosEstado['restricoes'] as string[] | undefined) ?? [],
+    preferencias_recusas: (dadosEstado['preferencias_recusas'] as string[] | undefined) ?? [],
+  };
+  const resposta = await responderComClaude(texto, contextoRag, paciente.nome, perfil);
+  await sendText(phone, resposta);
 }
 
 export async function enviarBoasVindas(pacienteId: string): Promise<void> {
