@@ -4,6 +4,7 @@ import * as agentService from '../services/agent';
 import * as audioService from '../services/audio';
 import * as visionService from '../services/vision';
 import { marcarMensagemProcessada } from '../services/dedup';
+import { enfileirarPorTelefone } from '../services/queue';
 
 export const webhookRouter = Router();
 
@@ -51,33 +52,38 @@ webhookRouter.post('/', async (req: Request, res: Response) => {
 
   console.log(`[webhook] Mensagem de ${phone} | tipo: ${messageType}`);
 
-  try {
-    switch (messageType) {
-      case 'conversation':
-      case 'extendedTextMessage': {
-        const text =
-          (data.message.conversation as string) ||
-          (data.message.extendedTextMessage as { text: string })?.text ||
-          '';
-        await agentService.processarMensagem(phone, text);
-        break;
+  // P2-8: serializar por telefone. Mensagens consecutivas do mesmo paciente
+  // sao processadas em ordem; o read-modify-write em entrevista_dados nao
+  // perde escrita concorrente. Telefones diferentes rodam em paralelo.
+  enfileirarPorTelefone(phone, async () => {
+    try {
+      switch (messageType) {
+        case 'conversation':
+        case 'extendedTextMessage': {
+          const text =
+            (data.message.conversation as string) ||
+            (data.message.extendedTextMessage as { text: string })?.text ||
+            '';
+          await agentService.processarMensagem(phone, text);
+          break;
+        }
+        case 'audioMessage': {
+          const audioMessageId = data.key.id;
+          await audioService.processarAudio(phone, audioMessageId);
+          break;
+        }
+        case 'imageMessage': {
+          const imageMessageId = data.key.id;
+          const caption = (data.message.imageMessage as { caption?: string })?.caption ?? '';
+          await visionService.processarImagem(phone, imageMessageId, caption);
+          break;
+        }
+        default: {
+          console.log(`[webhook] Tipo nao suportado: ${messageType}`);
+        }
       }
-      case 'audioMessage': {
-        const messageId = data.key.id;
-        await audioService.processarAudio(phone, messageId);
-        break;
-      }
-      case 'imageMessage': {
-        const messageId = data.key.id;
-        const caption = (data.message.imageMessage as { caption?: string })?.caption ?? '';
-        await visionService.processarImagem(phone, messageId, caption);
-        break;
-      }
-      default: {
-        console.log(`[webhook] Tipo nao suportado: ${messageType}`);
-      }
+    } catch (err) {
+      console.error('[webhook] Erro ao processar mensagem:', err);
     }
-  } catch (err) {
-    console.error('[webhook] Erro ao processar mensagem:', err);
-  }
+  });
 });
