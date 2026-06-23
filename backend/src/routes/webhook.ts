@@ -3,6 +3,7 @@ import { sendText } from '../services/evolution';
 import * as agentService from '../services/agent';
 import * as audioService from '../services/audio';
 import * as visionService from '../services/vision';
+import { marcarMensagemProcessada } from '../services/dedup';
 
 export const webhookRouter = Router();
 
@@ -36,6 +37,17 @@ webhookRouter.post('/', async (req: Request, res: Response) => {
   const { data } = payload;
   const phone = extractPhoneNumber(data.key.remoteJid);
   const messageType = data.messageType;
+  const messageId = data.key?.id;
+
+  // P2-7: dedup de reentregas da Evolution API. Sem isso, o mesmo evento
+  // reprocessado duplicaria refeicoes.
+  if (messageId) {
+    const novo = await marcarMensagemProcessada(messageId);
+    if (!novo) {
+      console.log(`[webhook] Descartado (duplicado) message_id=${messageId} phone=${phone}`);
+      return;
+    }
+  }
 
   console.log(`[webhook] Mensagem de ${phone} | tipo: ${messageType}`);
 
