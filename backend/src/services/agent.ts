@@ -24,6 +24,11 @@ import {
 import { sincronizarAlertasDaEntrevista } from './alertas';
 import { classificarIntencao, mencionaAguaCombinada, removerMencaoAgua } from './intent';
 import { analisarSuplementos, formatarAvisoControlados } from './suplementos';
+import {
+  registrarMensagem,
+  obterUltimasMensagens,
+  ConversaMensagem,
+} from './conversaHistorico';
 
 const claude = new Anthropic({ apiKey: env.CLAUDE_API_KEY });
 
@@ -521,6 +526,7 @@ async function responderComClaude(
   contextoRag: string,
   nomePaciente: string,
   perfil: PerfilNutricional,
+  historico: ConversaMensagem[] = [],
 ): Promise<string> {
   const objetivoLinha = perfil.objetivo
     ? OBJETIVO_LABEL[perfil.objetivo]
@@ -558,7 +564,7 @@ Regras de comunicacao:
     model: 'claude-sonnet-4-6',
     max_tokens: 512,
     system: systemPrompt,
-    messages: [{ role: 'user', content: perguntaUsuario }],
+    messages: [...historico, { role: 'user', content: perguntaUsuario }],
   });
 
   return response.content[0].type === 'text' ? response.content[0].text : '';
@@ -894,8 +900,26 @@ export async function processarMensagem(phone: string, texto: string): Promise<v
     restricoes: (dadosEstado['restricoes'] as string[] | undefined) ?? [],
     preferencias_recusas: (dadosEstado['preferencias_recusas'] as string[] | undefined) ?? [],
   };
-  const resposta = await responderComClaude(texto, contextoRag, paciente.nome, perfil);
+
+  // P2-9: memoria multi-turn. So aplica em 'consulta' — outras intencoes
+  // (refeicao/agua/correcao) sao acoes estruturadas, nao precisam de historico.
+  let historico: ConversaMensagem[] = [];
+  try {
+    historico = await obterUltimasMensagens(paciente.id, 12);
+  } catch (e) {
+    console.error('[agent] Erro ao obter historico (seguindo sem memoria):', e);
+  }
+
+  const resposta = await responderComClaude(texto, contextoRag, paciente.nome, perfil, historico);
   await sendText(phone, resposta);
+
+  // Registra DEPOIS do envio: erro aqui nao deve afetar o paciente.
+  try {
+    await registrarMensagem(paciente.id, 'user', texto);
+    await registrarMensagem(paciente.id, 'assistant', resposta);
+  } catch (e) {
+    console.error('[agent] Erro ao registrar conversa no historico:', e);
+  }
 }
 
 export async function enviarBoasVindas(pacienteId: string): Promise<void> {
