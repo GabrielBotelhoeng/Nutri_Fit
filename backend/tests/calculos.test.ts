@@ -12,6 +12,7 @@ import {
   detectarFatorAtividade,
   extrairFrequenciaSemanal,
   classificarTipoAtividade,
+  sanitizarMencaoConcorrentes,
 } from '../src/services/calculos';
 
 describe('extrairFrequenciaSemanal', () => {
@@ -169,6 +170,64 @@ describe('detectarFatorAtividade — casos do criterio P1-4', () => {
   it('"cinco vezes" por extenso → 1.725', () => {
     const r = detectarFatorAtividade('musculacao', 'cinco vezes na semana');
     expect(r.fator).toBe(1.725);
+  });
+});
+
+describe('sanitizarMencaoConcorrentes — P1-5', () => {
+  it('remove sentenca que menciona MyFitnessPal', () => {
+    const entrada =
+      'Sua meta calorica faz sentido pro emagrecimento. Recomendo mapear suas refeicoes no MyFitnessPal. Continue firme!';
+    const saida = sanitizarMencaoConcorrentes(entrada);
+    expect(saida).not.toMatch(/myfitnesspal/i);
+    expect(saida).toContain('Sua meta');
+    expect(saida).toContain('Continue firme');
+  });
+
+  it('adiciona dica on-brand quando remove menção', () => {
+    const entrada = 'Use MyFitnessPal pra controlar.';
+    const saida = sanitizarMencaoConcorrentes(entrada);
+    expect(saida).toMatch(/foto.*prato|audio.*descrev/i);
+  });
+
+  it('barra FatSecret', () => {
+    const entrada = 'Considere usar o FatSecret pra acompanhar.';
+    const saida = sanitizarMencaoConcorrentes(entrada);
+    expect(saida).not.toMatch(/fatsecret/i);
+  });
+
+  it('barra Cronometer', () => {
+    const entrada = 'O Cronometer ajuda a contar.';
+    const saida = sanitizarMencaoConcorrentes(entrada);
+    expect(saida).not.toMatch(/cronometer/i);
+  });
+
+  it('barra "Lose It"', () => {
+    const entrada = 'Considere o Lose It como ferramenta.';
+    const saida = sanitizarMencaoConcorrentes(entrada);
+    expect(saida).not.toMatch(/lose\s*it/i);
+  });
+
+  it('barra Yazio', () => {
+    const entrada = 'Voce pode usar Yazio se quiser.';
+    const saida = sanitizarMencaoConcorrentes(entrada);
+    expect(saida).not.toMatch(/yazio/i);
+  });
+
+  it('barra "contador de calorias"', () => {
+    const entrada = 'Use um contador de calorias.';
+    const saida = sanitizarMencaoConcorrentes(entrada);
+    expect(saida).not.toMatch(/contador de calorias/i);
+  });
+
+  it('texto sem concorrente passa inalterado', () => {
+    const entrada = 'Sua meta faz sentido. Continue firme e me manda foto do prato.';
+    expect(sanitizarMencaoConcorrentes(entrada)).toBe(entrada);
+  });
+
+  it('case-insensitive e tolerante a espacos', () => {
+    const entrada = 'Use o My Fitness Pal pra mapear.';
+    const saida = sanitizarMencaoConcorrentes(entrada);
+    expect(saida).not.toMatch(/my\s*fitness\s*pal/i);
   });
 });
 

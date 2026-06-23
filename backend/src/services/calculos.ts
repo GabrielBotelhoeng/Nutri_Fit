@@ -380,6 +380,11 @@ Escreva uma explicacao personalizada em 2-3 paragrafos CURTOS (WhatsApp, nao ema
 Tom: amigavel, direto, motivador. Sem jargao tecnico pesado. Emojis com moderacao.
 Nao repita os numeros exatos — eles ja foram mostrados na mensagem anterior.
 
+REGRA DE MARCA (P1-5, nao-negociavel):
+- NUNCA recomende, mencione ou compare com apps, sites ou ferramentas externas (MyFitnessPal, FatSecret, Cronometer, LoseIt, YAZIO, Lifesum, Calorie Counter, planilhas Excel, contador de calorias, etc.).
+- A "dica pratica" DEVE usar o proprio NutriChat. Exemplos validos: "me manda foto do prato que eu calculo pra voce", "se quiser, manda audio descrevendo o que comeu", "me pergunta a qualquer hora se um alimento cabe na meta".
+- NAO faca promessa medica nem garantia de resultado (ex.: "voce vai perder X kg em Y semanas").
+
 FORMATACAO (WhatsApp, nao Markdown):
 - NUNCA use headers (# ou ##) — WhatsApp renderiza como texto literal feio.
 - Para negrito use UM asterisco (*texto*), NUNCA dois (**texto**).
@@ -393,7 +398,48 @@ FORMATACAO (WhatsApp, nao Markdown):
     messages: [{ role: 'user', content: prompt }],
   });
 
-  return response.content[0].type === 'text' ? response.content[0].text : '';
+  const texto = response.content[0].type === 'text' ? response.content[0].text : '';
+  return sanitizarMencaoConcorrentes(texto);
+}
+
+// Lista de concorrentes/ferramentas que o NutriChat nao deve recomendar.
+// Match case-insensitive e tolerante a variacoes ("My Fitness Pal", "MyFitness
+// Pal"). Quando uma sentenca menciona qualquer um deles, a sentenca inteira e
+// substituida por uma dica on-brand. Conservador: prefere remover a sentenca a
+// re-escrever (evita inventar conteudo).
+const CONCORRENTES_RE = /\b(my\s*fitness\s*pal|myfitnesspal|fat\s*secret|fatsecret|cronometer|lose\s*it|loseit|yazio|lifesum|calorie\s*counter|contador\s+de\s+calorias)\b/i;
+
+const DICA_ON_BRAND = 'Se quiser, me manda foto do prato (ou audio descrevendo) que eu calculo as macros pra voce em segundos.';
+
+// Remove sentencas que recomendam concorrentes e substitui por uma dica
+// equivalente usando o proprio NutriChat. Idempotente: se nao encontra
+// concorrente, retorna o texto inalterado.
+export function sanitizarMencaoConcorrentes(texto: string): string {
+  if (!CONCORRENTES_RE.test(texto)) return texto;
+
+  // Divide em sentencas preservando o terminador (. ! ? \n).
+  const sentencas = texto.split(/(?<=[.!?\n])\s+/);
+  let substituiuAlguma = false;
+  const limpas = sentencas
+    .map((s) => {
+      if (CONCORRENTES_RE.test(s)) {
+        substituiuAlguma = true;
+        return ''; // descarta a sentenca inteira
+      }
+      return s;
+    })
+    .filter((s) => s.length > 0);
+
+  let resultado = limpas.join(' ').replace(/\s+/g, ' ').trim();
+
+  if (substituiuAlguma) {
+    // Garante que o paciente recebe uma dica equivalente.
+    if (!/foto.*prato/i.test(resultado) && !/audio.*descrev/i.test(resultado)) {
+      resultado = resultado ? `${resultado} ${DICA_ON_BRAND}` : DICA_ON_BRAND;
+    }
+  }
+
+  return resultado;
 }
 
 export function formatarMensagemCalculos(
