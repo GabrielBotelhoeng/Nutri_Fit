@@ -1,7 +1,8 @@
-import { Router, Request, Response, NextFunction } from 'express';
+import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import { createClient } from '@supabase/supabase-js';
 import { env } from '../config/env';
+import { requireAuth } from '../middleware/auth';
 import {
   processarDieta,
   baixarTextoPDF,
@@ -26,15 +27,7 @@ const upload = multer({
   },
 });
 
-function requirePanelKey(req: Request, res: Response, next: NextFunction): void {
-  if (req.headers['x-api-key'] !== env.PANEL_API_KEY) {
-    res.status(401).json({ error: 'Unauthorized' });
-    return;
-  }
-  next();
-}
-
-pacientesRouter.use(requirePanelKey);
+pacientesRouter.use(requireAuth);
 
 pacientesRouter.post('/', upload.single('dieta'), async (req: Request, res: Response) => {
   const { nome, whatsapp, plano, data_expiracao } = req.body as {

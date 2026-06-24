@@ -13,7 +13,6 @@ interface Env {
   GROQ_API_KEY: string;
   OPENAI_API_KEY: string;
   INTERNAL_API_KEY: string;
-  PANEL_API_KEY: string;
 }
 
 function validateEnv(): Env {
@@ -28,7 +27,6 @@ function validateEnv(): Env {
     'GROQ_API_KEY',
     'OPENAI_API_KEY',
     'INTERNAL_API_KEY',
-    'PANEL_API_KEY',
   ] as const;
 
   const missing = required.filter((key) => !process.env[key]);
@@ -50,7 +48,6 @@ function validateEnv(): Env {
     GROQ_API_KEY: process.env.GROQ_API_KEY!,
     OPENAI_API_KEY: process.env.OPENAI_API_KEY!,
     INTERNAL_API_KEY: process.env.INTERNAL_API_KEY!,
-    PANEL_API_KEY: process.env.PANEL_API_KEY!,
   };
 }
 

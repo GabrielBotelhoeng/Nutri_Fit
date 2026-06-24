@@ -10,4 +10,3 @@ process.env.CLAUDE_API_KEY = process.env.CLAUDE_API_KEY ?? 'sk-ant-test';
 process.env.GROQ_API_KEY = process.env.GROQ_API_KEY ?? 'gsk-test';
 process.env.OPENAI_API_KEY = process.env.OPENAI_API_KEY ?? 'sk-test';
 process.env.INTERNAL_API_KEY = process.env.INTERNAL_API_KEY ?? 'internal-test';
-process.env.PANEL_API_KEY = process.env.PANEL_API_KEY ?? 'panel-test';

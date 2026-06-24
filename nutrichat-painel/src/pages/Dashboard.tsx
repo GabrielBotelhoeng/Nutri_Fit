@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
+import { apiFetch } from '../lib/api';
 import { StatusBadge } from '../components/StatusBadge';
 import { PacienteModal } from '../components/PacienteModal';
 
@@ -22,9 +23,6 @@ const ragStatusLabel: Record<RagStatus, { texto: string; cor: string; icone: str
   falhou: { texto: 'Falhou', cor: 'bg-red-100 text-red-800', icone: '✕', titulo: 'Processamento falhou. Tente re-enviar o PDF pela edição.' },
   sem_dieta: { texto: 'Sem dieta', cor: 'bg-gray-100 text-gray-600', icone: '–', titulo: 'Nenhuma dieta cadastrada' },
 };
-
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL as string;
-const API_KEY = import.meta.env.VITE_PANEL_API_KEY as string;
 
 const planoLabels: Record<string, string> = {
   '1mes': '1 mês',
@@ -98,9 +96,7 @@ export function Dashboard() {
     setCarregando(true);
     setErroCarregamento(null);
     try {
-      const res = await fetch(`${BACKEND_URL}/api/pacientes`, {
-        headers: { 'X-API-Key': API_KEY },
-      });
+      const res = await apiFetch('/api/pacientes');
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error((body as { error?: string }).error ?? `Erro ${res.status} ao carregar pacientes`);

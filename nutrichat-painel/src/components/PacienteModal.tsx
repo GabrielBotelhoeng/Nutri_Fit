@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { apiFetch } from '../lib/api';
 
 interface Paciente {
   id: string;
@@ -15,9 +16,6 @@ interface PacienteModalProps {
   onClose: () => void;
   onSaved: () => void;
 }
-
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL as string;
-const API_KEY = import.meta.env.VITE_PANEL_API_KEY as string;
 
 function soDigitos(s: string): string {
   return s.replace(/\D/g, '');
@@ -66,9 +64,7 @@ export function PacienteModal({ paciente, onClose, onSaved }: PacienteModalProps
     if (!paciente) return;
     let cancelado = false;
     setCarregandoDieta(true);
-    fetch(`${BACKEND_URL}/api/pacientes/${paciente.id}/dieta`, {
-      headers: { 'X-API-Key': API_KEY },
-    })
+    apiFetch(`/api/pacientes/${paciente.id}/dieta`)
       .then(async (res) => {
         if (cancelado) return;
         if (res.ok) {
@@ -102,9 +98,9 @@ export function PacienteModal({ paciente, onClose, onSaved }: PacienteModalProps
         const body: { ativo?: boolean; data_expiracao?: string } = { ativo };
         if (dataExpiracao) body.data_expiracao = dataExpiracao;
 
-        const res = await fetch(`${BACKEND_URL}/api/pacientes/${paciente.id}`, {
+        const res = await apiFetch(`/api/pacientes/${paciente.id}`, {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
         });
         if (!res.ok) {
@@ -115,9 +111,8 @@ export function PacienteModal({ paciente, onClose, onSaved }: PacienteModalProps
         if (pdf) {
           const form = new FormData();
           form.append('dieta', pdf);
-          const resDieta = await fetch(`${BACKEND_URL}/api/pacientes/${paciente.id}/dieta`, {
+          const resDieta = await apiFetch(`/api/pacientes/${paciente.id}/dieta`, {
             method: 'POST',
-            headers: { 'X-API-Key': API_KEY },
             body: form,
           });
           if (!resDieta.ok) {
@@ -143,9 +138,8 @@ export function PacienteModal({ paciente, onClose, onSaved }: PacienteModalProps
         form.append('data_expiracao', dataExpiracao);
         form.append('dieta', pdf);
 
-        const res = await fetch(`${BACKEND_URL}/api/pacientes`, {
+        const res = await apiFetch('/api/pacientes', {
           method: 'POST',
-          headers: { 'X-API-Key': API_KEY },
           body: form,
         });
         if (!res.ok) {
@@ -169,9 +163,8 @@ export function PacienteModal({ paciente, onClose, onSaved }: PacienteModalProps
     setErro('');
     setSucesso('');
     try {
-      const res = await fetch(`${BACKEND_URL}/api/pacientes/${paciente.id}`, {
+      const res = await apiFetch(`/api/pacientes/${paciente.id}`, {
         method: 'DELETE',
-        headers: { 'X-API-Key': API_KEY },
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
