@@ -8,9 +8,15 @@ import { env } from '../config/env';
 const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
 const claude = new Anthropic({ apiKey: env.CLAUDE_API_KEY });
 
+// maxRetries explicito: o AsyncCaller do LangChain ja faz exponential
+// backoff em 429/5xx, mas o default (6) pode mudar entre versoes. Travar
+// aqui evita surpresa em upgrade. timeout por chamada limita o caso patologico
+// de OpenAI travar a request indefinidamente.
 const embeddings = new OpenAIEmbeddings({
   openAIApiKey: env.OPENAI_API_KEY,
   modelName: 'text-embedding-3-small',
+  maxRetries: 6,
+  timeout: 30000,
 });
 
 const splitter = new RecursiveCharacterTextSplitter({
@@ -278,7 +284,16 @@ export async function buscarHorariosDietaPaciente(
 }
 
 export async function query(pacienteId: string, pergunta: string): Promise<string> {
-  const queryEmbedding = await embeddings.embedQuery(pergunta);
+  // Fail-soft: 429 persistente da OpenAI (apos os 6 retries do AsyncCaller)
+  // nao pode derrubar a resposta ao paciente. Retorna '' — o caller cai pro
+  // fluxo "sem contexto de dieta" em vez de propagar 500 pro WhatsApp.
+  let queryEmbedding: number[];
+  try {
+    queryEmbedding = await embeddings.embedQuery(pergunta);
+  } catch (err) {
+    console.error('[rag] Falha ao gerar embedding da pergunta (sem contexto da dieta nesta resposta):', err);
+    return '';
+  }
 
   const { data, error } = await supabase.rpc('match_chunks_paciente', {
     query_embedding: JSON.stringify(queryEmbedding),
