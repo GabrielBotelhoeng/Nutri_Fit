@@ -5,8 +5,12 @@ import * as audioService from '../services/audio';
 import * as visionService from '../services/vision';
 import { marcarMensagemProcessada } from '../services/dedup';
 import { enfileirarPorTelefone } from '../services/queue';
+import { requireWebhookAuth } from '../middleware/webhookAuth';
 
 export const webhookRouter = Router();
+// SEC-2: middleware roda ANTES do handler — sem o header `X-Webhook-Secret`
+// valido, devolve 401 e nunca toca em agent/audio/vision.
+webhookRouter.use(requireWebhookAuth);
 
 interface EvolutionPayload {
   event: string;

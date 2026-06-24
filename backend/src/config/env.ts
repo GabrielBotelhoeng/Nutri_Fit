@@ -8,6 +8,7 @@ interface Env {
   SUPABASE_SERVICE_KEY: string;
   EVOLUTION_API_URL: string;
   EVOLUTION_API_KEY: string;
+  EVOLUTION_WEBHOOK_SECRET: string;
   N8N_WEBHOOK_URL: string;
   CLAUDE_API_KEY: string;
   GROQ_API_KEY: string;
@@ -22,6 +23,7 @@ function validateEnv(): Env {
     'SUPABASE_SERVICE_KEY',
     'EVOLUTION_API_URL',
     'EVOLUTION_API_KEY',
+    'EVOLUTION_WEBHOOK_SECRET',
     'N8N_WEBHOOK_URL',
     'CLAUDE_API_KEY',
     'GROQ_API_KEY',
@@ -43,6 +45,7 @@ function validateEnv(): Env {
     SUPABASE_SERVICE_KEY: process.env.SUPABASE_SERVICE_KEY!,
     EVOLUTION_API_URL: process.env.EVOLUTION_API_URL!,
     EVOLUTION_API_KEY: process.env.EVOLUTION_API_KEY!,
+    EVOLUTION_WEBHOOK_SECRET: process.env.EVOLUTION_WEBHOOK_SECRET!,
     N8N_WEBHOOK_URL: process.env.N8N_WEBHOOK_URL!,
     CLAUDE_API_KEY: process.env.CLAUDE_API_KEY!,
     GROQ_API_KEY: process.env.GROQ_API_KEY!,
