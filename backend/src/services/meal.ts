@@ -370,7 +370,7 @@ export function microMensagemFinal(saldo: MacrosRefeicao, metas: MacrosDiarios):
 // Usado tanto pelo card per-item (P0-2) quanto pelo formatarSaldoDia (foto).
 // A linha de agua so aparece quando o paciente tem meta cadastrada
 // (`metas.agua_ml`) — calculada a partir do peso na entrevista.
-function formatarBlocoProgressoDia(saldo: MacrosRefeicao, metas: MacrosDiarios): string {
+export function formatarBlocoProgressoDia(saldo: MacrosRefeicao, metas: MacrosDiarios): string {
   const linhas = [
     `🔥 Energia    ${barraProgresso(saldo.kcal, metas.kcal)}  ${Math.round(saldo.kcal)} / ${Math.round(metas.kcal)} kcal`,
     `🍗 Proteína   ${barraProgresso(saldo.proteina_g, metas.proteina_g)}  ${Math.round(saldo.proteina_g)} / ${Math.round(metas.proteina_g)} g`,

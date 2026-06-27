@@ -114,6 +114,46 @@ describe('classificarIntencaoRapida — fast-path regex', () => {
     expect(classificarIntencaoRapida('esqueci de falar dos 100g de feijao')).toBe('corrigir');
   });
 
+  // Casos de saldo do dia (bug UAT 2026-06-24)
+  it('"quantas calorias eu consumi hoje?" cai em saldo (bug UAT)', () => {
+    // Caso exato do UAT: estava virando consulta → RAG → Claude alucinava kcal.
+    expect(classificarIntencaoRapida('quantas calorias eu consumi hoje?')).toBe('saldo');
+  });
+
+  it('"quanto comi hoje?" cai em saldo (apesar do verbo "comi")', () => {
+    // Sem a regra 0 de SALDO_RE, "?" + "comi" cairia na regra 2 (defer pro Haiku).
+    expect(classificarIntencaoRapida('quanto comi hoje?')).toBe('saldo');
+  });
+
+  it('"quanto consumi de proteina?" cai em saldo', () => {
+    expect(classificarIntencaoRapida('quanto consumi de proteina?')).toBe('saldo');
+  });
+
+  it('"qual meu saldo do dia?" cai em saldo', () => {
+    expect(classificarIntencaoRapida('qual meu saldo do dia?')).toBe('saldo');
+  });
+
+  it('"to dentro da meta?" cai em saldo', () => {
+    expect(classificarIntencaoRapida('to dentro da meta?')).toBe('saldo');
+  });
+
+  it('"quanto falta pra fechar o dia?" cai em saldo', () => {
+    expect(classificarIntencaoRapida('quanto falta pra fechar o dia?')).toBe('saldo');
+  });
+
+  it('"ja bati a meta?" cai em saldo', () => {
+    expect(classificarIntencaoRapida('ja bati a meta?')).toBe('saldo');
+  });
+
+  it('"quantas gramas de carbo eu comi?" cai em saldo', () => {
+    expect(classificarIntencaoRapida('quantas gramas de carbo eu comi?')).toBe('saldo');
+  });
+
+  it('"qual minha dieta?" continua em consulta (nao em saldo)', () => {
+    // Sanity: nada em "qual minha dieta?" sugere saldo — deve cair em consulta.
+    expect(classificarIntencaoRapida('qual minha dieta?')).toBe('consulta');
+  });
+
   // Casos de substituicao
   it('"posso trocar o arroz por batata?" cai em substituicao mesmo com "?"', () => {
     // "posso trocar" e marcador forte de substituicao; o "?" e retorico aqui.

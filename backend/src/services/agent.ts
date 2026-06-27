@@ -893,6 +893,16 @@ export async function processarMensagem(phone: string, texto: string): Promise<v
     return;
   }
 
+  // Bug UAT 2026-06-24: pergunta de saldo do dia caia em 'consulta' → RAG →
+  // Claude alucinava kcal sem ter acesso a registros_diarios. Handler dedicado
+  // busca o saldo autoritativo + metas e responde com o bloco de progresso.
+  if (intent === 'saldo') {
+    const metas = obterMetas(dadosEstado);
+    const saldo = await mealService.obterSaldoDia(paciente.id);
+    await sendText(phone, mealService.formatarBlocoProgressoDia(saldo, metas));
+    return;
+  }
+
   // intent === 'consulta' (ou 'agua' sem volume valido) — responder via RAG
   const contextoRag = await ragQuery(paciente.id, texto);
   const perfil: PerfilNutricional = {

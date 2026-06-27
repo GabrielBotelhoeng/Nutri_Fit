@@ -9,7 +9,7 @@ import { env } from '../config/env';
 
 const claude = new Anthropic({ apiKey: env.CLAUDE_API_KEY });
 
-export type Intent = 'registrar' | 'corrigir' | 'agua' | 'consulta' | 'substituicao';
+export type Intent = 'registrar' | 'corrigir' | 'agua' | 'consulta' | 'substituicao' | 'saldo';
 
 export interface IntentResult {
   intent: Intent;
@@ -48,10 +48,25 @@ const SUBSTITUICAO_RE =
 const CONSULTA_PALAVRA_RE =
   /\b(qual|quais|como|onde|porqu[eê]|por\s+que|o\s+que\s+(e|é|posso|devo)|minha\s+dieta|meu\s+plano|recomend|sugest|dica\s+de)\b/i;
 
+// Pergunta de saldo do dia (kcal/macros consumidos vs meta). Bug UAT 2026-06-24:
+// "quantas calorias eu consumi hoje?" caia em 'consulta' → RAG → Claude alucinava
+// kcal. Precedencia ALTA no fast-path — antes das regras de pergunta/registro,
+// porque casos como "quanto comi hoje?" combinam "?" + verbo de registro "comi"
+// (regra 2 deferia ao Haiku que classificava como consulta).
+const SALDO_RE =
+  /\b(quant[oa]s?\s+(de\s+|gramas?\s+de\s+|g\s+de\s+)?(kcal|cal|calorias?|prote[ií]nas?|carb(o|oidrato)s?|gorduras?|[aá]gua|ml\b)|quant[oa]s?\s+(eu\s+)?(j[aá]\s+)?(consumi|comi|tomei|bebi)|saldo\s+do\s+dia|qual\s+(o\s+)?meu\s+(consumo|saldo)|consumo\s+(do\s+dia|de\s+hoje)|t[oô]u?\s+(dentro|fora|perto)\s+(da|de)\s+meta|j[aá]\s+(bati|passei|ultrapasse[ai])\s+(a|da)?\s*meta|bati\s+a?\s*meta|quanto\s+(falt(a|am|ou)|sobr(a|ou)|rest(a|ou|am))\b)/i;
+
 // Fast-path: retorna Intent quando confiante; null quando deve consultar o Haiku.
 export function classificarIntencaoRapida(texto: string): Intent | null {
   const t = texto.trim().toLowerCase();
   if (t.length === 0) return null;
+
+  // 0. Pergunta de saldo do dia (kcal/macros/agua consumidos) → saldo. Precisa
+  // vir antes das regras de pergunta/registro porque "quanto comi hoje?" combina
+  // "?" + verbo de registro "comi" e seria deferida pro Haiku (que errava).
+  if (SALDO_RE.test(t)) {
+    return 'saldo';
+  }
 
   // 1. Pergunta clara (pergunta + palavra de consulta sem verbo de registro) → consulta
   if (PERGUNTA_RE.test(t) && CONSULTA_PALAVRA_RE.test(t) && !VERBO_REGISTRO_RE.test(t)) {
@@ -103,20 +118,22 @@ export function classificarIntencaoRapida(texto: string): Intent | null {
 const SYSTEM_PROMPT_INTENT = `Você classifica a intenção da mensagem de um paciente em um app de nutrição via WhatsApp.
 
 Responda APENAS com JSON no formato:
-{"intent": "registrar" | "corrigir" | "agua" | "consulta" | "substituicao"}
+{"intent": "registrar" | "corrigir" | "agua" | "consulta" | "substituicao" | "saldo"}
 
 Definições:
 - "registrar": paciente informa uma refeição/comida/bebida calórica que comeu ou bebeu. Ex: "comi 200g de frango", "tomei iogurte", "bebi 300ml de suco", "almocei arroz com feijão".
 - "corrigir": paciente quer AJUSTAR a última refeição registrada. Ex: "na verdade eram 150g", "esqueci de falar do feijão", "corrige aí", "era pra ser 100g".
 - "agua": registro EXCLUSIVO de hidratação (água pura). Ex: "bebi 500ml de água", "tomei 2 copos d'água". NUNCA classifique suco, refrigerante, leite, café com leite ou cerveja como "agua" — esses são "registrar".
 - "substituicao": paciente pergunta se pode TROCAR um alimento da dieta prescrita. Ex: "posso trocar arroz por batata?", "não tenho frango, o que uso?", "tem alternativa pra ovo?".
+- "saldo": paciente pergunta QUANTO já consumiu hoje vs a meta (kcal/proteína/carbo/gordura/água). Ex: "quantas calorias consumi hoje?", "quanto comi de proteína?", "tô dentro da meta?", "quanto falta pra fechar o dia?", "qual meu saldo?".
 - "consulta": qualquer dúvida sobre a dieta, plano, alimentos permitidos, dicas, horários, suplementação. Ex: "qual minha dieta?", "como tomar a creatina?", "que horas posso comer fruta?", "comi bem hoje, qual minha dieta?".
 
 Regras de prioridade:
-1. Frase com "?" geralmente é "consulta", a não ser que seja confirmação curta tipo "comi 200g de arroz, ok?".
-2. "comi bem hoje, qual minha dieta?" → "consulta" (a pergunta é sobre o plano).
-3. "na verdade...", "foram X g...", "esqueci" → "corrigir".
-4. Volume (ml/copo/litro) + suco/leite/refrigerante/cerveja → "registrar", JAMAIS "agua".
+1. Pergunta sobre kcal/macros/água JÁ CONSUMIDOS hoje → "saldo", nunca "consulta". Marcadores: "quanto/quantas/quantos" + (calorias/proteína/carbo/gordura/água/consumi/comi); "saldo do dia"; "tô dentro/fora da meta"; "quanto falta/sobrou".
+2. Frase com "?" geralmente é "consulta", a não ser que seja confirmação curta tipo "comi 200g de arroz, ok?".
+3. "comi bem hoje, qual minha dieta?" → "consulta" (a pergunta é sobre o plano).
+4. "na verdade...", "foram X g...", "esqueci" → "corrigir".
+5. Volume (ml/copo/litro) + suco/leite/refrigerante/cerveja → "registrar", JAMAIS "agua".
 
 Devolva APENAS o JSON. Nada de explicações.`;
 
@@ -139,7 +156,8 @@ export async function classificarIntencaoComHaiku(texto: string): Promise<Intent
       intent === 'corrigir' ||
       intent === 'agua' ||
       intent === 'consulta' ||
-      intent === 'substituicao'
+      intent === 'substituicao' ||
+      intent === 'saldo'
     ) {
       return intent;
     }
