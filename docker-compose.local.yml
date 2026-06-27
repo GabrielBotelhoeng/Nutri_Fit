@@ -112,7 +112,6 @@ services:
       GROQ_API_KEY: ${GROQ_API_KEY}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-nutrichat_internal_dev_key_2026}
-      PANEL_API_KEY: ${PANEL_API_KEY:-nutrichat_panel_key_dev}
     volumes:
       - ./backend/src:/app/src
     networks:
