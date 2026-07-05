@@ -1,4 +1,7 @@
 {
+  "_OBSOLETE": "Este arquivo esta desatualizado desde 2026-06-24. O trabalho descrito em remaining_tasks ja foi entregue e novos itens ficaram pendentes. Handoff atual em .planning/NEXT-SESSION.md.",
+  "superseded_by": ".planning/NEXT-SESSION.md",
+  "superseded_at": "2026-07-05",
   "version": "1.0",
   "timestamp": "2026-06-22T03:30:00Z",
   "phase": "bot-refinements-batch-1",
@@ -7,7 +10,7 @@
   "plan": null,
   "task": null,
   "total_tasks": 18,
-  "status": "paused",
+  "status": "obsolete",
   "completed_tasks": [
     {"id": 1, "name": "Mapeamento de codigo dos 5 refinamentos", "status": "done", "commit": "3346a33"},
     {"id": 2, "name": "#5 Relatorio semanal v1 (basico)", "status": "done", "commit": "aa8ccc3"},

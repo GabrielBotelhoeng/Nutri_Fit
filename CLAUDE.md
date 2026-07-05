@@ -1,5 +1,7 @@
 # NutriChat — Contexto Rápido para Claude
 
+> **➡️ Handoff atual:** [`.planning/NEXT-SESSION.md`](.planning/NEXT-SESSION.md) — leia esse arquivo primeiro para saber o que já foi feito e o que falta. As seções "Fases GSD" e "Próxima ação" abaixo estão desatualizadas (mantidas por contexto histórico).
+
 ## O que é este projeto
 
 NutriChat é um assistente nutricional via WhatsApp. O nutricionista cadastra o paciente no sistema, o bot inicia onboarding automático (entrevista de 7 etapas), calcula TMB/hidratação/creatina e responde dúvidas sobre a dieta via Claude AI + RAG (PDF da dieta indexado no pgvector).
