@@ -50,6 +50,7 @@ vi.mock('../src/services/rag', () => ({
 
 // Importar DEPOIS dos mocks
 import { calcularStreak, linhaStreak, microMensagemFinal, StreakInfo } from '../src/services/meal';
+import { diasAtrasLocal } from '../src/utils/datas';
 import type { MacrosDiarios } from '../src/services/calculos';
 
 // Metas de referencia: zona de kcal = [1900, 2200]; proteina bate com >= 142.5g.
@@ -60,11 +61,11 @@ const metas: MacrosDiarios = {
   gordura_g: 60,
 };
 
-// Datas em UTC yyyy-mm-dd, mesmo formato que acumular_registro_diario grava.
+// Datas no fuso do paciente (mesma fonte que registrarRefeicao/calcularStreak
+// usam em producao) — usar toISOString aqui quebraria o teste entre 21h e
+// meia-noite no Brasil, exatamente o bug de timezone que foi corrigido.
 function diasAtras(n: number): string {
-  const d = new Date();
-  d.setUTCDate(d.getUTCDate() - n);
-  return d.toISOString().slice(0, 10);
+  return diasAtrasLocal(n);
 }
 
 // Linha de registros_diarios que bate ambas as dimensoes.

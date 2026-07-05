@@ -6,6 +6,7 @@ import { sendText } from './evolution';
 import { getEstado as getEstadoConv, atualizarEstado, UltimaRefeicao } from './conversation';
 import type { PacienteInfo } from './conversation';
 import { obterMetas, MacrosDiarios } from './calculos';
+import { hojeLocal, diaAnterior, diasAtrasLocal } from '../utils/datas';
 
 // Janela em minutos durante a qual uma refeicao recente ainda pode ser
 // alvo de "correcao". Fora dela, frases como "na verdade foi assim" voltam
@@ -185,7 +186,7 @@ export async function registrarRefeicao(
   itens?: UltimaRefeicao['itens'],
 ): Promise<UltimaRefeicao> {
   const m = sanitizarMacros(macros);
-  const hoje = new Date().toISOString().slice(0, 10);
+  const hoje = hojeLocal();
 
   const { data: inserted, error: insertError } = await supabase
     .from('refeicoes')
@@ -260,7 +261,7 @@ export async function corrigirUltimaRefeicao(
   novosItens?: UltimaRefeicao['itens'],
 ): Promise<UltimaRefeicao> {
   const novos = sanitizarMacros(novosMacros);
-  const hoje = new Date().toISOString().slice(0, 10);
+  const hoje = hojeLocal();
 
   const { error: updateError } = await supabase
     .from('refeicoes')
@@ -308,7 +309,7 @@ export async function corrigirUltimaRefeicao(
 }
 
 export async function obterSaldoDia(pacienteId: string): Promise<MacrosRefeicao> {
-  const hoje = new Date().toISOString().slice(0, 10);
+  const hoje = hojeLocal();
   const { data, error } = await supabase
     .from('registros_diarios')
     .select('kcal_consumido, proteina_g, carbo_g, gordura_g, agua_ml')
@@ -344,12 +345,6 @@ export const STREAK_TOLERANCIA = 0.95;
 // a mensagem perde precisao so pra quem ja esta ha um mes perfeito.
 export const STREAK_JANELA_DIAS = 30;
 
-function diaAnteriorUTC(dataISO: string): string {
-  const d = new Date(`${dataISO}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() - 1);
-  return d.toISOString().slice(0, 10);
-}
-
 // Calcula o streak por dimensao (proteina e kcal) olhando registros_diarios
 // dos ultimos STREAK_JANELA_DIAS. Regras:
 // - Hoje bateu → hoje conta. Hoje ainda nao bateu → nao quebra, pula hoje
@@ -358,7 +353,7 @@ function diaAnteriorUTC(dataISO: string): string {
 //   bater hoje → streak de kcal quebra agora (proteina segue independente).
 // - Dia sem registro no meio da sequencia (gap >= 1 dia) quebra.
 // - Dimensao sem meta cadastrada (<= 0) fica em 0 — nunca inventa streak.
-// Datas em UTC (yyyy-mm-dd), consistente com acumular_registro_diario.
+// Datas no fuso do paciente (hojeLocal), consistente com registrarRefeicao.
 export async function calcularStreak(
   pacienteId: string,
   metas: MacrosDiarios,
@@ -368,10 +363,8 @@ export async function calcularStreak(
   const temMetaKcal = metas.kcal > 0;
   if (!temMetaProteina && !temMetaKcal) return zero;
 
-  const hoje = new Date().toISOString().slice(0, 10);
-  const inicioJanela = new Date(Date.now() - STREAK_JANELA_DIAS * 24 * 60 * 60 * 1000)
-    .toISOString()
-    .slice(0, 10);
+  const hoje = hojeLocal();
+  const inicioJanela = diasAtrasLocal(STREAK_JANELA_DIAS);
 
   const { data, error } = await supabase
     .from('registros_diarios')
@@ -408,12 +401,12 @@ export async function calcularStreak(
       return { streak: 0, batendoHoje: false };
     }
     let streak = batendoHoje ? 1 : 0;
-    let cursor = diaAnteriorUTC(hoje);
+    let cursor = diaAnterior(hoje);
     for (let i = 0; i < STREAK_JANELA_DIAS; i++) {
       const dia = porData.get(cursor);
       if (!dia || !bateu(dia)) break;
       streak++;
-      cursor = diaAnteriorUTC(cursor);
+      cursor = diaAnterior(cursor);
     }
     return { streak, batendoHoje };
   };
@@ -632,21 +625,33 @@ export async function sugerirSubstituicao(
   return response.content[0].type === 'text' ? response.content[0].text : '';
 }
 
+// `intentHint` (P1-3 follow-up): quando o agent.ts ja classificou a intencao
+// (fast-path/Haiku), os regexes internos NAO devem re-decidir — eles sao mais
+// burros que o classificador e derrubavam mensagem valida em silencio
+// ("2 copos de leite" classificado como registrar nao batia em ehRegistro e
+// o paciente ficava sem resposta) ou desviavam registro pra substituicao
+// ("comi arroz, nao tenho certeza" batia em "nao tenho"). Sem hint (fallback
+// do fluxo de correcao), os regexes continuam decidindo como antes — ali o
+// ignorar-em-silencio e intencional.
 export async function processarTextoRefeicao(
   phone: string,
   texto: string,
   paciente: PacienteInfo,
+  intentHint?: 'registrar' | 'substituicao',
 ): Promise<void> {
   const textoLower = texto.toLowerCase();
 
-  const ehSubstituicao = /substitu|nao tenho|não tenho|alternativa|trocar|troca/.test(textoLower);
+  const ehSubstituicao = intentHint
+    ? intentHint === 'substituicao'
+    : /substitu|nao tenho|não tenho|alternativa|trocar|troca/.test(textoLower);
   if (ehSubstituicao) {
     const resposta = await sugerirSubstituicao(paciente.id, paciente.nome, texto);
     await sendText(phone, resposta);
     return;
   }
 
-  const ehRegistro = /comi|tomei|bebi|almocei|jantei|caf[eé]|lanche|refeicao|refeição|breakfast|lunch|dinner|g de|ml de|colher|prato|gramas/.test(textoLower);
+  const ehRegistro = intentHint === 'registrar' ||
+    /comi|tomei|bebi|almocei|jantei|caf[eé]|lanche|refeicao|refeição|breakfast|lunch|dinner|g de|ml de|colher|prato|gramas/.test(textoLower);
 
   if (!ehRegistro) {
     return;

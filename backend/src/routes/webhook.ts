@@ -68,6 +68,13 @@ webhookRouter.post('/', async (req: Request, res: Response) => {
             (data.message.conversation as string) ||
             (data.message.extendedTextMessage as { text: string })?.text ||
             '';
+          // Texto vazio (sticker/reacao mal classificada, payload truncado):
+          // nao ha o que rotear — evita queimar chamada de Haiku no
+          // classificador e "Nao entendi" sem contexto na entrevista.
+          if (!text.trim()) {
+            console.log(`[webhook] Texto vazio de ${phone} — ignorado`);
+            break;
+          }
           await agentService.processarMensagem(phone, text);
           break;
         }

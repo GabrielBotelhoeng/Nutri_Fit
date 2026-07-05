@@ -1,8 +1,7 @@
 import { Groq } from 'groq-sdk';
 import { toFile } from 'groq-sdk/uploads';
 import { env } from '../config/env';
-import { buscarPacientePorWhatsapp } from './conversation';
-import { processarTextoRefeicao } from './meal';
+import { processarMensagem } from './agent';
 import { sendText } from './evolution';
 
 const INSTANCE = 'nutrichat';
@@ -51,17 +50,23 @@ export async function transcreverAudio(buffer: Buffer, mimetype: string): Promis
 }
 
 // Ponto de entrada chamado pelo webhook.ts para mensagens de áudio.
+// Delegar pro processarMensagem (roteamento completo do agente) em vez de
+// processarTextoRefeicao direto: áudio passa pelas mesmas camadas do texto —
+// bloqueio de plano expirado, entrevista por voz, classificador de intenção
+// (P1-3), correção (P0-1), saldo, água e consulta RAG. O atalho antigo
+// tratava TODO áudio como registro de refeição: resposta de entrevista por
+// voz sumia, correção por áudio duplicava a refeição (o double-count do
+// P0-1 seguia vivo nesse fluxo) e consulta por áudio ficava sem resposta.
 export async function processarAudio(phone: string, messageId: string): Promise<void> {
-  const paciente = await buscarPacientePorWhatsapp(phone);
-  if (!paciente) {
-    return;
-  }
-
   try {
     const { buffer, mimetype } = await downloadMedia(messageId);
-    const texto = await transcreverAudio(buffer, mimetype);
+    const texto = (await transcreverAudio(buffer, mimetype)).trim();
     console.log(`[audio] Transcrição de ${phone}: "${texto}"`);
-    await processarTextoRefeicao(phone, texto, paciente);
+    if (!texto) {
+      await sendText(phone, '❌ Não consegui entender o áudio. Pode repetir ou mandar por texto?');
+      return;
+    }
+    await processarMensagem(phone, texto);
   } catch (err) {
     console.error('[audio] Erro ao processar áudio:', err);
     await sendText(phone, '❌ Não consegui processar seu áudio. Pode tentar de novo ou descrever por texto?');

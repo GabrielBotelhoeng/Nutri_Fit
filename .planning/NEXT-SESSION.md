@@ -96,6 +96,18 @@ Implementado conforme `.planning/REFINAMENTO-AGENTE.md:57-62`:
 - "não sei"/"estima" → segue com o preparo assumido e o card mantém `_(estimei)_` (marcador agora dispara também por `preparo_inferido` em item da whitelist, além de quantidade estimada).
 - Testes em `backend/tests/preparo.test.ts` (19 novos; suite em 246 verdes). Pendente: UAT via WhatsApp real ("comi batata" → pergunta preparo; "comi batata frita" → não pergunta).
 
+### 2b. Auditoria de bugs do agente — ✅ 5 correções (2026-07-05, mesma branch)
+
+Auditoria completa do fluxo de mensagens + contagem de calorias. Corrigidos:
+
+1. **Áudio bypassava o agente** (`audio.ts`): todo áudio ia direto pra `processarTextoRefeicao` — entrevista por voz sumia, correção por áudio **duplicava refeição** (P0-1 seguia vivo nesse fluxo), consulta/saldo/água por áudio ficavam sem resposta, e o bloqueio de plano expirado não valia pra áudio. Agora delega pro `processarMensagem` (roteamento completo). Guard pra transcrição vazia.
+2. **Datas em UTC deslocavam refeições noturnas pro dia seguinte** (contagem de calorias): jantar depois das 21h (UTC-3) caía em `registros_diarios` do dia seguinte — saldo "virava" às 21h, streak/água/relatório idem. Novo `src/utils/datas.ts` (`hojeLocal()` com `TIMEZONE_PACIENTES`, default America/Sao_Paulo) aplicado em meal.ts, agent.ts, expiracao.ts, relatorio.ts. Documentado em `backend/.env.example`.
+3. **`processarTextoRefeicao` re-derivava a intenção por regex** e derrubava mensagem válida em silêncio ("2 copos de leite" classificado como registrar não batia no regex interno → paciente sem resposta) ou desviava registro pra substituição ("comi arroz, não tenho certeza" batia em "não tenho"). Agora recebe `intentHint` do classificador; sem hint (fallback da correção) o comportamento antigo se mantém.
+4. **Lembrete de vencimento repetia em TODA mensagem** dos 3 dias finais. Agora no máximo 1x/dia (`ultimo_aviso_expiracao` em `entrevista_dados`, helper puro `avisoVencimentoPendente`).
+5. **Texto vazio no webhook** era roteado (queimava chamada de Haiku). Agora ignorado.
+
+Testes: `datas.test.ts`, `aviso-vencimento.test.ts`, `roteamento-refeicao.test.ts`, `audio-roteamento.test.ts` (21 novos; suite em 267 verdes). `streaks.test.ts` alinhado ao fuso local.
+
 ### 3. UAT humano (pendente do usuário)
 
 Validação via WhatsApp + painel real dos itens já mergeados:
