@@ -1,7 +1,14 @@
 # Handoff — Próxima sessão Claude
 
-**Última atualização:** 2026-07-05
-**Estado do repo:** `origin/main` em `457c11c` (sync). Working tree limpo.
+**Última atualização:** 2026-07-05 (fim da sessão de streaks + P0-2b + auditoria)
+**Estado do repo:** trabalho novo na branch `claude/nutrichat-streaks-feature-ongoxm` → **PR #1 aberto** (https://github.com/GabrielBotelhoeng/Nutri_Fit/pull/1), aguardando revisão/merge do usuário.
+
+## ⚡ Status imediato (ler primeiro)
+
+- **PR #1** (`claude/nutrichat-streaks-feature-ongoxm` → `main`): streaks + P0-2b + 5 correções da auditoria. 267 testes verdes, typecheck limpo. **Não mergeado ainda** — o usuário disse em 2026-07-05 que mexeria nisso "amanhã". Se já foi mergeado quando você ler isto, recomece a branch a partir de `origin/main`.
+- **Landing page**: pronta na máquina LOCAL do usuário, ainda não subiu pro GitHub. Combinado: ele roda `git checkout -b feat/landing-page && git add nutrichat-landing && git commit && git push -u origin feat/landing-page`; aí o Claude abre o PR dela e atualiza o STATE.md da fase 6.
+- **Pós-merge do PR #1, o usuário precisa fazer na máquina local**: `git pull` + `docker restart nutrichat_backend`, e rodar o UAT (lista na seção 3).
+- **Fases GSD reais** (a tabela do CLAUDE.md está desatualizada): 1–5 completas; 6 (landing) feita localmente pendente de push; 7 (deploy Railway/Vercel) não iniciada — precisa de contas/credenciais do usuário.
 
 ## O que já está feito (em `origin/main`)
 
@@ -110,9 +117,16 @@ Testes: `datas.test.ts`, `aviso-vencimento.test.ts`, `roteamento-refeicao.test.t
 
 ### 3. UAT humano (pendente do usuário)
 
-Validação via WhatsApp + painel real dos itens já mergeados:
+Validação via WhatsApp + painel real. Itens antigos:
 - P1-4 (fator de atividade), P1-5 (sem MyFitnessPal), P1-6 (horários da dieta), P2-9 (memória multi-turn), SEC-1/2/3.
 - Monitorar comportamento do fallback OpenAI 429 (commit `22d2a72`) em produção.
+
+Itens novos do PR #1 (testar após merge + pull + `docker restart nutrichat_backend`):
+- Streak: registrar refeição batendo proteína 2+ dias seguidos → linha 🔥 no card.
+- Preparo: "comi batata" → bot pergunta o preparo antes do card; "comi batata frita" → não pergunta.
+- Áudio agora passa pelo roteamento completo: mandar áudio de correção ("na verdade foram 150g"), áudio de consulta ("qual minha dieta?") e responder etapa de entrevista por voz.
+- Timezone: registrar refeição depois das 21h e conferir que caiu no saldo do dia CERTO.
+- Mensagens que antes sumiam: "2 copos de leite" (sem verbo) deve registrar e responder.
 
 ### 4. Bug encoding UTF-8 (bloqueado em repro)
 
@@ -120,11 +134,11 @@ Validação via WhatsApp + painel real dos itens já mergeados:
 
 ## Como retomar
 
-1. `cd backend && docker ps --format "table {{.Names}}\t{{.Status}}"` — confirmar containers rodando.
-2. `cd backend && npm run test:run` — baseline 209 verdes.
-3. Ler `.planning/REFINAMENTO-AGENTE.md` para contexto completo do track de refinamento.
-4. Começar streaks pela função `calcularStreak` em `meal.ts` + testes; propagar aos call sites depois.
-5. Após editar TS: `docker restart nutrichat_backend` (tsx watch não recarrega volumes Docker no Windows).
+1. Checar o estado do **PR #1**: mergeado? → recomeçar a branch de `origin/main`. Aberto? → continuar nele.
+2. `cd backend && npm run test:run` — baseline atual **267 verdes** (`npm run typecheck` limpo).
+3. Se o usuário subiu a branch `feat/landing-page`: abrir PR dela, revisar, atualizar `.planning/STATE.md` (fase 6).
+4. Próximo trabalho codável depois disso: fase 7 (deploy Railway/Vercel — precisa de credenciais do usuário) e o bug UTF-8 (seção 4, só com repro).
+5. Docker/UAT rodam só na máquina local do usuário (sessões remotas não têm Docker). Após editar TS local: `docker restart nutrichat_backend`.
 
 ## Referências
 
