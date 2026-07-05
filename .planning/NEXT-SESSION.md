@@ -28,9 +28,9 @@ Todo o track de refinamentos do agente + segurança + hardening está mergeado. 
 
 ## O que falta fazer
 
-### 1. Streaks no card de progresso — PRIORIDADE, projeto pronto pra codar
+### 1. Streaks no card de progresso — ✅ IMPLEMENTADO (2026-07-05, branch `claude/nutrichat-streaks-feature-ongoxm`)
 
-Design fechado, código **não escrito**. Especificação abaixo.
+Código escrito conforme o design abaixo: `calcularStreak` + `linhaStreak` em `meal.ts`, os 4 formatadores aceitam `streak?` opcional, os 6 call sites chamam `await calcularStreak` antes de formatar. Testes em `backend/tests/streaks.test.ts` (18 novos, suite em 227 verdes, typecheck limpo). Pendente: UAT via WhatsApp real. Especificação original mantida abaixo por referência.
 
 **Regras de produto (fechadas com o usuário):**
 - Dimensões que contam streak: **proteína** e **kcal** (água quebra fácil demais).

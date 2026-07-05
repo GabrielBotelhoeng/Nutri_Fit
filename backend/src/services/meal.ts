@@ -281,6 +281,122 @@ export async function obterSaldoDia(pacienteId: string): Promise<MacrosRefeicao>
   };
 }
 
+// Streak de dias seguidos batendo meta, por dimensao. Agua fica de fora de
+// proposito (quebra facil demais e vira frustracao). `batendo_hoje_*` separa
+// "hoje ja conta" de "hoje ainda em andamento" — muda o tom da mensagem.
+export type StreakInfo = {
+  proteina: number;
+  kcal: number;
+  batendo_hoje_proteina: boolean;
+  batendo_hoje_kcal: boolean;
+};
+
+// Tolerancia pra considerar meta "batida": >= 95% ja conta. Pra kcal ha
+// tambem teto (OVERSHOOT_THRESHOLD) — ultrapassar 110% nao e bater.
+export const STREAK_TOLERANCIA = 0.95;
+
+// Janela maxima olhada pra tras. Streak acima disso satura — aceitavel:
+// a mensagem perde precisao so pra quem ja esta ha um mes perfeito.
+export const STREAK_JANELA_DIAS = 30;
+
+function diaAnteriorUTC(dataISO: string): string {
+  const d = new Date(`${dataISO}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+// Calcula o streak por dimensao (proteina e kcal) olhando registros_diarios
+// dos ultimos STREAK_JANELA_DIAS. Regras:
+// - Hoje bateu → hoje conta. Hoje ainda nao bateu → nao quebra, pula hoje
+//   e conta de ontem pra tras (o dia ainda esta em andamento).
+// - Excecao kcal: se hoje JA ultrapassou 110% da meta, nao tem mais como
+//   bater hoje → streak de kcal quebra agora (proteina segue independente).
+// - Dia sem registro no meio da sequencia (gap >= 1 dia) quebra.
+// - Dimensao sem meta cadastrada (<= 0) fica em 0 — nunca inventa streak.
+// Datas em UTC (yyyy-mm-dd), consistente com acumular_registro_diario.
+export async function calcularStreak(
+  pacienteId: string,
+  metas: MacrosDiarios,
+): Promise<StreakInfo> {
+  const zero: StreakInfo = { proteina: 0, kcal: 0, batendo_hoje_proteina: false, batendo_hoje_kcal: false };
+  const temMetaProteina = metas.proteina_g > 0;
+  const temMetaKcal = metas.kcal > 0;
+  if (!temMetaProteina && !temMetaKcal) return zero;
+
+  const hoje = new Date().toISOString().slice(0, 10);
+  const inicioJanela = new Date(Date.now() - STREAK_JANELA_DIAS * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 10);
+
+  const { data, error } = await supabase
+    .from('registros_diarios')
+    .select('data, kcal_consumido, proteina_g')
+    .eq('paciente_id', pacienteId)
+    .gte('data', inicioJanela)
+    .order('data', { ascending: false });
+
+  if (error || !data || data.length === 0) return zero;
+
+  type Dia = { kcal: number; proteina: number };
+  const porData = new Map<string, Dia>();
+  for (const r of data) {
+    porData.set(String(r.data), {
+      kcal: Number(r.kcal_consumido) || 0,
+      proteina: Number(r.proteina_g) || 0,
+    });
+  }
+
+  const bateuProteina = (d: Dia) => temMetaProteina && d.proteina >= STREAK_TOLERANCIA * metas.proteina_g;
+  const bateuKcal = (d: Dia) =>
+    temMetaKcal &&
+    d.kcal >= STREAK_TOLERANCIA * metas.kcal &&
+    d.kcal <= OVERSHOOT_THRESHOLD * metas.kcal;
+  const estourouKcal = (d: Dia) => temMetaKcal && d.kcal > OVERSHOOT_THRESHOLD * metas.kcal;
+
+  const contar = (
+    bateu: (d: Dia) => boolean,
+    quebrouHoje?: (d: Dia) => boolean,
+  ): { streak: number; batendoHoje: boolean } => {
+    const registroHoje = porData.get(hoje);
+    const batendoHoje = registroHoje !== undefined && bateu(registroHoje);
+    if (registroHoje && !batendoHoje && quebrouHoje?.(registroHoje)) {
+      return { streak: 0, batendoHoje: false };
+    }
+    let streak = batendoHoje ? 1 : 0;
+    let cursor = diaAnteriorUTC(hoje);
+    for (let i = 0; i < STREAK_JANELA_DIAS; i++) {
+      const dia = porData.get(cursor);
+      if (!dia || !bateu(dia)) break;
+      streak++;
+      cursor = diaAnteriorUTC(cursor);
+    }
+    return { streak, batendoHoje };
+  };
+
+  const prot = contar(bateuProteina);
+  const kcal = contar(bateuKcal, estourouKcal);
+  return {
+    proteina: prot.streak,
+    kcal: kcal.streak,
+    batendo_hoje_proteina: prot.batendoHoje,
+    batendo_hoje_kcal: kcal.batendoHoje,
+  };
+}
+
+// Linha "🔥 N dias seguidos..." do card. So aparece com streak >= 2 (1 dia
+// nao e sequencia). Entre as duas dimensoes vence a de streak maior; empate
+// vai pra proteina (e o eixo que o nutricionista mais cobra). Quando o dia
+// atual ainda nao bateu, convida pro proximo em vez de celebrar.
+export function linhaStreak(streak?: StreakInfo): string {
+  if (!streak) return '';
+  const melhor = streak.proteina >= streak.kcal
+    ? { dias: streak.proteina, alvo: 'a proteína', batendoHoje: streak.batendo_hoje_proteina }
+    : { dias: streak.kcal, alvo: 'a meta de calorias', batendoHoje: streak.batendo_hoje_kcal };
+  if (melhor.dias < 2) return '';
+  const sufixo = melhor.batendoHoje ? '' : ' Vamos pro próximo?';
+  return `🔥 *${melhor.dias} dias seguidos batendo ${melhor.alvo}!*${sufixo}`;
+}
+
 // Limite a partir do qual o paciente recebe alerta proativo de excesso calorico.
 // 110% e tolerancia clinica razoavel: 100% e meta, +10% e overshoot leve digno
 // de aviso amigavel (nao critico). Centralizado pra facilitar tunning futuro.
@@ -332,7 +448,14 @@ export function barraProgresso(atual: number, meta: number, blocos = 10): string
 // - perto (kcal >= 85% meta): reta final
 // - abaixo (default): ainda falta — destacar proteina se ela esta mais
 //   atrasada (paciente comendo carbo demais e o ponto mais comum de falha)
-export function microMensagemFinal(saldo: MacrosRefeicao, metas: MacrosDiarios): string {
+export function microMensagemFinal(saldo: MacrosRefeicao, metas: MacrosDiarios, streak?: StreakInfo): string {
+  const base = microMensagemBase(saldo, metas);
+  const fogo = linhaStreak(streak);
+  if (!fogo) return base;
+  return base ? `${fogo}\n${base}` : fogo;
+}
+
+function microMensagemBase(saldo: MacrosRefeicao, metas: MacrosDiarios): string {
   const kcalAtual = saldo.kcal;
   const kcalMeta = metas.kcal;
   const protAtual = saldo.proteina_g;
@@ -370,7 +493,7 @@ export function microMensagemFinal(saldo: MacrosRefeicao, metas: MacrosDiarios):
 // Usado tanto pelo card per-item (P0-2) quanto pelo formatarSaldoDia (foto).
 // A linha de agua so aparece quando o paciente tem meta cadastrada
 // (`metas.agua_ml`) — calculada a partir do peso na entrevista.
-export function formatarBlocoProgressoDia(saldo: MacrosRefeicao, metas: MacrosDiarios): string {
+export function formatarBlocoProgressoDia(saldo: MacrosRefeicao, metas: MacrosDiarios, streak?: StreakInfo): string {
   const linhas = [
     `🔥 Energia    ${barraProgresso(saldo.kcal, metas.kcal)}  ${Math.round(saldo.kcal)} / ${Math.round(metas.kcal)} kcal`,
     `🍗 Proteína   ${barraProgresso(saldo.proteina_g, metas.proteina_g)}  ${Math.round(saldo.proteina_g)} / ${Math.round(metas.proteina_g)} g`,
@@ -383,7 +506,7 @@ export function formatarBlocoProgressoDia(saldo: MacrosRefeicao, metas: MacrosDi
       `💧 Água       ${barraProgresso(aguaAtual, metas.agua_ml)}  ${Math.round(aguaAtual)} / ${Math.round(metas.agua_ml)} ml`,
     );
   }
-  const micro = microMensagemFinal(saldo, metas);
+  const micro = microMensagemFinal(saldo, metas, streak);
   return `📊 *Seu dia até agora*\n${linhas.join('\n')}${micro ? `\n\n${micro}` : ''}`;
 }
 
@@ -392,10 +515,11 @@ export function formatarSaldoDia(
   kcalRegistrado: number,
   saldo: MacrosRefeicao,
   metas: MacrosDiarios,
+  streak?: StreakInfo,
 ): string {
   return (
     `✅ *Registrado:* ${descricao} (${Math.round(kcalRegistrado)} kcal)\n\n` +
-    formatarBlocoProgressoDia(saldo, metas)
+    formatarBlocoProgressoDia(saldo, metas, streak)
   );
 }
 
@@ -407,6 +531,7 @@ export function formatarCardRefeicao(
   analise: AnaliseRefeicao,
   saldo: MacrosRefeicao,
   metas: MacrosDiarios,
+  streak?: StreakInfo,
 ): string {
   const materiais = analise.itens.filter((i) => i.material);
   const naoMateriais = analise.itens.filter((i) => !i.material);
@@ -431,7 +556,7 @@ export function formatarCardRefeicao(
     `✅ *Registrado!*\n\n` +
     `${linhasItens.join('\n')}${rodapeExtras}\n\n` +
     `${linhaRefeicao}\n\n` +
-    formatarBlocoProgressoDia(saldo, metas)
+    formatarBlocoProgressoDia(saldo, metas, streak)
   );
 }
 
@@ -513,8 +638,9 @@ export async function processarTextoRefeicao(
   const estado = await getEstadoConv(paciente.id);
   const metas = obterMetas(estado.dados as Record<string, unknown>);
   const saldo = await obterSaldoDia(paciente.id);
+  const streak = await calcularStreak(paciente.id, metas);
 
-  await sendText(phone, formatarCardRefeicao(analise, saldo, metas));
+  await sendText(phone, formatarCardRefeicao(analise, saldo, metas, streak));
 
   await dispararAlertaOvershoot(phone, saldo, metas);
 }
@@ -561,7 +687,8 @@ export async function processarRespostaQuantidade(
   const estado = await getEstadoConv(paciente.id);
   const metas = obterMetas(estado.dados as Record<string, unknown>);
   const saldo = await obterSaldoDia(paciente.id);
-  await sendText(phone, formatarCardRefeicao(analiseFinal, saldo, metas));
+  const streak = await calcularStreak(paciente.id, metas);
+  await sendText(phone, formatarCardRefeicao(analiseFinal, saldo, metas, streak));
   await dispararAlertaOvershoot(phone, saldo, metas);
 }
 
@@ -623,11 +750,12 @@ export async function processarTextoCorrecao(
   const estado = await getEstadoConv(paciente.id);
   const metas = obterMetas(estado.dados as Record<string, unknown>);
   const saldo = await obterSaldoDia(paciente.id);
+  const streak = await calcularStreak(paciente.id, metas);
 
   await sendText(
     phone,
     `✏️ *Corrigi a última refeição* (substituí, não somei).\n\n` +
-    formatarSaldoDia(texto, novosMacros.kcal, saldo, metas),
+    formatarSaldoDia(texto, novosMacros.kcal, saldo, metas, streak),
   );
 
   await dispararAlertaOvershoot(phone, saldo, metas);

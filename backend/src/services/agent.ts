@@ -822,7 +822,8 @@ export async function processarMensagem(phone: string, texto: string): Promise<v
         const estadoAtual = await getEstado(paciente.id);
         const metas = obterMetas(estadoAtual.dados as Record<string, unknown>);
         const saldo = await mealService.obterSaldoDia(paciente.id);
-        await sendText(phone, mealService.formatarSaldoDia(descricao, macros.kcal, saldo, metas));
+        const streak = await mealService.calcularStreak(paciente.id, metas);
+        await sendText(phone, mealService.formatarSaldoDia(descricao, macros.kcal, saldo, metas, streak));
         await mealService.dispararAlertaOvershoot(phone, saldo, metas);
         return;
       } else if (textoConfirmacao === 'não' || textoConfirmacao === 'nao' || textoConfirmacao === 'n' || textoConfirmacao === 'no') {
@@ -899,7 +900,8 @@ export async function processarMensagem(phone: string, texto: string): Promise<v
   if (intent === 'saldo') {
     const metas = obterMetas(dadosEstado);
     const saldo = await mealService.obterSaldoDia(paciente.id);
-    await sendText(phone, mealService.formatarBlocoProgressoDia(saldo, metas));
+    const streak = await mealService.calcularStreak(paciente.id, metas);
+    await sendText(phone, mealService.formatarBlocoProgressoDia(saldo, metas, streak));
     return;
   }
 
