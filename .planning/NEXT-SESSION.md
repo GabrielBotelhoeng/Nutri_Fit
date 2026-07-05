@@ -87,13 +87,14 @@ Modificar os 4 formatadores para receber `streak?: StreakInfo` opcional:
 
 Mocar Supabase pelo mesmo padrão de `backend/tests/meal-correcao.test.ts`.
 
-### 2. P0-2b — Preparo silencioso (diferido)
+### 2. P0-2b — Preparo silencioso — ✅ IMPLEMENTADO (2026-07-05, branch `claude/nutrichat-streaks-feature-ongoxm`)
 
-Especificado em `.planning/REFINAMENTO-AGENTE.md:57-62`. Resumo:
-- Estender output do `analisarRefeicaoComClaude` com `preparo_inferido: boolean` por item.
-- Whitelist de alimentos "preparo muda muito kcal": batata, frango, ovo, peixe, carne moída.
-- Quando `preparo_inferido=true` E item ∈ whitelist, perguntar antes (mesmo fluxo do `refeicao_pendente` atual em `agent.ts`, TTL 10 min).
-- Card mantém `_(estimei)_` visível quando o paciente confirma preparo desconhecido.
+Implementado conforme `.planning/REFINAMENTO-AGENTE.md:57-62`:
+- `analisarRefeicaoComClaude` agora emite `preparo_inferido: boolean` por item (campo opcional em `ItemRefeicao` — compatível com análises antigas persistidas em estado).
+- Whitelist `PREPARO_CRITICO` em `meal.ts`: batata, frango, ovo, peixe, carne moída (regex com normalização de acento).
+- `preparo_inferido=true` + whitelist → pergunta "🍳 Como foi o preparo de *X*?" antes de registrar, via `preparo_pendente` (mesmo shape/TTL 10 min da `refeicao_pendente`; intercept em `agent.ts` antes do de quantidade). A pergunta de preparo vem ANTES da de quantidade; após a resposta, o fluxo P0-2 (quantidade) continua normalmente. Preparo não é re-checado após a resposta (uma pergunta por refeição, sem loop).
+- "não sei"/"estima" → segue com o preparo assumido e o card mantém `_(estimei)_` (marcador agora dispara também por `preparo_inferido` em item da whitelist, além de quantidade estimada).
+- Testes em `backend/tests/preparo.test.ts` (19 novos; suite em 246 verdes). Pendente: UAT via WhatsApp real ("comi batata" → pergunta preparo; "comi batata frita" → não pergunta).
 
 ### 3. UAT humano (pendente do usuário)
 

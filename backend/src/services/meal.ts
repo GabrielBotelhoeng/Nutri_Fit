@@ -27,12 +27,16 @@ export interface MacrosRefeicao {
 // Item individual da analise estruturada (P0-2). `material` distingue
 // alimento substancial (frango, arroz, banana) de aditivo/bebida zero
 // (sal, agua, coca zero, cafe preto) — so itens materiais sem quantidade
-// disparam pergunta antes do registro.
+// disparam pergunta antes do registro. `preparo_inferido` (P0-2b) marca
+// quando o Haiku escolheu o modo de preparo sozinho (paciente disse so
+// "batata") — opcional pra compatibilidade com analises ja persistidas
+// em estado antes deste campo existir.
 export interface ItemRefeicao {
   nome: string;
   quantidade_g: number;
   quantidade_informada: boolean;
   material: boolean;
+  preparo_inferido?: boolean;
 }
 
 export interface AnaliseRefeicao {
@@ -66,7 +70,8 @@ RESPONDA APENAS COM JSON VÁLIDO no formato:
       "nome": "nome curto do alimento (ex.: 'Frango grelhado', 'Arroz branco', 'Coca Zero')",
       "quantidade_g": numero em gramas (ou ml para liquidos),
       "quantidade_informada": true se o paciente disse a quantidade EXPLICITA (ex.: '200g', '100ml', '2 colheres'); false se você teve que estimar,
-      "material": true para alimentos substanciais que contribuem com macros (carnes, arroz, feijao, frutas, paes); false para itens sem macros relevantes (agua, cafe preto, refrigerante zero, sal, tempero, chá sem açúcar)
+      "material": true para alimentos substanciais que contribuem com macros (carnes, arroz, feijao, frutas, paes); false para itens sem macros relevantes (agua, cafe preto, refrigerante zero, sal, tempero, chá sem açúcar),
+      "preparo_inferido": true se o alimento tem modo de preparo que muda os macros (frito/cozido/assado/grelhado/mexido) e o paciente NÃO disse qual foi — ou seja, você escolheu o preparo sozinho; false se o paciente informou o preparo OU o alimento não tem preparo relevante (fruta, iogurte, pão)
     }
   ],
   "totais": {"kcal": number, "proteina_g": number, "carbo_g": number, "gordura_g": number}
@@ -77,6 +82,7 @@ Regras OBRIGATÓRIAS:
 - Use porção típica brasileira ao estimar (ex.: arroz médio ~100g, colher de feijão ~60g, fatia de pão ~30g).
 - "quantidade_informada" deve ser true APENAS quando o paciente deu um número explícito (gramas, ml, colheres, fatias, unidades). Se ele só falou "com arroz", marque false.
 - "material" diferencia o que tem caloria real do que é bebida zero ou tempero — bebida zero, agua, café preto, chá sem açúcar e temperos são SEMPRE material:false.
+- "preparo_inferido" só é true quando VOCÊ assumiu o preparo por conta própria: "batata frita" → false (paciente informou); "batata" → true (você escolheu). Ao assumir um preparo, use o mais comum no nome (ex.: "Batata cozida", "Frango grelhado", "Ovo cozido").
 - "totais" deve ser a SOMA exata dos macros de todos os itens.
 - Não inclua comentários ou markdown. Apenas JSON puro.`;
 
@@ -97,6 +103,7 @@ Regras OBRIGATÓRIAS:
         quantidade_g: Number(it['quantidade_g']) || 0,
         quantidade_informada: it['quantidade_informada'] === true,
         material: it['material'] === true,
+        preparo_inferido: it['preparo_inferido'] === true,
       };
     });
     const totais = sanitizarMacros({
@@ -126,6 +133,44 @@ export async function calcularMacrosComClaude(descricao: string): Promise<Macros
 // zero/temperos), ou seja, quando NAO se deve interromper o registro.
 export function detectarItemMaterialSemQuantidade(itens: ItemRefeicao[]): ItemRefeicao | null {
   return itens.find((i) => i.material && !i.quantidade_informada) ?? null;
+}
+
+// P0-2b: alimentos cujo preparo muda muito a kcal (batata frita ~310 kcal/100g
+// vs ~80 da cozida). So esses justificam interromper o registro pra perguntar
+// o preparo — pro resto, o preparo assumido fica visivel no card e o paciente
+// corrige via P0-1 se quiser.
+const PREPARO_CRITICO: RegExp[] = [
+  /\bbatatas?\b/,
+  /\bfrango\b/,
+  /\bovos?\b/,
+  /\bpeixes?\b/,
+  /\bcarnes?\s+moidas?\b/,
+];
+
+function normalizarNome(nome: string): string {
+  return nome.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+export function ehPreparoCritico(nome: string): boolean {
+  const n = normalizarNome(nome);
+  return PREPARO_CRITICO.some((re) => re.test(n));
+}
+
+// Remove adjetivos de preparo do nome pra pergunta nao sair esquisita
+// ("Como foi o preparo de *Batata cozida*?" → "... de *Batata*?"). O Haiku
+// ja embute o preparo assumido no nome do item.
+function nomeSemPreparo(nome: string): string {
+  return nome
+    .replace(/\b(frit[oa]s?|cozid[oa]s?|assad[oa]s?|grelhad[oa]s?|empanad[oa]s?|mexid[oa]s?|refogad[oa]s?|ao\s+forno)\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Detecta o primeiro item material de preparo critico cujo preparo foi
+// assumido pelo Haiku (P0-2b). Mesma filosofia do detector de quantidade:
+// null = nao interromper o registro.
+export function detectarItemPreparoInferido(itens: ItemRefeicao[]): ItemRefeicao | null {
+  return itens.find((i) => i.material && i.preparo_inferido === true && ehPreparoCritico(i.nome)) ?? null;
 }
 
 // Retorna o snapshot do que foi gravado — usado pelo agente pra montar
@@ -538,7 +583,11 @@ export function formatarCardRefeicao(
 
   const linhasItens = materiais.map((i) => {
     const qtd = Math.round(i.quantidade_g);
-    const marcador = i.quantidade_informada ? '' : ' _(estimei)_';
+    // P0-2b: preparo assumido em alimento critico tambem marca "_(estimei)_"
+    // (paciente respondeu "nao sei" a pergunta de preparo, ou fluxo que nao
+    // pergunta). O "~" continua exclusivo de quantidade estimada.
+    const estimou = !i.quantidade_informada || (i.preparo_inferido === true && ehPreparoCritico(i.nome));
+    const marcador = estimou ? ' _(estimei)_' : '';
     const prefixo = i.quantidade_informada ? '' : '~';
     return `• ${i.nome} — ${prefixo}${qtd}g${marcador}`;
   });
@@ -607,6 +656,30 @@ export async function processarTextoRefeicao(
 
   if (analise.totais.kcal === 0 || analise.itens.length === 0) {
     await sendText(phone, `⚠️ Não consegui estimar os macros para essa refeição. Tente descrever com mais detalhes (ex: "200g de frango grelhado com 100g de arroz").`);
+    return;
+  }
+
+  // P0-2b: preparo assumido em alimento critico (batata, frango, ovo...) —
+  // pergunta o preparo antes de tudo (erro de ~4x na kcal e pior que erro
+  // de porcao). A resposta vira pela `preparo_pendente` (intercept em
+  // agent.ts). A checagem de quantidade (P0-2) roda depois da resposta.
+  const itemPreparo = detectarItemPreparoInferido(analise.itens);
+  if (itemPreparo) {
+    await atualizarEstado(paciente.id, {
+      dados: {
+        preparo_pendente: {
+          descricao_original: texto,
+          analise,
+          item_perguntado: itemPreparo.nome,
+          timestamp: new Date().toISOString(),
+        },
+      } as Parameters<typeof atualizarEstado>[1]['dados'],
+    });
+    await sendText(
+      phone,
+      `🍳 Como foi o preparo de *${nomeSemPreparo(itemPreparo.nome)}*? (frito, cozido, assado, grelhado...)\n\n` +
+      `_Se não souber, manda *"não sei"* que eu uso o mais comum._`,
+    );
     return;
   }
 
@@ -726,6 +799,104 @@ export function obterRefeicaoPendenteSeValida(
     analise: raw.analise,
     item_perguntado: raw.item_perguntado,
   };
+}
+
+// P0-2b: pendencia da pergunta de preparo ("frito, cozido, assado?").
+// Mesmo shape e TTL da refeicao_pendente, chave separada — as duas nunca
+// coexistem (preparo pergunta primeiro; quantidade so depois da resposta).
+export function obterPreparoPendenteSeValido(
+  dadosEstado: Record<string, unknown>,
+): {
+  descricao_original: string;
+  analise: AnaliseRefeicao;
+  item_perguntado: string;
+} | null {
+  const raw = dadosEstado['preparo_pendente'] as {
+    descricao_original?: string;
+    analise?: AnaliseRefeicao;
+    item_perguntado?: string;
+    timestamp?: string;
+  } | null | undefined;
+  if (!raw || !raw.descricao_original || !raw.analise || !raw.item_perguntado || !raw.timestamp) return null;
+  const idadeMs = Date.now() - new Date(raw.timestamp).getTime();
+  if (idadeMs > TTL_REFEICAO_PENDENTE_MIN * 60 * 1000) return null;
+  return {
+    descricao_original: raw.descricao_original,
+    analise: raw.analise,
+    item_perguntado: raw.item_perguntado,
+  };
+}
+
+// Resposta do paciente a pergunta de preparo (P0-2b). Dois caminhos:
+// (a) "nao sei/estima/tanto faz" → segue com o preparo assumido pelo Haiku,
+//     que continua marcado `preparo_inferido` → card mostra "_(estimei)_";
+// (b) qualquer outra coisa → injeta na descricao e recalcula (re-analise
+//     com preparo informado zera o `preparo_inferido` do item).
+// Depois da resposta, o fluxo normal continua: se ainda faltar quantidade
+// de item material (P0-2), pergunta a quantidade; senao registra. Preparo
+// NAO e re-checado apos a resposta — uma pergunta de preparo por refeicao,
+// sem loop.
+export async function processarRespostaPreparo(
+  phone: string,
+  texto: string,
+  paciente: PacienteInfo,
+  pendente: {
+    descricao_original: string;
+    analise: AnaliseRefeicao;
+    item_perguntado: string;
+  },
+): Promise<void> {
+  const txt = texto.toLowerCase().trim();
+  const naoSabe = /^(n[aã]o\s+sei|sei\s+l[aá]|estima|estimar|qualquer|tanto\s+faz|o\s+mais\s+comum)\b/.test(txt);
+
+  let analiseFinal = pendente.analise;
+  let descricaoFinal = pendente.descricao_original;
+
+  if (!naoSabe) {
+    descricaoFinal = `${pendente.descricao_original} (${pendente.item_perguntado}: preparo ${texto.trim()})`;
+    analiseFinal = await analisarRefeicaoComClaude(descricaoFinal);
+    if (analiseFinal.totais.kcal === 0 || analiseFinal.itens.length === 0) {
+      analiseFinal = pendente.analise;
+      descricaoFinal = pendente.descricao_original;
+    }
+  }
+
+  // Limpa pendencia ANTES de gravar — mesmo racional da resposta de
+  // quantidade: mensagem nova nao pode ser interpretada como continuacao
+  // se algo abaixo falhar.
+  await atualizarEstado(paciente.id, {
+    dados: { preparo_pendente: null } as Parameters<typeof atualizarEstado>[1]['dados'],
+  });
+
+  // P0-2: com o preparo resolvido, ainda pode faltar quantidade.
+  const itemFaltando = detectarItemMaterialSemQuantidade(analiseFinal.itens);
+  if (itemFaltando) {
+    await atualizarEstado(paciente.id, {
+      dados: {
+        refeicao_pendente: {
+          descricao_original: descricaoFinal,
+          analise: analiseFinal,
+          item_perguntado: itemFaltando.nome,
+          timestamp: new Date().toISOString(),
+        },
+      } as Parameters<typeof atualizarEstado>[1]['dados'],
+    });
+    await sendText(
+      phone,
+      `🤔 Quantas gramas de *${itemFaltando.nome}*, mais ou menos?\n\n` +
+      `_Se não souber, manda *"estima"* que eu uso uma porção média._`,
+    );
+    return;
+  }
+
+  await registrarRefeicao(paciente.id, descricaoFinal, analiseFinal.totais, 'texto', stripMaterial(analiseFinal.itens));
+
+  const estado = await getEstadoConv(paciente.id);
+  const metas = obterMetas(estado.dados as Record<string, unknown>);
+  const saldo = await obterSaldoDia(paciente.id);
+  const streak = await calcularStreak(paciente.id, metas);
+  await sendText(phone, formatarCardRefeicao(analiseFinal, saldo, metas, streak));
+  await dispararAlertaOvershoot(phone, saldo, metas);
 }
 
 // Fluxo de correcao da ultima refeicao registrada (P0-1). Calcula novos

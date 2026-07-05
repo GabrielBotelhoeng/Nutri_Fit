@@ -835,6 +835,15 @@ export async function processarMensagem(phone: string, texto: string): Promise<v
     }
   }
 
+  // P0-2b: paciente respondendo pergunta de preparo ("frita", "cozido",
+  // "não sei") — TTL 10 min, gerenciado em meal.ts. Antes do roteamento
+  // normal pelo mesmo motivo da refeicao_pendente abaixo.
+  const preparoPendente = mealService.obterPreparoPendenteSeValido(dadosEstado);
+  if (preparoPendente) {
+    await mealService.processarRespostaPreparo(phone, texto, paciente, preparoPendente);
+    return;
+  }
+
   // P0-2: paciente respondendo pergunta "quantas gramas de X?" — TTL 10 min,
   // gerenciado em meal.ts. Tem que vir antes do roteamento normal pra resposta
   // curta ("estima", "100g") nao cair no ehRegistro=false e sumir.
