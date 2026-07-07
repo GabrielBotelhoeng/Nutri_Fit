@@ -1,14 +1,16 @@
 # Handoff — Próxima sessão Claude
 
-**Última atualização:** 2026-07-05 (fim da sessão de streaks + P0-2b + auditoria)
-**Estado do repo:** trabalho novo na branch `claude/nutrichat-streaks-feature-ongoxm` → **PR #1 aberto** (https://github.com/GabrielBotelhoeng/Nutri_Fit/pull/1), aguardando revisão/merge do usuário.
+**Última atualização:** 2026-07-06 (PR #1 mergeado)
+**Estado do repo:** **PR #1 MERGEADO** em `main` (`807dce4`) — streaks + P0-2b + 5 correções da auditoria. Branch `claude/nutrichat-streaks-feature-ongoxm` recomeçada a partir da main nova. 267 testes verdes, typecheck limpo.
 
 ## ⚡ Status imediato (ler primeiro)
 
-- **PR #1** (`claude/nutrichat-streaks-feature-ongoxm` → `main`): streaks + P0-2b + 5 correções da auditoria. 267 testes verdes, typecheck limpo. **Não mergeado ainda** — o usuário disse em 2026-07-05 que mexeria nisso "amanhã". Se já foi mergeado quando você ler isto, recomece a branch a partir de `origin/main`.
-- **Landing page**: pronta na máquina LOCAL do usuário, ainda não subiu pro GitHub. Combinado: ele roda `git checkout -b feat/landing-page && git add nutrichat-landing && git commit && git push -u origin feat/landing-page`; aí o Claude abre o PR dela e atualiza o STATE.md da fase 6.
-- **Pós-merge do PR #1, o usuário precisa fazer na máquina local**: `git pull` + `docker restart nutrichat_backend`, e rodar o UAT (lista na seção 3).
-- **Fases GSD reais** (a tabela do CLAUDE.md está desatualizada): 1–5 completas; 6 (landing) feita localmente pendente de push; 7 (deploy Railway/Vercel) não iniciada — precisa de contas/credenciais do usuário.
+- **Pendente do USUÁRIO na máquina local** (nada disso roda em sessão remota):
+  1. `git pull` + `docker restart nutrichat_backend` — sem isso o bot continua rodando o código antigo.
+  2. Rodar o UAT da seção 3 (destaques: áudio de correção, refeição depois das 21h, "2 copos de leite").
+  3. Subir a landing: `git checkout -b feat/landing-page && git add nutrichat-landing && git commit && git push -u origin feat/landing-page` — aí o Claude abre o PR dela e atualiza o STATE.md da fase 6.
+- **Próximo trabalho codável do Claude**: PR da landing (quando o usuário subir a branch); fase 7 — deploy Railway/Vercel (precisa de contas/credenciais do usuário); bug UTF-8 (seção 4, só com repro).
+- **Fases GSD reais** (a tabela do CLAUDE.md está desatualizada): 1–5 completas; 6 (landing) feita localmente pendente de push; 7 (deploy) não iniciada.
 
 ## O que já está feito (em `origin/main`)
 
