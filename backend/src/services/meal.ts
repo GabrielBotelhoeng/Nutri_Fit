@@ -6,6 +6,7 @@ import { sendText } from './evolution';
 import { getEstado as getEstadoConv, atualizarEstado, UltimaRefeicao } from './conversation';
 import type { PacienteInfo } from './conversation';
 import { obterMetas, MacrosDiarios } from './calculos';
+import { hojeLocal, diaAnterior, diasAtrasLocal } from '../utils/datas';
 
 // Janela em minutos durante a qual uma refeicao recente ainda pode ser
 // alvo de "correcao". Fora dela, frases como "na verdade foi assim" voltam
@@ -27,12 +28,16 @@ export interface MacrosRefeicao {
 // Item individual da analise estruturada (P0-2). `material` distingue
 // alimento substancial (frango, arroz, banana) de aditivo/bebida zero
 // (sal, agua, coca zero, cafe preto) — so itens materiais sem quantidade
-// disparam pergunta antes do registro.
+// disparam pergunta antes do registro. `preparo_inferido` (P0-2b) marca
+// quando o Haiku escolheu o modo de preparo sozinho (paciente disse so
+// "batata") — opcional pra compatibilidade com analises ja persistidas
+// em estado antes deste campo existir.
 export interface ItemRefeicao {
   nome: string;
   quantidade_g: number;
   quantidade_informada: boolean;
   material: boolean;
+  preparo_inferido?: boolean;
 }
 
 export interface AnaliseRefeicao {
@@ -66,7 +71,8 @@ RESPONDA APENAS COM JSON VÁLIDO no formato:
       "nome": "nome curto do alimento (ex.: 'Frango grelhado', 'Arroz branco', 'Coca Zero')",
       "quantidade_g": numero em gramas (ou ml para liquidos),
       "quantidade_informada": true se o paciente disse a quantidade EXPLICITA (ex.: '200g', '100ml', '2 colheres'); false se você teve que estimar,
-      "material": true para alimentos substanciais que contribuem com macros (carnes, arroz, feijao, frutas, paes); false para itens sem macros relevantes (agua, cafe preto, refrigerante zero, sal, tempero, chá sem açúcar)
+      "material": true para alimentos substanciais que contribuem com macros (carnes, arroz, feijao, frutas, paes); false para itens sem macros relevantes (agua, cafe preto, refrigerante zero, sal, tempero, chá sem açúcar),
+      "preparo_inferido": true se o alimento tem modo de preparo que muda os macros (frito/cozido/assado/grelhado/mexido) e o paciente NÃO disse qual foi — ou seja, você escolheu o preparo sozinho; false se o paciente informou o preparo OU o alimento não tem preparo relevante (fruta, iogurte, pão)
     }
   ],
   "totais": {"kcal": number, "proteina_g": number, "carbo_g": number, "gordura_g": number}
@@ -77,6 +83,7 @@ Regras OBRIGATÓRIAS:
 - Use porção típica brasileira ao estimar (ex.: arroz médio ~100g, colher de feijão ~60g, fatia de pão ~30g).
 - "quantidade_informada" deve ser true APENAS quando o paciente deu um número explícito (gramas, ml, colheres, fatias, unidades). Se ele só falou "com arroz", marque false.
 - "material" diferencia o que tem caloria real do que é bebida zero ou tempero — bebida zero, agua, café preto, chá sem açúcar e temperos são SEMPRE material:false.
+- "preparo_inferido" só é true quando VOCÊ assumiu o preparo por conta própria: "batata frita" → false (paciente informou); "batata" → true (você escolheu). Ao assumir um preparo, use o mais comum no nome (ex.: "Batata cozida", "Frango grelhado", "Ovo cozido").
 - "totais" deve ser a SOMA exata dos macros de todos os itens.
 - Não inclua comentários ou markdown. Apenas JSON puro.`;
 
@@ -97,6 +104,7 @@ Regras OBRIGATÓRIAS:
         quantidade_g: Number(it['quantidade_g']) || 0,
         quantidade_informada: it['quantidade_informada'] === true,
         material: it['material'] === true,
+        preparo_inferido: it['preparo_inferido'] === true,
       };
     });
     const totais = sanitizarMacros({
@@ -128,6 +136,44 @@ export function detectarItemMaterialSemQuantidade(itens: ItemRefeicao[]): ItemRe
   return itens.find((i) => i.material && !i.quantidade_informada) ?? null;
 }
 
+// P0-2b: alimentos cujo preparo muda muito a kcal (batata frita ~310 kcal/100g
+// vs ~80 da cozida). So esses justificam interromper o registro pra perguntar
+// o preparo — pro resto, o preparo assumido fica visivel no card e o paciente
+// corrige via P0-1 se quiser.
+const PREPARO_CRITICO: RegExp[] = [
+  /\bbatatas?\b/,
+  /\bfrango\b/,
+  /\bovos?\b/,
+  /\bpeixes?\b/,
+  /\bcarnes?\s+moidas?\b/,
+];
+
+function normalizarNome(nome: string): string {
+  return nome.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+export function ehPreparoCritico(nome: string): boolean {
+  const n = normalizarNome(nome);
+  return PREPARO_CRITICO.some((re) => re.test(n));
+}
+
+// Remove adjetivos de preparo do nome pra pergunta nao sair esquisita
+// ("Como foi o preparo de *Batata cozida*?" → "... de *Batata*?"). O Haiku
+// ja embute o preparo assumido no nome do item.
+function nomeSemPreparo(nome: string): string {
+  return nome
+    .replace(/\b(frit[oa]s?|cozid[oa]s?|assad[oa]s?|grelhad[oa]s?|empanad[oa]s?|mexid[oa]s?|refogad[oa]s?|ao\s+forno)\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Detecta o primeiro item material de preparo critico cujo preparo foi
+// assumido pelo Haiku (P0-2b). Mesma filosofia do detector de quantidade:
+// null = nao interromper o registro.
+export function detectarItemPreparoInferido(itens: ItemRefeicao[]): ItemRefeicao | null {
+  return itens.find((i) => i.material && i.preparo_inferido === true && ehPreparoCritico(i.nome)) ?? null;
+}
+
 // Retorna o snapshot do que foi gravado — usado pelo agente pra montar
 // `ultima_refeicao` em entrevista_dados (base do fluxo de correcao P0-1).
 // `itens` e opcional pra manter compatibilidade com chamadas que ainda
@@ -140,7 +186,7 @@ export async function registrarRefeicao(
   itens?: UltimaRefeicao['itens'],
 ): Promise<UltimaRefeicao> {
   const m = sanitizarMacros(macros);
-  const hoje = new Date().toISOString().slice(0, 10);
+  const hoje = hojeLocal();
 
   const { data: inserted, error: insertError } = await supabase
     .from('refeicoes')
@@ -215,7 +261,7 @@ export async function corrigirUltimaRefeicao(
   novosItens?: UltimaRefeicao['itens'],
 ): Promise<UltimaRefeicao> {
   const novos = sanitizarMacros(novosMacros);
-  const hoje = new Date().toISOString().slice(0, 10);
+  const hoje = hojeLocal();
 
   const { error: updateError } = await supabase
     .from('refeicoes')
@@ -263,7 +309,7 @@ export async function corrigirUltimaRefeicao(
 }
 
 export async function obterSaldoDia(pacienteId: string): Promise<MacrosRefeicao> {
-  const hoje = new Date().toISOString().slice(0, 10);
+  const hoje = hojeLocal();
   const { data, error } = await supabase
     .from('registros_diarios')
     .select('kcal_consumido, proteina_g, carbo_g, gordura_g, agua_ml')
@@ -279,6 +325,114 @@ export async function obterSaldoDia(pacienteId: string): Promise<MacrosRefeicao>
     gordura_g:  Number(data.gordura_g),
     agua_ml:    Number(data.agua_ml ?? 0),
   };
+}
+
+// Streak de dias seguidos batendo meta, por dimensao. Agua fica de fora de
+// proposito (quebra facil demais e vira frustracao). `batendo_hoje_*` separa
+// "hoje ja conta" de "hoje ainda em andamento" — muda o tom da mensagem.
+export type StreakInfo = {
+  proteina: number;
+  kcal: number;
+  batendo_hoje_proteina: boolean;
+  batendo_hoje_kcal: boolean;
+};
+
+// Tolerancia pra considerar meta "batida": >= 95% ja conta. Pra kcal ha
+// tambem teto (OVERSHOOT_THRESHOLD) — ultrapassar 110% nao e bater.
+export const STREAK_TOLERANCIA = 0.95;
+
+// Janela maxima olhada pra tras. Streak acima disso satura — aceitavel:
+// a mensagem perde precisao so pra quem ja esta ha um mes perfeito.
+export const STREAK_JANELA_DIAS = 30;
+
+// Calcula o streak por dimensao (proteina e kcal) olhando registros_diarios
+// dos ultimos STREAK_JANELA_DIAS. Regras:
+// - Hoje bateu → hoje conta. Hoje ainda nao bateu → nao quebra, pula hoje
+//   e conta de ontem pra tras (o dia ainda esta em andamento).
+// - Excecao kcal: se hoje JA ultrapassou 110% da meta, nao tem mais como
+//   bater hoje → streak de kcal quebra agora (proteina segue independente).
+// - Dia sem registro no meio da sequencia (gap >= 1 dia) quebra.
+// - Dimensao sem meta cadastrada (<= 0) fica em 0 — nunca inventa streak.
+// Datas no fuso do paciente (hojeLocal), consistente com registrarRefeicao.
+export async function calcularStreak(
+  pacienteId: string,
+  metas: MacrosDiarios,
+): Promise<StreakInfo> {
+  const zero: StreakInfo = { proteina: 0, kcal: 0, batendo_hoje_proteina: false, batendo_hoje_kcal: false };
+  const temMetaProteina = metas.proteina_g > 0;
+  const temMetaKcal = metas.kcal > 0;
+  if (!temMetaProteina && !temMetaKcal) return zero;
+
+  const hoje = hojeLocal();
+  const inicioJanela = diasAtrasLocal(STREAK_JANELA_DIAS);
+
+  const { data, error } = await supabase
+    .from('registros_diarios')
+    .select('data, kcal_consumido, proteina_g')
+    .eq('paciente_id', pacienteId)
+    .gte('data', inicioJanela)
+    .order('data', { ascending: false });
+
+  if (error || !data || data.length === 0) return zero;
+
+  type Dia = { kcal: number; proteina: number };
+  const porData = new Map<string, Dia>();
+  for (const r of data) {
+    porData.set(String(r.data), {
+      kcal: Number(r.kcal_consumido) || 0,
+      proteina: Number(r.proteina_g) || 0,
+    });
+  }
+
+  const bateuProteina = (d: Dia) => temMetaProteina && d.proteina >= STREAK_TOLERANCIA * metas.proteina_g;
+  const bateuKcal = (d: Dia) =>
+    temMetaKcal &&
+    d.kcal >= STREAK_TOLERANCIA * metas.kcal &&
+    d.kcal <= OVERSHOOT_THRESHOLD * metas.kcal;
+  const estourouKcal = (d: Dia) => temMetaKcal && d.kcal > OVERSHOOT_THRESHOLD * metas.kcal;
+
+  const contar = (
+    bateu: (d: Dia) => boolean,
+    quebrouHoje?: (d: Dia) => boolean,
+  ): { streak: number; batendoHoje: boolean } => {
+    const registroHoje = porData.get(hoje);
+    const batendoHoje = registroHoje !== undefined && bateu(registroHoje);
+    if (registroHoje && !batendoHoje && quebrouHoje?.(registroHoje)) {
+      return { streak: 0, batendoHoje: false };
+    }
+    let streak = batendoHoje ? 1 : 0;
+    let cursor = diaAnterior(hoje);
+    for (let i = 0; i < STREAK_JANELA_DIAS; i++) {
+      const dia = porData.get(cursor);
+      if (!dia || !bateu(dia)) break;
+      streak++;
+      cursor = diaAnterior(cursor);
+    }
+    return { streak, batendoHoje };
+  };
+
+  const prot = contar(bateuProteina);
+  const kcal = contar(bateuKcal, estourouKcal);
+  return {
+    proteina: prot.streak,
+    kcal: kcal.streak,
+    batendo_hoje_proteina: prot.batendoHoje,
+    batendo_hoje_kcal: kcal.batendoHoje,
+  };
+}
+
+// Linha "🔥 N dias seguidos..." do card. So aparece com streak >= 2 (1 dia
+// nao e sequencia). Entre as duas dimensoes vence a de streak maior; empate
+// vai pra proteina (e o eixo que o nutricionista mais cobra). Quando o dia
+// atual ainda nao bateu, convida pro proximo em vez de celebrar.
+export function linhaStreak(streak?: StreakInfo): string {
+  if (!streak) return '';
+  const melhor = streak.proteina >= streak.kcal
+    ? { dias: streak.proteina, alvo: 'a proteína', batendoHoje: streak.batendo_hoje_proteina }
+    : { dias: streak.kcal, alvo: 'a meta de calorias', batendoHoje: streak.batendo_hoje_kcal };
+  if (melhor.dias < 2) return '';
+  const sufixo = melhor.batendoHoje ? '' : ' Vamos pro próximo?';
+  return `🔥 *${melhor.dias} dias seguidos batendo ${melhor.alvo}!*${sufixo}`;
 }
 
 // Limite a partir do qual o paciente recebe alerta proativo de excesso calorico.
@@ -332,7 +486,14 @@ export function barraProgresso(atual: number, meta: number, blocos = 10): string
 // - perto (kcal >= 85% meta): reta final
 // - abaixo (default): ainda falta — destacar proteina se ela esta mais
 //   atrasada (paciente comendo carbo demais e o ponto mais comum de falha)
-export function microMensagemFinal(saldo: MacrosRefeicao, metas: MacrosDiarios): string {
+export function microMensagemFinal(saldo: MacrosRefeicao, metas: MacrosDiarios, streak?: StreakInfo): string {
+  const base = microMensagemBase(saldo, metas);
+  const fogo = linhaStreak(streak);
+  if (!fogo) return base;
+  return base ? `${fogo}\n${base}` : fogo;
+}
+
+function microMensagemBase(saldo: MacrosRefeicao, metas: MacrosDiarios): string {
   const kcalAtual = saldo.kcal;
   const kcalMeta = metas.kcal;
   const protAtual = saldo.proteina_g;
@@ -370,7 +531,7 @@ export function microMensagemFinal(saldo: MacrosRefeicao, metas: MacrosDiarios):
 // Usado tanto pelo card per-item (P0-2) quanto pelo formatarSaldoDia (foto).
 // A linha de agua so aparece quando o paciente tem meta cadastrada
 // (`metas.agua_ml`) — calculada a partir do peso na entrevista.
-export function formatarBlocoProgressoDia(saldo: MacrosRefeicao, metas: MacrosDiarios): string {
+export function formatarBlocoProgressoDia(saldo: MacrosRefeicao, metas: MacrosDiarios, streak?: StreakInfo): string {
   const linhas = [
     `🔥 Energia    ${barraProgresso(saldo.kcal, metas.kcal)}  ${Math.round(saldo.kcal)} / ${Math.round(metas.kcal)} kcal`,
     `🍗 Proteína   ${barraProgresso(saldo.proteina_g, metas.proteina_g)}  ${Math.round(saldo.proteina_g)} / ${Math.round(metas.proteina_g)} g`,
@@ -383,7 +544,7 @@ export function formatarBlocoProgressoDia(saldo: MacrosRefeicao, metas: MacrosDi
       `💧 Água       ${barraProgresso(aguaAtual, metas.agua_ml)}  ${Math.round(aguaAtual)} / ${Math.round(metas.agua_ml)} ml`,
     );
   }
-  const micro = microMensagemFinal(saldo, metas);
+  const micro = microMensagemFinal(saldo, metas, streak);
   return `📊 *Seu dia até agora*\n${linhas.join('\n')}${micro ? `\n\n${micro}` : ''}`;
 }
 
@@ -392,10 +553,11 @@ export function formatarSaldoDia(
   kcalRegistrado: number,
   saldo: MacrosRefeicao,
   metas: MacrosDiarios,
+  streak?: StreakInfo,
 ): string {
   return (
     `✅ *Registrado:* ${descricao} (${Math.round(kcalRegistrado)} kcal)\n\n` +
-    formatarBlocoProgressoDia(saldo, metas)
+    formatarBlocoProgressoDia(saldo, metas, streak)
   );
 }
 
@@ -407,13 +569,18 @@ export function formatarCardRefeicao(
   analise: AnaliseRefeicao,
   saldo: MacrosRefeicao,
   metas: MacrosDiarios,
+  streak?: StreakInfo,
 ): string {
   const materiais = analise.itens.filter((i) => i.material);
   const naoMateriais = analise.itens.filter((i) => !i.material);
 
   const linhasItens = materiais.map((i) => {
     const qtd = Math.round(i.quantidade_g);
-    const marcador = i.quantidade_informada ? '' : ' _(estimei)_';
+    // P0-2b: preparo assumido em alimento critico tambem marca "_(estimei)_"
+    // (paciente respondeu "nao sei" a pergunta de preparo, ou fluxo que nao
+    // pergunta). O "~" continua exclusivo de quantidade estimada.
+    const estimou = !i.quantidade_informada || (i.preparo_inferido === true && ehPreparoCritico(i.nome));
+    const marcador = estimou ? ' _(estimei)_' : '';
     const prefixo = i.quantidade_informada ? '' : '~';
     return `• ${i.nome} — ${prefixo}${qtd}g${marcador}`;
   });
@@ -431,7 +598,7 @@ export function formatarCardRefeicao(
     `✅ *Registrado!*\n\n` +
     `${linhasItens.join('\n')}${rodapeExtras}\n\n` +
     `${linhaRefeicao}\n\n` +
-    formatarBlocoProgressoDia(saldo, metas)
+    formatarBlocoProgressoDia(saldo, metas, streak)
   );
 }
 
@@ -458,21 +625,33 @@ export async function sugerirSubstituicao(
   return response.content[0].type === 'text' ? response.content[0].text : '';
 }
 
+// `intentHint` (P1-3 follow-up): quando o agent.ts ja classificou a intencao
+// (fast-path/Haiku), os regexes internos NAO devem re-decidir — eles sao mais
+// burros que o classificador e derrubavam mensagem valida em silencio
+// ("2 copos de leite" classificado como registrar nao batia em ehRegistro e
+// o paciente ficava sem resposta) ou desviavam registro pra substituicao
+// ("comi arroz, nao tenho certeza" batia em "nao tenho"). Sem hint (fallback
+// do fluxo de correcao), os regexes continuam decidindo como antes — ali o
+// ignorar-em-silencio e intencional.
 export async function processarTextoRefeicao(
   phone: string,
   texto: string,
   paciente: PacienteInfo,
+  intentHint?: 'registrar' | 'substituicao',
 ): Promise<void> {
   const textoLower = texto.toLowerCase();
 
-  const ehSubstituicao = /substitu|nao tenho|não tenho|alternativa|trocar|troca/.test(textoLower);
+  const ehSubstituicao = intentHint
+    ? intentHint === 'substituicao'
+    : /substitu|nao tenho|não tenho|alternativa|trocar|troca/.test(textoLower);
   if (ehSubstituicao) {
     const resposta = await sugerirSubstituicao(paciente.id, paciente.nome, texto);
     await sendText(phone, resposta);
     return;
   }
 
-  const ehRegistro = /comi|tomei|bebi|almocei|jantei|caf[eé]|lanche|refeicao|refeição|breakfast|lunch|dinner|g de|ml de|colher|prato|gramas/.test(textoLower);
+  const ehRegistro = intentHint === 'registrar' ||
+    /comi|tomei|bebi|almocei|jantei|caf[eé]|lanche|refeicao|refeição|breakfast|lunch|dinner|g de|ml de|colher|prato|gramas/.test(textoLower);
 
   if (!ehRegistro) {
     return;
@@ -482,6 +661,30 @@ export async function processarTextoRefeicao(
 
   if (analise.totais.kcal === 0 || analise.itens.length === 0) {
     await sendText(phone, `⚠️ Não consegui estimar os macros para essa refeição. Tente descrever com mais detalhes (ex: "200g de frango grelhado com 100g de arroz").`);
+    return;
+  }
+
+  // P0-2b: preparo assumido em alimento critico (batata, frango, ovo...) —
+  // pergunta o preparo antes de tudo (erro de ~4x na kcal e pior que erro
+  // de porcao). A resposta vira pela `preparo_pendente` (intercept em
+  // agent.ts). A checagem de quantidade (P0-2) roda depois da resposta.
+  const itemPreparo = detectarItemPreparoInferido(analise.itens);
+  if (itemPreparo) {
+    await atualizarEstado(paciente.id, {
+      dados: {
+        preparo_pendente: {
+          descricao_original: texto,
+          analise,
+          item_perguntado: itemPreparo.nome,
+          timestamp: new Date().toISOString(),
+        },
+      } as Parameters<typeof atualizarEstado>[1]['dados'],
+    });
+    await sendText(
+      phone,
+      `🍳 Como foi o preparo de *${nomeSemPreparo(itemPreparo.nome)}*? (frito, cozido, assado, grelhado...)\n\n` +
+      `_Se não souber, manda *"não sei"* que eu uso o mais comum._`,
+    );
     return;
   }
 
@@ -513,8 +716,9 @@ export async function processarTextoRefeicao(
   const estado = await getEstadoConv(paciente.id);
   const metas = obterMetas(estado.dados as Record<string, unknown>);
   const saldo = await obterSaldoDia(paciente.id);
+  const streak = await calcularStreak(paciente.id, metas);
 
-  await sendText(phone, formatarCardRefeicao(analise, saldo, metas));
+  await sendText(phone, formatarCardRefeicao(analise, saldo, metas, streak));
 
   await dispararAlertaOvershoot(phone, saldo, metas);
 }
@@ -561,7 +765,8 @@ export async function processarRespostaQuantidade(
   const estado = await getEstadoConv(paciente.id);
   const metas = obterMetas(estado.dados as Record<string, unknown>);
   const saldo = await obterSaldoDia(paciente.id);
-  await sendText(phone, formatarCardRefeicao(analiseFinal, saldo, metas));
+  const streak = await calcularStreak(paciente.id, metas);
+  await sendText(phone, formatarCardRefeicao(analiseFinal, saldo, metas, streak));
   await dispararAlertaOvershoot(phone, saldo, metas);
 }
 
@@ -601,6 +806,104 @@ export function obterRefeicaoPendenteSeValida(
   };
 }
 
+// P0-2b: pendencia da pergunta de preparo ("frito, cozido, assado?").
+// Mesmo shape e TTL da refeicao_pendente, chave separada — as duas nunca
+// coexistem (preparo pergunta primeiro; quantidade so depois da resposta).
+export function obterPreparoPendenteSeValido(
+  dadosEstado: Record<string, unknown>,
+): {
+  descricao_original: string;
+  analise: AnaliseRefeicao;
+  item_perguntado: string;
+} | null {
+  const raw = dadosEstado['preparo_pendente'] as {
+    descricao_original?: string;
+    analise?: AnaliseRefeicao;
+    item_perguntado?: string;
+    timestamp?: string;
+  } | null | undefined;
+  if (!raw || !raw.descricao_original || !raw.analise || !raw.item_perguntado || !raw.timestamp) return null;
+  const idadeMs = Date.now() - new Date(raw.timestamp).getTime();
+  if (idadeMs > TTL_REFEICAO_PENDENTE_MIN * 60 * 1000) return null;
+  return {
+    descricao_original: raw.descricao_original,
+    analise: raw.analise,
+    item_perguntado: raw.item_perguntado,
+  };
+}
+
+// Resposta do paciente a pergunta de preparo (P0-2b). Dois caminhos:
+// (a) "nao sei/estima/tanto faz" → segue com o preparo assumido pelo Haiku,
+//     que continua marcado `preparo_inferido` → card mostra "_(estimei)_";
+// (b) qualquer outra coisa → injeta na descricao e recalcula (re-analise
+//     com preparo informado zera o `preparo_inferido` do item).
+// Depois da resposta, o fluxo normal continua: se ainda faltar quantidade
+// de item material (P0-2), pergunta a quantidade; senao registra. Preparo
+// NAO e re-checado apos a resposta — uma pergunta de preparo por refeicao,
+// sem loop.
+export async function processarRespostaPreparo(
+  phone: string,
+  texto: string,
+  paciente: PacienteInfo,
+  pendente: {
+    descricao_original: string;
+    analise: AnaliseRefeicao;
+    item_perguntado: string;
+  },
+): Promise<void> {
+  const txt = texto.toLowerCase().trim();
+  const naoSabe = /^(n[aã]o\s+sei|sei\s+l[aá]|estima|estimar|qualquer|tanto\s+faz|o\s+mais\s+comum)\b/.test(txt);
+
+  let analiseFinal = pendente.analise;
+  let descricaoFinal = pendente.descricao_original;
+
+  if (!naoSabe) {
+    descricaoFinal = `${pendente.descricao_original} (${pendente.item_perguntado}: preparo ${texto.trim()})`;
+    analiseFinal = await analisarRefeicaoComClaude(descricaoFinal);
+    if (analiseFinal.totais.kcal === 0 || analiseFinal.itens.length === 0) {
+      analiseFinal = pendente.analise;
+      descricaoFinal = pendente.descricao_original;
+    }
+  }
+
+  // Limpa pendencia ANTES de gravar — mesmo racional da resposta de
+  // quantidade: mensagem nova nao pode ser interpretada como continuacao
+  // se algo abaixo falhar.
+  await atualizarEstado(paciente.id, {
+    dados: { preparo_pendente: null } as Parameters<typeof atualizarEstado>[1]['dados'],
+  });
+
+  // P0-2: com o preparo resolvido, ainda pode faltar quantidade.
+  const itemFaltando = detectarItemMaterialSemQuantidade(analiseFinal.itens);
+  if (itemFaltando) {
+    await atualizarEstado(paciente.id, {
+      dados: {
+        refeicao_pendente: {
+          descricao_original: descricaoFinal,
+          analise: analiseFinal,
+          item_perguntado: itemFaltando.nome,
+          timestamp: new Date().toISOString(),
+        },
+      } as Parameters<typeof atualizarEstado>[1]['dados'],
+    });
+    await sendText(
+      phone,
+      `🤔 Quantas gramas de *${itemFaltando.nome}*, mais ou menos?\n\n` +
+      `_Se não souber, manda *"estima"* que eu uso uma porção média._`,
+    );
+    return;
+  }
+
+  await registrarRefeicao(paciente.id, descricaoFinal, analiseFinal.totais, 'texto', stripMaterial(analiseFinal.itens));
+
+  const estado = await getEstadoConv(paciente.id);
+  const metas = obterMetas(estado.dados as Record<string, unknown>);
+  const saldo = await obterSaldoDia(paciente.id);
+  const streak = await calcularStreak(paciente.id, metas);
+  await sendText(phone, formatarCardRefeicao(analiseFinal, saldo, metas, streak));
+  await dispararAlertaOvershoot(phone, saldo, metas);
+}
+
 // Fluxo de correcao da ultima refeicao registrada (P0-1). Calcula novos
 // macros a partir da nova descricao, faz UPDATE da linha em `refeicoes` e
 // aplica o delta sobre `registros_diarios`. Mensagem final deixa explicito
@@ -623,11 +926,12 @@ export async function processarTextoCorrecao(
   const estado = await getEstadoConv(paciente.id);
   const metas = obterMetas(estado.dados as Record<string, unknown>);
   const saldo = await obterSaldoDia(paciente.id);
+  const streak = await calcularStreak(paciente.id, metas);
 
   await sendText(
     phone,
     `✏️ *Corrigi a última refeição* (substituí, não somei).\n\n` +
-    formatarSaldoDia(texto, novosMacros.kcal, saldo, metas),
+    formatarSaldoDia(texto, novosMacros.kcal, saldo, metas, streak),
   );
 
   await dispararAlertaOvershoot(phone, saldo, metas);

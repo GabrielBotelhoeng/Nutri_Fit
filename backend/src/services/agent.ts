@@ -9,6 +9,7 @@ import {
   atualizarEstado,
   EstadoEntrevista,
   ObjetivoNutricional,
+  PacienteInfo,
 } from './conversation';
 import * as mealService from './meal';
 import {
@@ -29,6 +30,7 @@ import {
   obterUltimasMensagens,
   ConversaMensagem,
 } from './conversaHistorico';
+import { hojeLocal } from '../utils/datas';
 
 const claude = new Anthropic({ apiKey: env.CLAUDE_API_KEY });
 
@@ -38,7 +40,7 @@ const claude = new Anthropic({ apiKey: env.CLAUDE_API_KEY });
 // o card da refeicao.
 async function registrarAguaContador(pacienteId: string, aguaMl: number): Promise<boolean> {
   const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
-  const hoje = new Date().toISOString().slice(0, 10);
+  const hoje = hojeLocal();
   const { error } = await supabase.rpc('registrar_agua_diaria', {
     p_paciente_id: pacienteId,
     p_data: hoje,
@@ -570,6 +572,24 @@ Regras de comunicacao:
   return response.content[0].type === 'text' ? response.content[0].text : '';
 }
 
+// AGENT-18: decide se o lembrete de vencimento deve sair NESTA mensagem.
+// Pura pra ser testavel: null = nao avisar (fora da janela de 3 dias ou ja
+// avisado hoje). `agoraMs` injetavel so nos testes.
+export function avisoVencimentoPendente(
+  paciente: PacienteInfo,
+  hoje: string,
+  agoraMs: number = Date.now(),
+): string | null {
+  if (!paciente.data_expiracao) return null;
+  const dataExp = new Date(paciente.data_expiracao as string);
+  const diasParaVencer = Math.ceil((dataExp.getTime() - agoraMs) / (1000 * 60 * 60 * 24));
+  if (diasParaVencer <= 0 || diasParaVencer > 3) return null;
+  const dados = (paciente.entrevista_dados ?? {}) as Record<string, unknown>;
+  if (dados['ultimo_aviso_expiracao'] === hoje) return null;
+  const diasStr = diasParaVencer === 1 ? '1 dia' : `${diasParaVencer} dias`;
+  return `⚠️ Lembrete: seu plano NutriChat vence em *${diasStr}*. Renove com seu nutricionista para nao perder o acompanhamento. 💚`;
+}
+
 export async function processarMensagem(phone: string, texto: string): Promise<void> {
   // 1. Buscar paciente pelo numero
   const paciente = await buscarPacientePorWhatsapp(phone);
@@ -581,7 +601,7 @@ export async function processarMensagem(phone: string, texto: string): Promise<v
 
   // Bloqueio: plano inativo OU data de expiracao ja passou.
   // Defesa em camadas — nao depende do cron de expiracao ter rodado.
-  const hoje = new Date().toISOString().slice(0, 10);
+  const hoje = hojeLocal();
   const expirouPorData = !!paciente.data_expiracao && (paciente.data_expiracao as string) < hoje;
 
   if (!paciente.ativo || expirouPorData) {
@@ -589,13 +609,19 @@ export async function processarMensagem(phone: string, texto: string): Promise<v
     return;
   }
 
-  // AGENT-18: aviso reativo quando plano vence em <= 3 dias
-  if (paciente.data_expiracao) {
-    const dataExp = new Date(paciente.data_expiracao as string);
-    const diasParaVencer = Math.ceil((dataExp.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-    if (diasParaVencer > 0 && diasParaVencer <= 3) {
-      const diasStr = diasParaVencer === 1 ? '1 dia' : `${diasParaVencer} dias`;
-      await sendText(phone, `⚠️ Lembrete: seu plano NutriChat vence em *${diasStr}*. Renove com seu nutricionista para nao perder o acompanhamento. 💚`);
+  // AGENT-18: aviso reativo quando plano vence em <= 3 dias. No maximo UMA
+  // vez por dia — sem a trava, TODA mensagem dos 3 dias finais vinha
+  // prefixada com o lembrete (paciente ativo recebia o aviso dezenas de
+  // vezes ao dia). ultimo_aviso_expiracao vive em entrevista_dados.
+  const aviso = avisoVencimentoPendente(paciente, hoje);
+  if (aviso) {
+    await sendText(phone, aviso);
+    try {
+      await atualizarEstado(paciente.id, {
+        dados: { ultimo_aviso_expiracao: hoje } as Parameters<typeof atualizarEstado>[1]['dados'],
+      });
+    } catch (err) {
+      console.error('[agent] Falha ao marcar ultimo_aviso_expiracao:', err);
     }
   }
 
@@ -822,7 +848,8 @@ export async function processarMensagem(phone: string, texto: string): Promise<v
         const estadoAtual = await getEstado(paciente.id);
         const metas = obterMetas(estadoAtual.dados as Record<string, unknown>);
         const saldo = await mealService.obterSaldoDia(paciente.id);
-        await sendText(phone, mealService.formatarSaldoDia(descricao, macros.kcal, saldo, metas));
+        const streak = await mealService.calcularStreak(paciente.id, metas);
+        await sendText(phone, mealService.formatarSaldoDia(descricao, macros.kcal, saldo, metas, streak));
         await mealService.dispararAlertaOvershoot(phone, saldo, metas);
         return;
       } else if (textoConfirmacao === 'não' || textoConfirmacao === 'nao' || textoConfirmacao === 'n' || textoConfirmacao === 'no') {
@@ -832,6 +859,15 @@ export async function processarMensagem(phone: string, texto: string): Promise<v
       }
       // Não é sim/não — ignorar confirmação pendente e processar normalmente
     }
+  }
+
+  // P0-2b: paciente respondendo pergunta de preparo ("frita", "cozido",
+  // "não sei") — TTL 10 min, gerenciado em meal.ts. Antes do roteamento
+  // normal pelo mesmo motivo da refeicao_pendente abaixo.
+  const preparoPendente = mealService.obterPreparoPendenteSeValido(dadosEstado);
+  if (preparoPendente) {
+    await mealService.processarRespostaPreparo(phone, texto, paciente, preparoPendente);
+    return;
   }
 
   // P0-2: paciente respondendo pergunta "quantas gramas de X?" — TTL 10 min,
@@ -889,7 +925,10 @@ export async function processarMensagem(phone: string, texto: string): Promise<v
   }
 
   if (intent === 'registrar' || intent === 'substituicao') {
-    await mealService.processarTextoRefeicao(phone, textoParaRefeicao, paciente);
+    // Passa a intencao adiante: o classificador ja decidiu, os regexes
+    // internos de processarTextoRefeicao nao devem re-decidir (e derrubar
+    // mensagem valida em silencio).
+    await mealService.processarTextoRefeicao(phone, textoParaRefeicao, paciente, intent);
     return;
   }
 
@@ -899,7 +938,8 @@ export async function processarMensagem(phone: string, texto: string): Promise<v
   if (intent === 'saldo') {
     const metas = obterMetas(dadosEstado);
     const saldo = await mealService.obterSaldoDia(paciente.id);
-    await sendText(phone, mealService.formatarBlocoProgressoDia(saldo, metas));
+    const streak = await mealService.calcularStreak(paciente.id, metas);
+    await sendText(phone, mealService.formatarBlocoProgressoDia(saldo, metas, streak));
     return;
   }
 

@@ -1,11 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
 import { env } from '../config/env';
 import { sendText } from './evolution';
+import { hojeLocal, somarDias } from '../utils/datas';
 
 const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
 
 export async function verificarExpiracoes(): Promise<void> {
-  const hoje = new Date().toISOString().slice(0, 10);
+  const hoje = hojeLocal();
 
   // AGENT-19: Bloquear pacientes cujo plano venceu hoje ou antes
   const { data: vencidos, error: errVencidos } = await supabase
@@ -28,13 +29,8 @@ export async function verificarExpiracoes(): Promise<void> {
   }
 
   // AGENT-18: Avisar pacientes que vencem em 1, 2 ou 3 dias
-  const em3Dias = new Date();
-  em3Dias.setDate(em3Dias.getDate() + 3);
-  const dataLimite = em3Dias.toISOString().slice(0, 10);
-
-  const amanha = new Date();
-  amanha.setDate(amanha.getDate() + 1);
-  const dataAmanha = amanha.toISOString().slice(0, 10);
+  const dataLimite = somarDias(hoje, 3);
+  const dataAmanha = somarDias(hoje, 1);
 
   const { data: expirando, error: errExpirando } = await supabase
     .from('pacientes')

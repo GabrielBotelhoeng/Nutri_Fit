@@ -5,7 +5,7 @@ import { sendText } from './evolution';
 import { buscarPacientePorWhatsapp, getEstado, atualizarEstado } from './conversation';
 import type { PacienteInfo } from './conversation';
 import { processarCodigoBarras } from './barcode';
-import { registrarRefeicao, obterSaldoDia, formatarSaldoDia, dispararAlertaOvershoot, MacrosRefeicao } from './meal';
+import { registrarRefeicao, obterSaldoDia, formatarSaldoDia, dispararAlertaOvershoot, calcularStreak, MacrosRefeicao } from './meal';
 import { obterMetas, MacrosDiarios } from './calculos';
 
 const claude = new Anthropic({ apiKey: env.CLAUDE_API_KEY });
@@ -246,14 +246,16 @@ export async function processarImagem(
         const descricao = `${produto.nome} (~100g)`;
         await registrarRefeicao(paciente.id, descricao, produto.macrosPor100g, 'codigo_barras');
         const saldo = await obterSaldoDia(paciente.id);
-        await sendText(phone, formatarSaldoDia(descricao, produto.macrosPor100g.kcal, saldo, metas));
+        const streak = await calcularStreak(paciente.id, metas);
+        await sendText(phone, formatarSaldoDia(descricao, produto.macrosPor100g.kcal, saldo, metas, streak));
         await dispararAlertaOvershoot(phone, saldo, metas);
       } else {
         const rotulo = await lerRotulo(base64, mimetype);
         if (rotulo) {
           await registrarRefeicao(paciente.id, rotulo.produto, rotulo.macros, 'rotulo');
           const saldo = await obterSaldoDia(paciente.id);
-          await sendText(phone, formatarSaldoDia(rotulo.produto, rotulo.macros.kcal, saldo, metas));
+          const streak = await calcularStreak(paciente.id, metas);
+          await sendText(phone, formatarSaldoDia(rotulo.produto, rotulo.macros.kcal, saldo, metas, streak));
           await dispararAlertaOvershoot(phone, saldo, metas);
         } else {
           await sendText(phone, '❌ Não consegui ler o código de barras ou rótulo. Tente uma foto mais nítida ou descreva a refeição por texto.');
@@ -270,7 +272,8 @@ export async function processarImagem(
       }
       await registrarRefeicao(paciente.id, rotulo.produto, rotulo.macros, 'rotulo');
       const saldo = await obterSaldoDia(paciente.id);
-      await sendText(phone, formatarSaldoDia(rotulo.produto, rotulo.macros.kcal, saldo, metas));
+      const streak = await calcularStreak(paciente.id, metas);
+      await sendText(phone, formatarSaldoDia(rotulo.produto, rotulo.macros.kcal, saldo, metas, streak));
       await dispararAlertaOvershoot(phone, saldo, metas);
       return;
     }

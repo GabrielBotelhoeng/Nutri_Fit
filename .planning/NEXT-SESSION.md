@@ -1,7 +1,14 @@
 # Handoff — Próxima sessão Claude
 
-**Última atualização:** 2026-07-05
-**Estado do repo:** `origin/main` em `457c11c` (sync). Working tree limpo.
+**Última atualização:** 2026-07-05 (fim da sessão de streaks + P0-2b + auditoria)
+**Estado do repo:** trabalho novo na branch `claude/nutrichat-streaks-feature-ongoxm` → **PR #1 aberto** (https://github.com/GabrielBotelhoeng/Nutri_Fit/pull/1), aguardando revisão/merge do usuário.
+
+## ⚡ Status imediato (ler primeiro)
+
+- **PR #1** (`claude/nutrichat-streaks-feature-ongoxm` → `main`): streaks + P0-2b + 5 correções da auditoria. 267 testes verdes, typecheck limpo. **Não mergeado ainda** — o usuário disse em 2026-07-05 que mexeria nisso "amanhã". Se já foi mergeado quando você ler isto, recomece a branch a partir de `origin/main`.
+- **Landing page**: pronta na máquina LOCAL do usuário, ainda não subiu pro GitHub. Combinado: ele roda `git checkout -b feat/landing-page && git add nutrichat-landing && git commit && git push -u origin feat/landing-page`; aí o Claude abre o PR dela e atualiza o STATE.md da fase 6.
+- **Pós-merge do PR #1, o usuário precisa fazer na máquina local**: `git pull` + `docker restart nutrichat_backend`, e rodar o UAT (lista na seção 3).
+- **Fases GSD reais** (a tabela do CLAUDE.md está desatualizada): 1–5 completas; 6 (landing) feita localmente pendente de push; 7 (deploy Railway/Vercel) não iniciada — precisa de contas/credenciais do usuário.
 
 ## O que já está feito (em `origin/main`)
 
@@ -28,9 +35,9 @@ Todo o track de refinamentos do agente + segurança + hardening está mergeado. 
 
 ## O que falta fazer
 
-### 1. Streaks no card de progresso — PRIORIDADE, projeto pronto pra codar
+### 1. Streaks no card de progresso — ✅ IMPLEMENTADO (2026-07-05, branch `claude/nutrichat-streaks-feature-ongoxm`)
 
-Design fechado, código **não escrito**. Especificação abaixo.
+Código escrito conforme o design abaixo: `calcularStreak` + `linhaStreak` em `meal.ts`, os 4 formatadores aceitam `streak?` opcional, os 6 call sites chamam `await calcularStreak` antes de formatar. Testes em `backend/tests/streaks.test.ts` (18 novos, suite em 227 verdes, typecheck limpo). Pendente: UAT via WhatsApp real. Especificação original mantida abaixo por referência.
 
 **Regras de produto (fechadas com o usuário):**
 - Dimensões que contam streak: **proteína** e **kcal** (água quebra fácil demais).
@@ -87,19 +94,39 @@ Modificar os 4 formatadores para receber `streak?: StreakInfo` opcional:
 
 Mocar Supabase pelo mesmo padrão de `backend/tests/meal-correcao.test.ts`.
 
-### 2. P0-2b — Preparo silencioso (diferido)
+### 2. P0-2b — Preparo silencioso — ✅ IMPLEMENTADO (2026-07-05, branch `claude/nutrichat-streaks-feature-ongoxm`)
 
-Especificado em `.planning/REFINAMENTO-AGENTE.md:57-62`. Resumo:
-- Estender output do `analisarRefeicaoComClaude` com `preparo_inferido: boolean` por item.
-- Whitelist de alimentos "preparo muda muito kcal": batata, frango, ovo, peixe, carne moída.
-- Quando `preparo_inferido=true` E item ∈ whitelist, perguntar antes (mesmo fluxo do `refeicao_pendente` atual em `agent.ts`, TTL 10 min).
-- Card mantém `_(estimei)_` visível quando o paciente confirma preparo desconhecido.
+Implementado conforme `.planning/REFINAMENTO-AGENTE.md:57-62`:
+- `analisarRefeicaoComClaude` agora emite `preparo_inferido: boolean` por item (campo opcional em `ItemRefeicao` — compatível com análises antigas persistidas em estado).
+- Whitelist `PREPARO_CRITICO` em `meal.ts`: batata, frango, ovo, peixe, carne moída (regex com normalização de acento).
+- `preparo_inferido=true` + whitelist → pergunta "🍳 Como foi o preparo de *X*?" antes de registrar, via `preparo_pendente` (mesmo shape/TTL 10 min da `refeicao_pendente`; intercept em `agent.ts` antes do de quantidade). A pergunta de preparo vem ANTES da de quantidade; após a resposta, o fluxo P0-2 (quantidade) continua normalmente. Preparo não é re-checado após a resposta (uma pergunta por refeição, sem loop).
+- "não sei"/"estima" → segue com o preparo assumido e o card mantém `_(estimei)_` (marcador agora dispara também por `preparo_inferido` em item da whitelist, além de quantidade estimada).
+- Testes em `backend/tests/preparo.test.ts` (19 novos; suite em 246 verdes). Pendente: UAT via WhatsApp real ("comi batata" → pergunta preparo; "comi batata frita" → não pergunta).
+
+### 2b. Auditoria de bugs do agente — ✅ 5 correções (2026-07-05, mesma branch)
+
+Auditoria completa do fluxo de mensagens + contagem de calorias. Corrigidos:
+
+1. **Áudio bypassava o agente** (`audio.ts`): todo áudio ia direto pra `processarTextoRefeicao` — entrevista por voz sumia, correção por áudio **duplicava refeição** (P0-1 seguia vivo nesse fluxo), consulta/saldo/água por áudio ficavam sem resposta, e o bloqueio de plano expirado não valia pra áudio. Agora delega pro `processarMensagem` (roteamento completo). Guard pra transcrição vazia.
+2. **Datas em UTC deslocavam refeições noturnas pro dia seguinte** (contagem de calorias): jantar depois das 21h (UTC-3) caía em `registros_diarios` do dia seguinte — saldo "virava" às 21h, streak/água/relatório idem. Novo `src/utils/datas.ts` (`hojeLocal()` com `TIMEZONE_PACIENTES`, default America/Sao_Paulo) aplicado em meal.ts, agent.ts, expiracao.ts, relatorio.ts. Documentado em `backend/.env.example`.
+3. **`processarTextoRefeicao` re-derivava a intenção por regex** e derrubava mensagem válida em silêncio ("2 copos de leite" classificado como registrar não batia no regex interno → paciente sem resposta) ou desviava registro pra substituição ("comi arroz, não tenho certeza" batia em "não tenho"). Agora recebe `intentHint` do classificador; sem hint (fallback da correção) o comportamento antigo se mantém.
+4. **Lembrete de vencimento repetia em TODA mensagem** dos 3 dias finais. Agora no máximo 1x/dia (`ultimo_aviso_expiracao` em `entrevista_dados`, helper puro `avisoVencimentoPendente`).
+5. **Texto vazio no webhook** era roteado (queimava chamada de Haiku). Agora ignorado.
+
+Testes: `datas.test.ts`, `aviso-vencimento.test.ts`, `roteamento-refeicao.test.ts`, `audio-roteamento.test.ts` (21 novos; suite em 267 verdes). `streaks.test.ts` alinhado ao fuso local.
 
 ### 3. UAT humano (pendente do usuário)
 
-Validação via WhatsApp + painel real dos itens já mergeados:
+Validação via WhatsApp + painel real. Itens antigos:
 - P1-4 (fator de atividade), P1-5 (sem MyFitnessPal), P1-6 (horários da dieta), P2-9 (memória multi-turn), SEC-1/2/3.
 - Monitorar comportamento do fallback OpenAI 429 (commit `22d2a72`) em produção.
+
+Itens novos do PR #1 (testar após merge + pull + `docker restart nutrichat_backend`):
+- Streak: registrar refeição batendo proteína 2+ dias seguidos → linha 🔥 no card.
+- Preparo: "comi batata" → bot pergunta o preparo antes do card; "comi batata frita" → não pergunta.
+- Áudio agora passa pelo roteamento completo: mandar áudio de correção ("na verdade foram 150g"), áudio de consulta ("qual minha dieta?") e responder etapa de entrevista por voz.
+- Timezone: registrar refeição depois das 21h e conferir que caiu no saldo do dia CERTO.
+- Mensagens que antes sumiam: "2 copos de leite" (sem verbo) deve registrar e responder.
 
 ### 4. Bug encoding UTF-8 (bloqueado em repro)
 
@@ -107,11 +134,11 @@ Validação via WhatsApp + painel real dos itens já mergeados:
 
 ## Como retomar
 
-1. `cd backend && docker ps --format "table {{.Names}}\t{{.Status}}"` — confirmar containers rodando.
-2. `cd backend && npm run test:run` — baseline 209 verdes.
-3. Ler `.planning/REFINAMENTO-AGENTE.md` para contexto completo do track de refinamento.
-4. Começar streaks pela função `calcularStreak` em `meal.ts` + testes; propagar aos call sites depois.
-5. Após editar TS: `docker restart nutrichat_backend` (tsx watch não recarrega volumes Docker no Windows).
+1. Checar o estado do **PR #1**: mergeado? → recomeçar a branch de `origin/main`. Aberto? → continuar nele.
+2. `cd backend && npm run test:run` — baseline atual **267 verdes** (`npm run typecheck` limpo).
+3. Se o usuário subiu a branch `feat/landing-page`: abrir PR dela, revisar, atualizar `.planning/STATE.md` (fase 6).
+4. Próximo trabalho codável depois disso: fase 7 (deploy Railway/Vercel — precisa de credenciais do usuário) e o bug UTF-8 (seção 4, só com repro).
+5. Docker/UAT rodam só na máquina local do usuário (sessões remotas não têm Docker). Após editar TS local: `docker restart nutrichat_backend`.
 
 ## Referências
 

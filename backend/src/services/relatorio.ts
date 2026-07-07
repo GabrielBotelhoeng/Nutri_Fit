@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@supabase/supabase-js';
 import { env } from '../config/env';
 import { sendText } from './evolution';
+import { hojeLocal, somarDias } from '../utils/datas';
 
 const claude = new Anthropic({ apiKey: env.CLAUDE_API_KEY });
 const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
@@ -41,10 +42,8 @@ Escreva 1-2 frases de incentivo em português, levando em conta o desempenho. Se
 }
 
 export async function gerarRelatorioSemanal(): Promise<void> {
-  const hoje = new Date().toISOString().slice(0, 10);
-  const seteDiasAtras = new Date();
-  seteDiasAtras.setDate(seteDiasAtras.getDate() - 7);
-  const dataInicio = seteDiasAtras.toISOString().slice(0, 10);
+  const hoje = hojeLocal();
+  const dataInicio = somarDias(hoje, -7);
 
   const { data: pacientes, error: errPacientes } = await supabase
     .from('pacientes')
