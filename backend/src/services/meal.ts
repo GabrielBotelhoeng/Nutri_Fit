@@ -7,12 +7,18 @@ import { getEstado as getEstadoConv, atualizarEstado, UltimaRefeicao } from './c
 import type { PacienteInfo } from './conversation';
 import { obterMetas, MacrosDiarios } from './calculos';
 import { hojeLocal, diaAnterior, diasAtrasLocal } from '../utils/datas';
+import { comBackoff } from '../utils/retry';
 
 // Janela em minutos durante a qual uma refeicao recente ainda pode ser
 // alvo de "correcao". Fora dela, frases como "na verdade foi assim" voltam
 // a ser registro novo — evita que o paciente acabe "corrigindo" o almoco
 // quando ja jantou.
 export const TTL_ULTIMA_REFEICAO_MIN = 60;
+
+// Mensagem humana enviada ao paciente quando o backoff de retry esgota. Evita
+// silencio suspeito (paciente esperando resposta que nunca chega) e nao expoe
+// stack trace ("Error 429..."). Menciona o tempo pra sugerir retry consciente.
+const MSG_ERRO_HUMANA = '😅 Tá um pouco lento aqui do meu lado agora. Me manda de novo em uns 30s?';
 
 const claude = new Anthropic({ apiKey: env.CLAUDE_API_KEY });
 const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
@@ -87,11 +93,13 @@ Regras OBRIGATÓRIAS:
 - "totais" deve ser a SOMA exata dos macros de todos os itens.
 - Não inclua comentários ou markdown. Apenas JSON puro.`;
 
-  const response = await claude.messages.create({
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 1024,
-    messages: [{ role: 'user', content: prompt }],
-  });
+  const response = await comBackoff(() =>
+    claude.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 1024,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  );
 
   const texto = response.content[0].type === 'text' ? response.content[0].text : '{}';
   try {
@@ -421,18 +429,24 @@ export async function calcularStreak(
   };
 }
 
-// Linha "🔥 N dias seguidos..." do card. So aparece com streak >= 2 (1 dia
-// nao e sequencia). Entre as duas dimensoes vence a de streak maior; empate
-// vai pra proteina (e o eixo que o nutricionista mais cobra). Quando o dia
-// atual ainda nao bateu, convida pro proximo em vez de celebrar.
+// Linha "🔥 N dias..." do card. Streak >= 2 usa 🔥 e comemora sequencia.
+// Streak == 1 usa 🌱 com framing de comeco de habito (empurra aderencia sem
+// forçar) — so aparece quando o paciente bateu hoje, pra evitar mensagem
+// otimista quando na verdade so bateu ontem e hoje esta em zero.
+// Entre as duas dimensoes vence a de streak maior; empate vai pra proteina.
 export function linhaStreak(streak?: StreakInfo): string {
   if (!streak) return '';
   const melhor = streak.proteina >= streak.kcal
     ? { dias: streak.proteina, alvo: 'a proteína', batendoHoje: streak.batendo_hoje_proteina }
     : { dias: streak.kcal, alvo: 'a meta de calorias', batendoHoje: streak.batendo_hoje_kcal };
-  if (melhor.dias < 2) return '';
-  const sufixo = melhor.batendoHoje ? '' : ' Vamos pro próximo?';
-  return `🔥 *${melhor.dias} dias seguidos batendo ${melhor.alvo}!*${sufixo}`;
+  if (melhor.dias >= 2) {
+    const sufixo = melhor.batendoHoje ? '' : ' Vamos pro próximo?';
+    return `🔥 *${melhor.dias} dias seguidos batendo ${melhor.alvo}!*${sufixo}`;
+  }
+  if (melhor.dias === 1 && melhor.batendoHoje) {
+    return `🌱 *1º dia batendo ${melhor.alvo}!* Amanha a gente mantém.`;
+  }
+  return '';
 }
 
 // Limite a partir do qual o paciente recebe alerta proativo de excesso calorico.
@@ -657,7 +671,14 @@ export async function processarTextoRefeicao(
     return;
   }
 
-  const analise = await analisarRefeicaoComClaude(texto);
+  let analise: AnaliseRefeicao;
+  try {
+    analise = await analisarRefeicaoComClaude(texto);
+  } catch (e) {
+    console.error('[meal] Claude falhou apos backoff em processarTextoRefeicao:', e);
+    await sendText(phone, MSG_ERRO_HUMANA);
+    return;
+  }
 
   if (analise.totais.kcal === 0 || analise.itens.length === 0) {
     await sendText(phone, `⚠️ Não consegui estimar os macros para essa refeição. Tente descrever com mais detalhes (ex: "200g de frango grelhado com 100g de arroz").`);
@@ -747,10 +768,16 @@ export async function processarRespostaQuantidade(
 
   if (!aceitarEstimativa && matchQtd) {
     descricaoFinal = `${pendente.descricao_original} (${pendente.item_perguntado}: ${matchQtd[0]})`;
-    analiseFinal = await analisarRefeicaoComClaude(descricaoFinal);
-    if (analiseFinal.totais.kcal === 0 || analiseFinal.itens.length === 0) {
-      analiseFinal = pendente.analise;
-      descricaoFinal = pendente.descricao_original;
+    try {
+      analiseFinal = await analisarRefeicaoComClaude(descricaoFinal);
+      if (analiseFinal.totais.kcal === 0 || analiseFinal.itens.length === 0) {
+        analiseFinal = pendente.analise;
+        descricaoFinal = pendente.descricao_original;
+      }
+    } catch (e) {
+      console.error('[meal] Claude falhou apos backoff em processarRespostaQuantidade:', e);
+      await sendText(phone, MSG_ERRO_HUMANA);
+      return;
     }
   }
 
@@ -859,10 +886,16 @@ export async function processarRespostaPreparo(
 
   if (!naoSabe) {
     descricaoFinal = `${pendente.descricao_original} (${pendente.item_perguntado}: preparo ${texto.trim()})`;
-    analiseFinal = await analisarRefeicaoComClaude(descricaoFinal);
-    if (analiseFinal.totais.kcal === 0 || analiseFinal.itens.length === 0) {
-      analiseFinal = pendente.analise;
-      descricaoFinal = pendente.descricao_original;
+    try {
+      analiseFinal = await analisarRefeicaoComClaude(descricaoFinal);
+      if (analiseFinal.totais.kcal === 0 || analiseFinal.itens.length === 0) {
+        analiseFinal = pendente.analise;
+        descricaoFinal = pendente.descricao_original;
+      }
+    } catch (e) {
+      console.error('[meal] Claude falhou apos backoff em processarRespostaPreparo:', e);
+      await sendText(phone, MSG_ERRO_HUMANA);
+      return;
     }
   }
 
@@ -914,7 +947,14 @@ export async function processarTextoCorrecao(
   paciente: PacienteInfo,
   ultima: UltimaRefeicao,
 ): Promise<void> {
-  const novosMacros = await calcularMacrosComClaude(texto);
+  let novosMacros: MacrosRefeicao;
+  try {
+    novosMacros = await calcularMacrosComClaude(texto);
+  } catch (e) {
+    console.error('[meal] Claude falhou apos backoff em processarTextoCorrecao:', e);
+    await sendText(phone, MSG_ERRO_HUMANA);
+    return;
+  }
 
   if (novosMacros.kcal === 0) {
     await sendText(phone, `⚠️ Não consegui recalcular os macros pra essa correção. Tente descrever com mais detalhes (ex: "foram 200g de frango com 100g de arroz").`);

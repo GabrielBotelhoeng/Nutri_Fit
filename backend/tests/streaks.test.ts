@@ -178,8 +178,18 @@ describe('linhaStreak — mensagem 🔥 do card', () => {
     expect(linhaStreak(undefined)).toBe('');
   });
 
-  it('streak 1 nao e sequencia → vazio', () => {
+  it('streak 1 sem bater hoje → vazio (evita otimismo prematuro)', () => {
     expect(linhaStreak({ ...base, proteina: 1, kcal: 1 })).toBe('');
+  });
+
+  it('streak 1 + bateu hoje → 🌱 primeiro dia', () => {
+    const msg = linhaStreak({ ...base, proteina: 1, batendo_hoje_proteina: true });
+    expect(msg).toBe('🌱 *1º dia batendo a proteína!* Amanha a gente mantém.');
+  });
+
+  it('streak 1 kcal + bateu hoje → 🌱 com "a meta de calorias"', () => {
+    const msg = linhaStreak({ ...base, proteina: 0, kcal: 1, batendo_hoje_kcal: true });
+    expect(msg).toBe('🌱 *1º dia batendo a meta de calorias!* Amanha a gente mantém.');
   });
 
   it('streak >= 2 de proteina gera a linha 🔥', () => {
@@ -215,9 +225,18 @@ describe('microMensagemFinal com streak', () => {
     expect(linhas[1]).toContain('1000 kcal');
   });
 
-  it('streak < 2 mantem a mensagem original intacta', () => {
+  it('streak < 2 sem bater hoje mantem a mensagem original intacta', () => {
+    const saldo = { kcal: 1000, proteina_g: 120, carbo_g: 150, gordura_g: 30 };
+    const streak: StreakInfo = { proteina: 1, kcal: 0, batendo_hoje_proteina: false, batendo_hoje_kcal: false };
+    expect(microMensagemFinal(saldo, metas, streak)).toBe(microMensagemFinal(saldo, metas));
+  });
+
+  it('streak 1 + bateu hoje prepende a linha 🌱 acima da micro-mensagem', () => {
     const saldo = { kcal: 1000, proteina_g: 120, carbo_g: 150, gordura_g: 30 };
     const streak: StreakInfo = { proteina: 1, kcal: 0, batendo_hoje_proteina: true, batendo_hoje_kcal: false };
-    expect(microMensagemFinal(saldo, metas, streak)).toBe(microMensagemFinal(saldo, metas));
+    const msg = microMensagemFinal(saldo, metas, streak);
+    const linhas = msg.split('\n');
+    expect(linhas[0]).toBe('🌱 *1º dia batendo a proteína!* Amanha a gente mantém.');
+    expect(linhas[1]).toContain('1000 kcal');
   });
 });

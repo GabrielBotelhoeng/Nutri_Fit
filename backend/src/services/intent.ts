@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { env } from '../config/env';
+import { comBackoff } from '../utils/retry';
 
 // P1-3: classificador de intencao da mensagem do paciente. Substitui o roteamento
 // por regex empilhada do agent.ts (`ehRegistro`, `ehSubstituicao`, `ehCorrecao`,
@@ -53,8 +54,10 @@ const CONSULTA_PALAVRA_RE =
 // kcal. Precedencia ALTA no fast-path — antes das regras de pergunta/registro,
 // porque casos como "quanto comi hoje?" combinam "?" + verbo de registro "comi"
 // (regra 2 deferia ao Haiku que classificava como consulta).
+// 2026-07-07: ampliado pra pegar variacoes coloquiais que caiam no Haiku ou pior
+// ("meu dia", "cade meu resumo", "como to hoje", "progresso de hoje", etc).
 const SALDO_RE =
-  /\b(quant[oa]s?\s+(de\s+|gramas?\s+de\s+|g\s+de\s+)?(kcal|cal|calorias?|prote[ií]nas?|carb(o|oidrato)s?|gorduras?|[aá]gua|ml\b)|quant[oa]s?\s+(eu\s+)?(j[aá]\s+)?(consumi|comi|tomei|bebi)|saldo\s+do\s+dia|qual\s+(o\s+)?meu\s+(consumo|saldo)|consumo\s+(do\s+dia|de\s+hoje)|t[oô]u?\s+(dentro|fora|perto)\s+(da|de)\s+meta|j[aá]\s+(bati|passei|ultrapasse[ai])\s+(a|da)?\s*meta|bati\s+a?\s*meta|quanto\s+(falt(a|am|ou)|sobr(a|ou)|rest(a|ou|am))\b)/i;
+  /\b(quant[oa]s?\s+(de\s+|gramas?\s+de\s+|g\s+de\s+)?(kcal|cal|calorias?|prote[ií]nas?|carb(o|oidrato)s?|gorduras?|[aá]gua|ml\b)|quant[oa]s?\s+(eu\s+)?(j[aá]\s+)?(consumi|comi|tomei|bebi)|saldo\s+do\s+dia|qual\s+(o\s+)?meu\s+(consumo|saldo|dia|progresso|resumo)|consumo\s+(do\s+dia|de\s+hoje|de\s+hj)|t[oô]u?\s+(dentro|fora|perto)\s+(da|de)\s+meta|j[aá]\s+(bati|passei|ultrapasse[ai])\s+(a|da)?\s*meta|bati\s+a?\s*meta|quanto\s+(falt(a|am|ou)|sobr(a|ou)|rest(a|ou|am))\b|meu\s+(dia|progresso|resumo)\b|resumo\s+d[oe]\s+(dia|hoje|hj)\b|progresso\s+(d[oe]\s+)?(hoje|hj|dia)\b|como\s+t[oôõ]u?\s+(hoje|hj)\b|cad[eê]\s+meu\s+(dia|resumo|progresso)\b)/i;
 
 // Fast-path: retorna Intent quando confiante; null quando deve consultar o Haiku.
 export function classificarIntencaoRapida(texto: string): Intent | null {
@@ -125,7 +128,7 @@ Definições:
 - "corrigir": paciente quer AJUSTAR a última refeição registrada. Ex: "na verdade eram 150g", "esqueci de falar do feijão", "corrige aí", "era pra ser 100g".
 - "agua": registro EXCLUSIVO de hidratação (água pura). Ex: "bebi 500ml de água", "tomei 2 copos d'água". NUNCA classifique suco, refrigerante, leite, café com leite ou cerveja como "agua" — esses são "registrar".
 - "substituicao": paciente pergunta se pode TROCAR um alimento da dieta prescrita. Ex: "posso trocar arroz por batata?", "não tenho frango, o que uso?", "tem alternativa pra ovo?".
-- "saldo": paciente pergunta QUANTO já consumiu hoje vs a meta (kcal/proteína/carbo/gordura/água). Ex: "quantas calorias consumi hoje?", "quanto comi de proteína?", "tô dentro da meta?", "quanto falta pra fechar o dia?", "qual meu saldo?".
+- "saldo": paciente pergunta QUANTO já consumiu hoje vs a meta (kcal/proteína/carbo/gordura/água), OU pede resumo/progresso do dia. Ex: "quantas calorias consumi hoje?", "quanto comi de proteína?", "tô dentro da meta?", "quanto falta pra fechar o dia?", "qual meu saldo?", "meu dia", "cadê meu resumo", "progresso de hoje", "como tô hoje?".
 - "consulta": qualquer dúvida sobre a dieta, plano, alimentos permitidos, dicas, horários, suplementação. Ex: "qual minha dieta?", "como tomar a creatina?", "que horas posso comer fruta?", "comi bem hoje, qual minha dieta?".
 
 Regras de prioridade:
@@ -138,12 +141,14 @@ Regras de prioridade:
 Devolva APENAS o JSON. Nada de explicações.`;
 
 export async function classificarIntencaoComHaiku(texto: string): Promise<Intent> {
-  const response = await claude.messages.create({
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 32,
-    system: SYSTEM_PROMPT_INTENT,
-    messages: [{ role: 'user', content: texto }],
-  });
+  const response = await comBackoff(() =>
+    claude.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 32,
+      system: SYSTEM_PROMPT_INTENT,
+      messages: [{ role: 'user', content: texto }],
+    }),
+  );
 
   const raw = response.content[0].type === 'text' ? response.content[0].text : '';
   const limpo = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();

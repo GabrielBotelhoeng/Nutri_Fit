@@ -154,6 +154,70 @@ describe('classificarIntencaoRapida — fast-path regex', () => {
     expect(classificarIntencaoRapida('qual minha dieta?')).toBe('consulta');
   });
 
+  // Variacoes coloquiais de saldo/resumo (ampliadas em 2026-07-07)
+  it('"meu dia" cai em saldo', () => {
+    expect(classificarIntencaoRapida('meu dia')).toBe('saldo');
+  });
+
+  it('"cade meu dia" cai em saldo', () => {
+    expect(classificarIntencaoRapida('cade meu dia')).toBe('saldo');
+  });
+
+  it('"cadê meu resumo" cai em saldo (com acento)', () => {
+    expect(classificarIntencaoRapida('cadê meu resumo')).toBe('saldo');
+  });
+
+  it('"meu progresso" cai em saldo', () => {
+    expect(classificarIntencaoRapida('meu progresso')).toBe('saldo');
+  });
+
+  it('"meu resumo" cai em saldo', () => {
+    expect(classificarIntencaoRapida('meu resumo')).toBe('saldo');
+  });
+
+  it('"resumo do dia" cai em saldo', () => {
+    expect(classificarIntencaoRapida('resumo do dia')).toBe('saldo');
+  });
+
+  it('"resumo de hoje" cai em saldo', () => {
+    expect(classificarIntencaoRapida('resumo de hoje')).toBe('saldo');
+  });
+
+  it('"progresso de hoje" cai em saldo', () => {
+    expect(classificarIntencaoRapida('progresso de hoje')).toBe('saldo');
+  });
+
+  it('"progresso do dia" cai em saldo', () => {
+    expect(classificarIntencaoRapida('progresso do dia')).toBe('saldo');
+  });
+
+  it('"como to hoje" cai em saldo', () => {
+    expect(classificarIntencaoRapida('como to hoje')).toBe('saldo');
+  });
+
+  it('"como tô hj" cai em saldo (acento + abreviacao)', () => {
+    expect(classificarIntencaoRapida('como tô hj')).toBe('saldo');
+  });
+
+  it('"qual meu dia?" cai em saldo', () => {
+    expect(classificarIntencaoRapida('qual meu dia?')).toBe('saldo');
+  });
+
+  it('"qual meu progresso?" cai em saldo', () => {
+    expect(classificarIntencaoRapida('qual meu progresso?')).toBe('saldo');
+  });
+
+  // Falsos positivos que precisamos evitar
+  it('"meu diario alimentar" NAO cai em saldo (word boundary protege)', () => {
+    // "diario" comeca com "dia" mas nao e o mesmo termo — \b apos "dia" impede match
+    expect(classificarIntencaoRapida('meu diario alimentar')).not.toBe('saldo');
+  });
+
+  it('"como to indo com a creatina?" NAO cai em saldo (defer pro Haiku)', () => {
+    // "indo" sozinho seria saldo mas o regex exige "hoje|hj" — sobra pergunta ambigua
+    expect(classificarIntencaoRapida('como to indo com a creatina?')).toBeNull();
+  });
+
   // Casos de substituicao
   it('"posso trocar o arroz por batata?" cai em substituicao mesmo com "?"', () => {
     // "posso trocar" e marcador forte de substituicao; o "?" e retorico aqui.
