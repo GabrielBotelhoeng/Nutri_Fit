@@ -46,10 +46,31 @@ export interface ItemRefeicao {
   preparo_inferido?: boolean;
 }
 
-export interface AnaliseRefeicao {
+// Uma refeicao individual dentro de uma mensagem. O Haiku pode identificar
+// varias (Fase B: "café: X. almoço: Y") — sempre retorna array, mesmo com 1.
+// `tipo_refeicao` fica null quando o paciente nao especificou.
+export interface RefeicaoIndividual {
+  tipo_refeicao?: string;
   itens: ItemRefeicao[];
   totais: MacrosRefeicao;
 }
+
+export interface AnaliseRefeicao {
+  refeicoes: RefeicaoIndividual[];
+  itens: ItemRefeicao[];
+  totais: MacrosRefeicao;
+}
+
+// Valores validos que o Haiku pode retornar em tipo_refeicao. Usado pelo
+// card multiplo pra escolher emoji.
+const TIPOS_REFEICAO_VALIDOS = new Set<string>([
+  'café da manhã',
+  'lanche da manhã',
+  'almoço',
+  'lanche da tarde',
+  'jantar',
+  'ceia',
+]);
 
 function extrairJSON(texto: string): unknown {
   const limpo = texto.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
@@ -61,37 +82,94 @@ function sanitizarMacros(m: MacrosRefeicao): MacrosRefeicao {
   return { kcal: san(m.kcal), proteina_g: san(m.proteina_g), carbo_g: san(m.carbo_g), gordura_g: san(m.gordura_g) };
 }
 
-// Output estruturado por item (P0-2). Resolve a "suposicao silenciosa":
-// o Haiku precisa marcar quais itens tiveram quantidade informada pelo
-// paciente vs quais foram estimados, pra o agente perguntar antes de
-// registrar (so se for item material) e o card poder marcar "_(estimei)_".
-export async function analisarRefeicaoComClaude(descricao: string): Promise<AnaliseRefeicao> {
-  const prompt = `Você é um assistente nutricional. Analise a refeição descrita pelo paciente e devolva uma decomposição por item.
+function normalizarItens(raw: unknown): ItemRefeicao[] {
+  const arr = Array.isArray(raw) ? raw : [];
+  return arr.map((i) => {
+    const it = i as Record<string, unknown>;
+    return {
+      nome: typeof it['nome'] === 'string' ? (it['nome'] as string) : 'item',
+      quantidade_g: Number(it['quantidade_g']) || 0,
+      quantidade_informada: it['quantidade_informada'] === true,
+      material: it['material'] === true,
+      preparo_inferido: it['preparo_inferido'] === true,
+    };
+  });
+}
 
-Refeição: "${descricao}"
+function macrosDeRaw(raw: unknown): MacrosRefeicao {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  return sanitizarMacros({
+    kcal:       Number(r['kcal'])       || 0,
+    proteina_g: Number(r['proteina_g']) || 0,
+    carbo_g:    Number(r['carbo_g'])    || 0,
+    gordura_g:  Number(r['gordura_g'])  || 0,
+  });
+}
+
+function agregarMacros(lista: MacrosRefeicao[]): MacrosRefeicao {
+  const soma = lista.reduce(
+    (acc, m) => ({
+      kcal:       acc.kcal       + m.kcal,
+      proteina_g: acc.proteina_g + m.proteina_g,
+      carbo_g:    acc.carbo_g    + m.carbo_g,
+      gordura_g:  acc.gordura_g  + m.gordura_g,
+    }),
+    { kcal: 0, proteina_g: 0, carbo_g: 0, gordura_g: 0 },
+  );
+  return sanitizarMacros(soma);
+}
+
+// Output estruturado por refeicao (Fase B) e por item (P0-2). O Haiku pode
+// identificar N refeicoes na mesma mensagem ("café: X. almoço: Y"): sempre
+// retorna `refeicoes[]`, mesmo com 1. Cada refeicao tem tipo (café/almoço/...)
+// ou null quando o paciente nao marcou. Compat: parser aceita shape legada
+// `{itens, totais}` — embrulha em 1 refeicao — pra nao quebrar chamadas antigas
+// e as centenas de fixtures dos testes que ainda usam esse shape.
+export async function analisarRefeicaoComClaude(descricao: string): Promise<AnaliseRefeicao> {
+  const prompt = `Você é um assistente nutricional. Analise a mensagem do paciente e devolva as refeições que ele descreveu.
+
+Mensagem: "${descricao}"
 
 RESPONDA APENAS COM JSON VÁLIDO no formato:
 {
-  "itens": [
+  "refeicoes": [
     {
-      "nome": "nome curto do alimento (ex.: 'Frango grelhado', 'Arroz branco', 'Coca Zero')",
-      "quantidade_g": numero em gramas (ou ml para liquidos),
-      "quantidade_informada": true se o paciente disse a quantidade EXPLICITA (ex.: '200g', '100ml', '2 colheres'); false se você teve que estimar,
-      "material": true para alimentos substanciais que contribuem com macros (carnes, arroz, feijao, frutas, paes); false para itens sem macros relevantes (agua, cafe preto, refrigerante zero, sal, tempero, chá sem açúcar),
-      "preparo_inferido": true se o alimento tem modo de preparo que muda os macros (frito/cozido/assado/grelhado/mexido) e o paciente NÃO disse qual foi — ou seja, você escolheu o preparo sozinho; false se o paciente informou o preparo OU o alimento não tem preparo relevante (fruta, iogurte, pão)
+      "tipo_refeicao": "café da manhã" | "lanche da manhã" | "almoço" | "lanche da tarde" | "jantar" | "ceia" | null,
+      "itens": [
+        {
+          "nome": "nome curto do alimento (ex.: 'Frango grelhado', 'Arroz branco', 'Coca Zero')",
+          "quantidade_g": numero em gramas (ou ml para liquidos),
+          "quantidade_informada": true se o paciente disse a quantidade EXPLICITA (ex.: '200g', '100ml', '2 colheres'); false se você teve que estimar,
+          "material": true para alimentos substanciais que contribuem com macros (carnes, arroz, feijao, frutas, paes); false para itens sem macros relevantes (agua, cafe preto, refrigerante zero, sal, tempero, chá sem açúcar),
+          "preparo_inferido": true se o alimento tem modo de preparo que muda os macros (frito/cozido/assado/grelhado/mexido) e o paciente NÃO disse qual foi — ou seja, você escolheu o preparo sozinho; false se o paciente informou o preparo OU o alimento não tem preparo relevante (fruta, iogurte, pão)
+        }
+      ],
+      "totais": {"kcal": number, "proteina_g": number, "carbo_g": number, "gordura_g": number}
     }
-  ],
-  "totais": {"kcal": number, "proteina_g": number, "carbo_g": number, "gordura_g": number}
+  ]
 }
 
 Regras OBRIGATÓRIAS:
-- Para cada item da refeição, gere uma entrada em "itens".
+- Sempre retorne "refeicoes" como array, mesmo com uma única refeição.
+- Separe em MÚLTIPLAS refeições quando o paciente citou explicitamente marcadores diferentes (ex.: "café: X. almoço: Y. janta: Z" → 3 refeições). Se ele descreveu tudo junto como uma refeição só, retorne 1.
+- "tipo_refeicao" só recebe valor quando o paciente marcou explicitamente. Se ele só disse "comi X", use null — NÃO invente o tipo.
+- Para cada item, gere uma entrada em "itens".
 - Use porção típica brasileira ao estimar (ex.: arroz médio ~100g, colher de feijão ~60g, fatia de pão ~30g).
 - "quantidade_informada" deve ser true APENAS quando o paciente deu um número explícito (gramas, ml, colheres, fatias, unidades). Se ele só falou "com arroz", marque false.
 - "material" diferencia o que tem caloria real do que é bebida zero ou tempero — bebida zero, agua, café preto, chá sem açúcar e temperos são SEMPRE material:false.
 - "preparo_inferido" só é true quando VOCÊ assumiu o preparo por conta própria: "batata frita" → false (paciente informou); "batata" → true (você escolheu). Ao assumir um preparo, use o mais comum no nome (ex.: "Batata cozida", "Frango grelhado", "Ovo cozido").
-- "totais" deve ser a SOMA exata dos macros de todos os itens.
-- Não inclua comentários ou markdown. Apenas JSON puro.`;
+- "totais" de cada refeição deve ser a SOMA exata dos macros dos itens dessa refeição.
+- Não inclua comentários ou markdown. Apenas JSON puro.
+
+Exemplo 1 — uma refeição sem tipo marcado:
+Entrada: "comi 200g de frango com arroz"
+Saída:
+{"refeicoes":[{"tipo_refeicao":null,"itens":[{"nome":"Frango grelhado","quantidade_g":200,"quantidade_informada":true,"material":true,"preparo_inferido":true},{"nome":"Arroz branco","quantidade_g":100,"quantidade_informada":false,"material":true,"preparo_inferido":false}],"totais":{"kcal":460,"proteina_g":50,"carbo_g":28,"gordura_g":8}}]}
+
+Exemplo 2 — três refeições com tipos marcados:
+Entrada: "café: 2 ovos e um pão. almoço: 200g de frango e arroz. janta: salada"
+Saída:
+{"refeicoes":[{"tipo_refeicao":"café da manhã","itens":[{"nome":"Ovo cozido","quantidade_g":100,"quantidade_informada":true,"material":true,"preparo_inferido":true},{"nome":"Pão francês","quantidade_g":50,"quantidade_informada":true,"material":true,"preparo_inferido":false}],"totais":{"kcal":275,"proteina_g":18,"carbo_g":29,"gordura_g":10}},{"tipo_refeicao":"almoço","itens":[{"nome":"Frango grelhado","quantidade_g":200,"quantidade_informada":true,"material":true,"preparo_inferido":true},{"nome":"Arroz branco","quantidade_g":100,"quantidade_informada":false,"material":true,"preparo_inferido":false}],"totais":{"kcal":460,"proteina_g":50,"carbo_g":28,"gordura_g":8}},{"tipo_refeicao":"jantar","itens":[{"nome":"Salada verde","quantidade_g":150,"quantidade_informada":false,"material":true,"preparo_inferido":false}],"totais":{"kcal":30,"proteina_g":2,"carbo_g":5,"gordura_g":0}}]}`;
 
   const response = await comBackoff(() =>
     claude.messages.create({
@@ -103,28 +181,44 @@ Regras OBRIGATÓRIAS:
 
   const texto = response.content[0].type === 'text' ? response.content[0].text : '{}';
   try {
-    const raw = extrairJSON(texto) as { itens?: unknown; totais?: Record<string, number> };
-    const itensRaw = Array.isArray(raw.itens) ? raw.itens : [];
-    const itens: ItemRefeicao[] = itensRaw.map((i) => {
-      const it = i as Record<string, unknown>;
-      return {
-        nome: typeof it['nome'] === 'string' ? (it['nome'] as string) : 'item',
-        quantidade_g: Number(it['quantidade_g']) || 0,
-        quantidade_informada: it['quantidade_informada'] === true,
-        material: it['material'] === true,
-        preparo_inferido: it['preparo_inferido'] === true,
-      };
-    });
-    const totais = sanitizarMacros({
-      kcal:       Number(raw.totais?.['kcal'])       || 0,
-      proteina_g: Number(raw.totais?.['proteina_g']) || 0,
-      carbo_g:    Number(raw.totais?.['carbo_g'])    || 0,
-      gordura_g:  Number(raw.totais?.['gordura_g'])  || 0,
-    });
-    return { itens, totais };
+    const raw = extrairJSON(texto) as {
+      refeicoes?: unknown;
+      itens?: unknown;    // legacy
+      totais?: unknown;   // legacy
+    };
+
+    let refeicoes: RefeicaoIndividual[];
+    if (Array.isArray(raw.refeicoes)) {
+      refeicoes = raw.refeicoes.map((r) => {
+        const rObj = (r ?? {}) as Record<string, unknown>;
+        const tipoRaw = typeof rObj['tipo_refeicao'] === 'string' ? (rObj['tipo_refeicao'] as string) : null;
+        const tipo = tipoRaw && TIPOS_REFEICAO_VALIDOS.has(tipoRaw) ? tipoRaw : undefined;
+        const itens = normalizarItens(rObj['itens']);
+        // Se o Haiku esqueceu totais por refeicao, deriva dos itens (fallback defensivo).
+        const totais = rObj['totais'] !== undefined
+          ? macrosDeRaw(rObj['totais'])
+          : agregarMacros([{ kcal: 0, proteina_g: 0, carbo_g: 0, gordura_g: 0 }]);
+        return { tipo_refeicao: tipo, itens, totais };
+      });
+    } else {
+      // Fallback legacy: shape antiga {itens, totais} vira 1 refeicao sem tipo.
+      refeicoes = [{
+        tipo_refeicao: undefined,
+        itens: normalizarItens(raw.itens),
+        totais: macrosDeRaw(raw.totais),
+      }];
+    }
+
+    const itensFlat = refeicoes.flatMap((r) => r.itens);
+    const totaisAgregados = agregarMacros(refeicoes.map((r) => r.totais));
+    return { refeicoes, itens: itensFlat, totais: totaisAgregados };
   } catch {
     console.error('[meal] Claude retornou JSON inválido para analise estruturada:', texto);
-    return { itens: [], totais: { kcal: 0, proteina_g: 0, carbo_g: 0, gordura_g: 0 } };
+    return {
+      refeicoes: [],
+      itens: [],
+      totais: { kcal: 0, proteina_g: 0, carbo_g: 0, gordura_g: 0 },
+    };
   }
 }
 
@@ -616,6 +710,100 @@ export function formatarCardRefeicao(
   );
 }
 
+// Descricao curta usada como texto persistido na tabela `refeicoes` quando
+// vem em batch. Formato: "almoço: 200g de Frango, 100g de Arroz". Sem tipo,
+// omite o prefixo. Sem itens materiais (raro — refeicao so de bebida zero),
+// cai pra lista completa pra nao gravar string vazia.
+function descricaoRefeicao(r: RefeicaoIndividual): string {
+  const materiais = r.itens.filter((i) => i.material);
+  const base = materiais.length > 0 ? materiais : r.itens;
+  const partes = base.map((i) => `${Math.round(i.quantidade_g)}g de ${i.nome}`).join(', ');
+  const prefixo = r.tipo_refeicao ? `${r.tipo_refeicao}: ` : '';
+  return partes ? `${prefixo}${partes}` : (r.tipo_refeicao ?? 'refeição');
+}
+
+// Rodape consolidado do card multiplo: lista o que o Haiku estimou (preparo
+// critico assumido + quantidades chutadas). Alternativa ao marcador
+// "_(estimei)_" por item, que poluiria demais em batch. Retorna "" quando
+// nada foi estimado — evita rodape ruidoso pra mensagem com quantidades
+// todas explicitas.
+function resumoEstimativasBatch(analise: AnaliseRefeicao): string {
+  const preparosEstimados: string[] = [];
+  const qtdsEstimadas: string[] = [];
+  const vistoPreparo = new Set<string>();
+  const vistoQtd = new Set<string>();
+
+  for (const r of analise.refeicoes) {
+    for (const i of r.itens) {
+      if (!i.material) continue;
+      if (i.preparo_inferido === true && ehPreparoCritico(i.nome) && !vistoPreparo.has(i.nome)) {
+        preparosEstimados.push(i.nome);
+        vistoPreparo.add(i.nome);
+      }
+      if (!i.quantidade_informada && !vistoQtd.has(i.nome)) {
+        qtdsEstimadas.push(`${i.nome} (${Math.round(i.quantidade_g)}g)`);
+        vistoQtd.add(i.nome);
+      }
+    }
+  }
+  if (preparosEstimados.length === 0 && qtdsEstimadas.length === 0) return '';
+
+  const partes: string[] = [];
+  if (preparosEstimados.length > 0) {
+    const lista = preparosEstimados.join(', ');
+    partes.push(preparosEstimados.length === 1 ? `o preparo de ${lista}` : `os preparos de ${lista}`);
+  }
+  if (qtdsEstimadas.length > 0) {
+    const lista = qtdsEstimadas.join(', ');
+    partes.push(qtdsEstimadas.length === 1 ? `a quantidade de ${lista}` : `as quantidades de ${lista}`);
+  }
+  return `_Estimei ${partes.join(' e ')}. Se algo estiver muito fora, me manda a correção._`;
+}
+
+// Card unico agregando N refeicoes detectadas na mesma mensagem (Fase B).
+// Um bloco por refeicao com emoji por tipo + itens indentados, seguido de
+// total agregado, rodape de estimativas (quando houve) e progresso do dia.
+// Sem marcador "_(estimei)_" por item — em batch a sinalizacao vai
+// concentrada no rodape pra nao poluir cada linha.
+export function formatarCardMultiplo(
+  analise: AnaliseRefeicao,
+  saldo: MacrosRefeicao,
+  metas: MacrosDiarios,
+  streak?: StreakInfo,
+): string {
+  const emojiPorTipo: Record<string, string> = {
+    'café da manhã': '☕',
+    'lanche da manhã': '🍎',
+    'almoço': '🍽️',
+    'lanche da tarde': '🍎',
+    'jantar': '🍽️',
+    'ceia': '🌙',
+  };
+  const blocos = analise.refeicoes.map((r) => {
+    const titulo = r.tipo_refeicao
+      ? `${emojiPorTipo[r.tipo_refeicao] ?? '🍴'} *${r.tipo_refeicao}* (${Math.round(r.totais.kcal)} kcal)`
+      : `🍴 *Refeição* (${Math.round(r.totais.kcal)} kcal)`;
+    const itensMat = r.itens.filter((i) => i.material);
+    const linhas = itensMat.map((i) => `  • ${i.nome} — ${Math.round(i.quantidade_g)}g`);
+    return linhas.length > 0 ? `${titulo}\n${linhas.join('\n')}` : titulo;
+  }).join('\n\n');
+
+  const t = analise.totais;
+  const linhaTotal =
+    `_Total das refeições:_ ${Math.round(t.kcal)} kcal · ` +
+    `${Math.round(t.proteina_g)}g P · ${Math.round(t.carbo_g)}g C · ${Math.round(t.gordura_g)}g G`;
+
+  const resumo = resumoEstimativasBatch(analise);
+  const blocoResumo = resumo ? `\n\n${resumo}` : '';
+
+  return (
+    `✅ *${analise.refeicoes.length} refeições registradas!*\n\n` +
+    `${blocos}\n\n` +
+    `${linhaTotal}${blocoResumo}\n\n` +
+    formatarBlocoProgressoDia(saldo, metas, streak)
+  );
+}
+
 export async function sugerirSubstituicao(
   pacienteId: string,
   pacienteNome: string,
@@ -637,6 +825,30 @@ export async function sugerirSubstituicao(
   });
 
   return response.content[0].type === 'text' ? response.content[0].text : '';
+}
+
+// Fase B: registra N refeicoes detectadas na mesma mensagem, uma insert
+// atomica por refeicao. Falha no meio nao rebobina as anteriores — a
+// consequencia (paciente ve card com menos refeicoes que descreveu) e
+// preferivel a perder o registro parcial ja consolidado no saldo do dia.
+// Fluxos P0-2/P0-2b DESLIGADOS aqui por design (ver comentario na branch).
+async function processarBatch(
+  phone: string,
+  paciente: PacienteInfo,
+  analise: AnaliseRefeicao,
+): Promise<void> {
+  for (const r of analise.refeicoes) {
+    const descricao = descricaoRefeicao(r);
+    await registrarRefeicao(paciente.id, descricao, r.totais, 'texto', stripMaterial(r.itens));
+  }
+
+  const estado = await getEstadoConv(paciente.id);
+  const metas = obterMetas(estado.dados as Record<string, unknown>);
+  const saldo = await obterSaldoDia(paciente.id);
+  const streak = await calcularStreak(paciente.id, metas);
+
+  await sendText(phone, formatarCardMultiplo(analise, saldo, metas, streak));
+  await dispararAlertaOvershoot(phone, saldo, metas);
 }
 
 // `intentHint` (P1-3 follow-up): quando o agent.ts ja classificou a intencao
@@ -682,6 +894,17 @@ export async function processarTextoRefeicao(
 
   if (analise.totais.kcal === 0 || analise.itens.length === 0) {
     await sendText(phone, `⚠️ Não consegui estimar os macros para essa refeição. Tente descrever com mais detalhes (ex: "200g de frango grelhado com 100g de arroz").`);
+    return;
+  }
+
+  // Fase B: paciente descreveu 2+ refeicoes na mesma mensagem. Registra em
+  // batch (N linhas em `refeicoes`, 1 card agregado) e SEM interromper com
+  // pergunta de preparo/quantidade — interromper batch por 1 item vira UX
+  // ruim. Se houver imprecisao (item material sem qtd, preparo assumido em
+  // alimento critico), fica marcado como estimativa no BD; paciente corrige
+  // via P0-1 se quiser.
+  if (analise.refeicoes.length >= 2) {
+    await processarBatch(phone, paciente, analise);
     return;
   }
 
