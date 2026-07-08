@@ -856,12 +856,7 @@ export async function processarMensagem(phone: string, texto: string): Promise<v
   // Verificar confirmação pendente de análise de foto (D-06)
   // DEVE vir ANTES do bloco ehRegistro/ehSubstituicao para não conflitar
   const confirmacaoPendente = dadosEstado['confirmacao_pendente'] as {
-    analise: {
-      alimentos: string[];
-      macros: { kcal: number; proteina_g: number; carbo_g: number; gordura_g: number };
-      confianca: string;
-      aviso: string | null;
-    };
+    analise: visionService.AnalisePrato;
     timestamp: string;
   } | undefined;
 
@@ -871,8 +866,8 @@ export async function processarMensagem(phone: string, texto: string): Promise<v
       await atualizarEstado(paciente.id, { dados: { confirmacao_pendente: null } as Parameters<typeof atualizarEstado>[1]['dados'] });
       // Não retornar — continuar para processar a mensagem normalmente
     } else {
-      const textoConfirmacao = texto.toLowerCase().trim();
-      if (textoConfirmacao === 'sim' || textoConfirmacao === 's' || textoConfirmacao === 'yes') {
+      const resposta = visionService.interpretarRespostaConfirmacao(texto);
+      if (resposta === 'sim') {
         await atualizarEstado(paciente.id, { dados: { confirmacao_pendente: null } as Parameters<typeof atualizarEstado>[1]['dados'] });
         const macros = confirmacaoPendente.analise.macros;
         const descricao = confirmacaoPendente.analise.alimentos.join(', ');
@@ -884,12 +879,30 @@ export async function processarMensagem(phone: string, texto: string): Promise<v
         await sendText(phone, mealService.formatarSaldoDia(descricao, macros.kcal, saldo, metas, streak));
         await mealService.dispararAlertaOvershoot(phone, saldo, metas);
         return;
-      } else if (textoConfirmacao === 'não' || textoConfirmacao === 'nao' || textoConfirmacao === 'n' || textoConfirmacao === 'no') {
+      } else if (resposta === 'nao') {
         await atualizarEstado(paciente.id, { dados: { confirmacao_pendente: null } as Parameters<typeof atualizarEstado>[1]['dados'] });
         await sendText(phone, '❌ Registro cancelado. Você pode tirar outra foto ou descrever a refeição por texto.');
         return;
       }
-      // Não é sim/não — ignorar confirmação pendente e processar normalmente
+      // Bug D-06 fix Opcao C1 (2026-07-08): resposta 'outro' — paciente
+      // digitou correcao parcial ("bife 200g e feijao 100g"). Tenta merge
+      // via Haiku: mantem itens nao mencionados + substitui quantidades.
+      // Se merge der certo, atualiza estado + re-emite card. Se falhar
+      // (Haiku invalido/vazio), cai no fallback Opcao B: cancela card e
+      // deixa classificador de intent tratar como refeicao nova.
+      const analiseCorrigida = await visionService.aplicarCorrecaoParcial(
+        confirmacaoPendente.analise,
+        texto,
+      );
+      if (analiseCorrigida) {
+        console.log(`[agent] confirmacao_pendente atualizada via correcao parcial — texto="${texto.slice(0, 60)}"`);
+        await visionService.enviarCardConfirmacao(phone, paciente, analiseCorrigida, {
+          cabecalho: '✏️ Corrigi a análise:',
+        });
+        return;
+      }
+      await atualizarEstado(paciente.id, { dados: { confirmacao_pendente: null } as Parameters<typeof atualizarEstado>[1]['dados'] });
+      console.log(`[agent] confirmacao_pendente cancelada por resposta livre — texto="${texto.slice(0, 60)}"`);
     }
   }
 

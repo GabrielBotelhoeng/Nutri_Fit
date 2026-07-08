@@ -208,6 +208,50 @@ Se algum campo não estiver visível, use null. Responda APENAS com JSON válido
   }
 }
 
+// Bug D-06 fix (2026-07-08): interpreta resposta do card D-06.
+// Aceita variacoes comuns de sim/nao. Qualquer outra coisa e tratada em
+// agent.ts como "cancela o card e trata como refeicao nova por texto".
+export function interpretarRespostaConfirmacao(texto: string): 'sim' | 'nao' | 'outro' {
+  const t = texto.toLowerCase().trim();
+  if (t === 'sim' || t === 's' || t === 'yes' || t === 'ok' || t === '👍') return 'sim';
+  if (t === 'não' || t === 'nao' || t === 'n' || t === 'no') return 'nao';
+  return 'outro';
+}
+
+// Bug D-06 fix (2026-07-08): monta o texto do card D-06. Extraido de
+// handleConfirmacaoPrato pra reusar na re-emissao pos-correcao (Opcao C1).
+export function montarTextoCard(analise: AnalisePrato, avisoExtra?: string, cabecalho?: string): string {
+  const lista = analise.alimentos.map((a, i) => `${i + 1}. ${a}`).join('\n');
+  const avisoConfianca = analise.confianca === 'baixa' ? '\n⚠️ Baixa confiança na identificação.' : '';
+  const avisoLimitacao = avisoExtra ? `\n${avisoExtra}` : '';
+  const header = cabecalho ?? '📸 Identifiquei na foto:';
+  return `${header}\n${lista}\n\nEst. ${Math.round(analise.macros.kcal)} kcal${avisoConfianca}${avisoLimitacao}\n\nEstá correto?\n• *sim* para registrar\n• *não* para cancelar\n• ou me manda a refeição corrigida por texto (ex: "70g de abobrinha e 70g de ovo")`;
+}
+
+// Bug D-06 fix (2026-07-08): salva confirmacao_pendente + envia card.
+// Reutilizado pela emissao inicial (foto nova) e pela re-emissao pos-merge
+// de correcao parcial via Haiku (Opcao C1).
+export async function enviarCardConfirmacao(
+  phone: string,
+  paciente: PacienteInfo,
+  analise: AnalisePrato,
+  opcoes?: { avisoExtra?: string; cabecalho?: string },
+): Promise<void> {
+  if (analise.macros.kcal === 0 || analise.alimentos.length === 0) {
+    await sendText(phone, '❌ Não consegui identificar os alimentos. Tente uma foto com mais luz ou descreva por texto.');
+    return;
+  }
+  await atualizarEstado(paciente.id, {
+    dados: {
+      confirmacao_pendente: {
+        analise,
+        timestamp: new Date().toISOString(),
+      },
+    },
+  });
+  await sendText(phone, montarTextoCard(analise, opcoes?.avisoExtra, opcoes?.cabecalho));
+}
+
 // Envia lista de alimentos identificados ao paciente e aguarda confirmação "sim"/"não" (D-06).
 // A interceptação da resposta é feita em agent.ts no bloco confirmacao_pendente.
 async function handleConfirmacaoPrato(
@@ -217,28 +261,94 @@ async function handleConfirmacaoPrato(
   metas: MacrosDiarios,
   avisoExtra?: string,
 ): Promise<void> {
-  if (analise.macros.kcal === 0 || analise.alimentos.length === 0) {
-    await sendText(phone, '❌ Não consegui identificar os alimentos. Tente uma foto com mais luz ou descreva por texto.');
-    return;
-  }
+  void metas;
+  await enviarCardConfirmacao(phone, paciente, analise, { avisoExtra });
+}
 
-  await atualizarEstado(paciente.id, {
-    dados: {
-      confirmacao_pendente: {
-        analise,
-        timestamp: new Date().toISOString(),
+// Bug D-06 fix (2026-07-08) — Opcao C1.
+// Recebe a analise atual do card + texto livre do paciente ("bife 200g, feijao 100g").
+// Chama Haiku pra aplicar correcao PARCIAL: mantem itens nao mencionados, substitui
+// quantidades dos mencionados, recalcula macros totais. Retorna null quando:
+//   - Haiku retorna JSON invalido
+//   - Haiku sinaliza "invalido: true" (paciente nao queria corrigir de fato)
+//   - Analise resultante ficou vazia
+// Nesses casos, agent.ts cai no fallback (Opcao B — cancela card + trata como
+// refeicao nova via classificador de intent).
+export async function aplicarCorrecaoParcial(
+  analiseOriginal: AnalisePrato,
+  textoCorrecao: string,
+): Promise<AnalisePrato | null> {
+  try {
+    const resumo = {
+      alimentos: analiseOriginal.alimentos,
+      kcal: analiseOriginal.macros.kcal,
+      proteina_g: analiseOriginal.macros.proteina_g,
+      carbo_g: analiseOriginal.macros.carbo_g,
+      gordura_g: analiseOriginal.macros.gordura_g,
+    };
+    const response = await claude.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 512,
+      messages: [{
+        role: 'user',
+        content: [{
+          type: 'text',
+          text: `Você é um assistente nutricional. Um paciente enviou foto de refeição e o sistema identificou os alimentos abaixo. Ele está agora corrigindo QUANTIDADES de itens específicos.
+
+ANÁLISE ORIGINAL DO PRATO:
+${JSON.stringify(resumo)}
+
+CORREÇÃO DO PACIENTE:
+"${textoCorrecao}"
+
+TAREFA: retorne a análise atualizada mantendo os itens não mencionados.
+
+REGRAS:
+- MANTENHA os itens não citados na correção (ex: se paciente citou só bife e feijão, preserve arroz, salada, batata etc.).
+- SUBSTITUA a quantidade dos itens mencionados (ex: "bife 200g" → item bife vira ~200g).
+- Se o paciente REMOVER um item ("sem arroz", "tira a batata"), elimine-o da lista.
+- RECALCULE os macros TOTAIS considerando as novas quantidades (USDA-like).
+- Se o texto não for interpretável como correção (é uma pergunta, cumprimento, ou refeição totalmente nova/independente), responda: {"invalido": true}
+
+RESPONDA EM JSON, um dos dois formatos:
+{"alimentos": ["item corrigido 1 com nova qtd", "item mantido 2 com qtd original", ...], "confianca": "media", "kcal": N, "proteina_g": N, "carbo_g": N, "gordura_g": N, "aviso": null}
+ou
+{"invalido": true}
+
+Sem markdown, sem texto fora do JSON.`,
+        }],
+      }],
+    });
+    const texto = response.content[0].type === 'text' ? response.content[0].text : '{}';
+    const raw = extrairJSON(texto) as Record<string, unknown>;
+    if (raw['invalido'] === true) {
+      console.log('[vision] aplicarCorrecaoParcial: Haiku marcou invalido');
+      return null;
+    }
+    const alimentos = Array.isArray(raw['alimentos']) ? (raw['alimentos'] as string[]) : [];
+    const kcal = Number(raw['kcal']) || 0;
+    if (alimentos.length === 0 || kcal === 0) {
+      console.log('[vision] aplicarCorrecaoParcial: resposta vazia — fallback');
+      return null;
+    }
+    return {
+      alimentos,
+      confianca: (raw['confianca'] as 'alta' | 'media' | 'baixa') || 'media',
+      macros: {
+        kcal,
+        proteina_g: Number(raw['proteina_g']) || 0,
+        carbo_g: Number(raw['carbo_g']) || 0,
+        gordura_g: Number(raw['gordura_g']) || 0,
       },
-    },
-  });
-
-  const lista = analise.alimentos.map((a, i) => `${i + 1}. ${a}`).join('\n');
-  const avisoConfianca = analise.confianca === 'baixa' ? '\n⚠️ Baixa confiança na identificação.' : '';
-  const avisoLimitacao = avisoExtra ? `\n${avisoExtra}` : '';
-
-  await sendText(
-    phone,
-    `📸 Identifiquei na foto:\n${lista}\n\nEst. ${Math.round(analise.macros.kcal)} kcal${avisoConfianca}${avisoLimitacao}\n\nEstá correto? Responda *sim* para registrar ou *não* para cancelar.`,
-  );
+      aviso: (raw['aviso'] as string | null) || null,
+      // Correcao parcial nao muda ambiguidade — se paciente ja passou pela fase
+      // C, chegou aqui com ambiguidade='nenhuma' (foto simples ou ja resolvida).
+      ambiguidade: 'nenhuma',
+    };
+  } catch (e) {
+    console.error('[vision] aplicarCorrecaoParcial falhou:', e);
+    return null;
+  }
 }
 
 // Ponto de entrada principal chamado pelo webhook.ts para mensagens de imagem.
