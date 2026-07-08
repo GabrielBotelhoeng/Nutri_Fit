@@ -12,6 +12,7 @@ import {
   PacienteInfo,
 } from './conversation';
 import * as mealService from './meal';
+import * as visionService from './vision';
 import {
   calcularTMB,
   calcularHidratacao,
@@ -818,6 +819,37 @@ export async function processarMensagem(phone: string, texto: string): Promise<v
     if (diffMs > 5 * 60 * 1000) {
       await atualizarEstado(paciente.id, { dados: { aguardando_foto_2: null } as Parameters<typeof atualizarEstado>[1]['dados'] });
       console.log(`[agent] Estado aguardando_foto_2 expirado — limpo.`);
+    }
+  }
+
+  // Verificar ambiguidade de foto pendente (Fase C)
+  // DEVE vir ANTES de confirmacao_pendente — mesmo padrao D-06 com pergunta previa.
+  // Se ativo e nao expirado, essa resposta eh consumida aqui e nao cai no fluxo normal.
+  const fotoAmbiguaPendente = dadosEstado['foto_ambigua_pendente'] as {
+    tipo: 'pessoas' | 'refeicoes';
+    analise: visionService.AnalisePrato;
+    timestamp: string;
+  } | undefined;
+
+  if (fotoAmbiguaPendente) {
+    const expirada = Date.now() - new Date(fotoAmbiguaPendente.timestamp).getTime() > 10 * 60 * 1000;
+    if (expirada) {
+      await atualizarEstado(paciente.id, { dados: { foto_ambigua_pendente: null } as Parameters<typeof atualizarEstado>[1]['dados'] });
+      // Nao retornar — cai no fluxo normal
+    } else {
+      const resolvido = await visionService.resolverAmbiguidadeFoto(
+        phone,
+        paciente,
+        { tipo: fotoAmbiguaPendente.tipo, analise: fotoAmbiguaPendente.analise },
+        texto,
+      );
+      if (resolvido) return;
+      // Resposta invalida — repete pergunta
+      const repergunta = fotoAmbiguaPendente.tipo === 'pessoas'
+        ? '🤔 Não entendi. Manda só o número de pessoas (ex: *1*, *2*, *3*).'
+        : '🤔 Não entendi. Responde *uma só* ou *separadas*.';
+      await sendText(phone, repergunta);
+      return;
     }
   }
 
