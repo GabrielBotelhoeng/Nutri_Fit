@@ -866,7 +866,7 @@ export async function processarMensagem(phone: string, texto: string): Promise<v
       await atualizarEstado(paciente.id, { dados: { confirmacao_pendente: null } as Parameters<typeof atualizarEstado>[1]['dados'] });
       // Não retornar — continuar para processar a mensagem normalmente
     } else {
-      const resposta = visionService.interpretarRespostaConfirmacao(texto);
+      const resposta = await visionService.interpretarRespostaConfirmacao(texto);
       if (resposta === 'sim') {
         await atualizarEstado(paciente.id, { dados: { confirmacao_pendente: null } as Parameters<typeof atualizarEstado>[1]['dados'] });
         const macros = confirmacaoPendente.analise.macros;

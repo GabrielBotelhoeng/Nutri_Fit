@@ -221,11 +221,69 @@ Se algum campo não estiver visível, use null. Responda APENAS com JSON válido
 // Bug D-06 fix (2026-07-08): interpreta resposta do card D-06.
 // Aceita variacoes comuns de sim/nao. Qualquer outra coisa e tratada em
 // agent.ts como "cancela o card e trata como refeicao nova por texto".
-export function interpretarRespostaConfirmacao(texto: string): 'sim' | 'nao' | 'outro' {
+//
+// 2026-07-09: paciente digitou "Aim" no UAT real e caiu em 'outro' →
+// cancelou card. Fast-path regex nao pega typos. Nova arquitetura em 2 fases,
+// espelhando o padrao de intent.ts (classificarIntencaoRapida + Haiku):
+//   1. Fast-path (gratis, instantaneo) — casos exatos e casos claros de 'outro'
+//      (frase longa, com quantidade, com pontuacao). Cobre 99% do trafego.
+//   2. Fallback Haiku — so palavras curtas ambiguas ("aim", "aham", "beleza",
+//      "nap"). Custo por chamada ~$0.0003.
+export function interpretarConfirmacaoRapida(texto: string): 'sim' | 'nao' | 'outro' | null {
   const t = texto.toLowerCase().trim();
+  if (t.length === 0) return 'outro';
   if (t === 'sim' || t === 's' || t === 'yes' || t === 'ok' || t === '👍') return 'sim';
   if (t === 'não' || t === 'nao' || t === 'n' || t === 'no') return 'nao';
-  return 'outro';
+  // Contem quantidade explicita → correcao parcial ou refeicao nova, jamais confirmacao
+  if (/\d/.test(t)) return 'outro';
+  // Frase estruturada (virgula, ponto, ponto-de-exclamacao, interrogacao) → nao e confirmacao curta
+  if (/[,.!?;]/.test(t)) return 'outro';
+  // Frase longa (> 15 chars sem pontuacao) → provavel descricao de refeicao
+  if (t.length > 15) return 'outro';
+  // Curto e desconhecido → ambiguo, deixa Haiku decidir ("aim", "aham", "beleza", "nap")
+  return null;
+}
+
+const SYSTEM_PROMPT_CONFIRMACAO = `Você recebe UMA resposta curta de um paciente que acabou de ver um card do WhatsApp perguntando se ele confirma uma refeição identificada por foto. As opções que o paciente conhece são:
+• *sim* para registrar
+• *não* para cancelar
+• ou uma correção por texto (ex: "70g de abobrinha e 70g de ovo")
+
+Classifique a resposta em uma dessas categorias:
+- "sim" — o paciente está confirmando. Inclui variações escritas com typo, gírias ou expressões de aceitação: "aim", "sinm", "simm", "aham", "uhum", "beleza", "blz", "pode ser", "pode registrar", "bora", "manda ver", "confirmado", "isso", "isso mesmo", "certo", "tá certo", "tá bom", "tudo certo", "positivo".
+- "nao" — o paciente está negando/cancelando. Inclui: "nap", "naum", "nn", "nada disso", "errado", "não é isso", "cancela", "negativo".
+- "outro" — qualquer coisa que não seja confirmação nem negação (dúvida, saudação, mudança de assunto, silêncio, etc).
+
+Responda APENAS com JSON no formato:
+{"resposta": "sim" | "nao" | "outro"}
+
+Nada de explicações.`;
+
+export async function interpretarConfirmacaoComHaiku(texto: string): Promise<'sim' | 'nao' | 'outro'> {
+  try {
+    const response = await claude.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 32,
+      system: SYSTEM_PROMPT_CONFIRMACAO,
+      messages: [{ role: 'user', content: texto }],
+    });
+    const raw = response.content[0].type === 'text' ? response.content[0].text : '';
+    const limpo = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const parsed = JSON.parse(limpo) as { resposta?: string };
+    const r = parsed.resposta;
+    if (r === 'sim' || r === 'nao' || r === 'outro') return r;
+    console.warn(`[vision] Haiku confirmacao retornou resposta invalida: ${raw}`);
+    return 'outro';
+  } catch (err) {
+    console.error('[vision] Haiku confirmacao falhou:', err);
+    return 'outro';
+  }
+}
+
+export async function interpretarRespostaConfirmacao(texto: string): Promise<'sim' | 'nao' | 'outro'> {
+  const rapida = interpretarConfirmacaoRapida(texto);
+  if (rapida !== null) return rapida;
+  return interpretarConfirmacaoComHaiku(texto);
 }
 
 // Bug D-06 fix (2026-07-08): monta o texto do card D-06. Extraido de

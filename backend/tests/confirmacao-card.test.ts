@@ -48,6 +48,7 @@ vi.mock('../src/services/barcode', () => ({
 
 import {
   interpretarRespostaConfirmacao,
+  interpretarConfirmacaoRapida,
   montarTextoCard,
   aplicarCorrecaoParcial,
   type AnalisePrato,
@@ -68,51 +69,116 @@ function makeAnalise(over: Partial<AnalisePrato> = {}): AnalisePrato {
 // interpretarRespostaConfirmacao — funcao pura
 // ------------------------------------------------------------------------
 
-describe('interpretarRespostaConfirmacao', () => {
-  it('aceita "sim", "s", "yes", "ok", "👍" como sim (case-insensitive + trim)', () => {
-    expect(interpretarRespostaConfirmacao('sim')).toBe('sim');
-    expect(interpretarRespostaConfirmacao('SIM')).toBe('sim');
-    expect(interpretarRespostaConfirmacao(' sim ')).toBe('sim');
-    expect(interpretarRespostaConfirmacao('s')).toBe('sim');
-    expect(interpretarRespostaConfirmacao('S')).toBe('sim');
-    expect(interpretarRespostaConfirmacao('yes')).toBe('sim');
-    expect(interpretarRespostaConfirmacao('ok')).toBe('sim');
-    expect(interpretarRespostaConfirmacao('👍')).toBe('sim');
+describe('interpretarConfirmacaoRapida (fast-path — sincrono, gratis)', () => {
+  it('match exato: "sim", "s", "yes", "ok", "👍" (case-insensitive + trim)', () => {
+    expect(interpretarConfirmacaoRapida('sim')).toBe('sim');
+    expect(interpretarConfirmacaoRapida('SIM')).toBe('sim');
+    expect(interpretarConfirmacaoRapida(' sim ')).toBe('sim');
+    expect(interpretarConfirmacaoRapida('s')).toBe('sim');
+    expect(interpretarConfirmacaoRapida('S')).toBe('sim');
+    expect(interpretarConfirmacaoRapida('yes')).toBe('sim');
+    expect(interpretarConfirmacaoRapida('ok')).toBe('sim');
+    expect(interpretarConfirmacaoRapida('👍')).toBe('sim');
   });
 
-  it('aceita "não", "nao", "n", "no" como nao (com/sem acento)', () => {
-    expect(interpretarRespostaConfirmacao('não')).toBe('nao');
-    expect(interpretarRespostaConfirmacao('nao')).toBe('nao');
-    expect(interpretarRespostaConfirmacao('NÃO')).toBe('nao');
-    expect(interpretarRespostaConfirmacao(' não ')).toBe('nao');
-    expect(interpretarRespostaConfirmacao('n')).toBe('nao');
-    expect(interpretarRespostaConfirmacao('N')).toBe('nao');
-    expect(interpretarRespostaConfirmacao('no')).toBe('nao');
+  it('match exato: "não", "nao", "n", "no"', () => {
+    expect(interpretarConfirmacaoRapida('não')).toBe('nao');
+    expect(interpretarConfirmacaoRapida('nao')).toBe('nao');
+    expect(interpretarConfirmacaoRapida('NÃO')).toBe('nao');
+    expect(interpretarConfirmacaoRapida('n')).toBe('nao');
+    expect(interpretarConfirmacaoRapida('no')).toBe('nao');
   });
 
-  it('descricao de refeicao vira "outro" (bug D-06 — cancela card em vez de somar)', () => {
-    expect(interpretarRespostaConfirmacao('70g de abobrinha e 70g de ovo cozido')).toBe('outro');
-    expect(interpretarRespostaConfirmacao('São 100g de arroz e 150g de frango')).toBe('outro');
-    expect(interpretarRespostaConfirmacao('na verdade eram 80g')).toBe('outro');
-    expect(interpretarRespostaConfirmacao('comi 200g de peito de frango')).toBe('outro');
+  it('contem numero → "outro" (correcao parcial ou refeicao nova)', () => {
+    expect(interpretarConfirmacaoRapida('70g de abobrinha e 70g de ovo cozido')).toBe('outro');
+    expect(interpretarConfirmacaoRapida('São 100g de arroz e 150g de frango')).toBe('outro');
+    expect(interpretarConfirmacaoRapida('na verdade eram 80g')).toBe('outro');
   });
 
-  it('consulta vira "outro" (nao confirma nem cancela nada)', () => {
-    expect(interpretarRespostaConfirmacao('quantas calorias?')).toBe('outro');
-    expect(interpretarRespostaConfirmacao('qual minha meta de proteina?')).toBe('outro');
+  it('pontuacao (,.!?;) → "outro" (nao e confirmacao curta)', () => {
+    expect(interpretarConfirmacaoRapida('quantas calorias?')).toBe('outro');
+    expect(interpretarConfirmacaoRapida('sim, agora')).toBe('outro');
+    expect(interpretarConfirmacaoRapida('sim!!!')).toBe('outro');
   });
 
-  it('string vazia vira "outro" (nao confirma)', () => {
-    expect(interpretarRespostaConfirmacao('')).toBe('outro');
-    expect(interpretarRespostaConfirmacao('   ')).toBe('outro');
+  it('vazio/whitespace → "outro"', () => {
+    expect(interpretarConfirmacaoRapida('')).toBe('outro');
+    expect(interpretarConfirmacaoRapida('   ')).toBe('outro');
   });
 
-  it('"simba" e "sim, agora" NAO viram sim (evita false positive)', () => {
-    // "sim" precisa ser o texto INTEIRO. "sim, agora" tem virgula — o
-    // classificador de intent trata como refeicao nova / consulta.
-    expect(interpretarRespostaConfirmacao('simba')).toBe('outro');
-    expect(interpretarRespostaConfirmacao('sim, agora')).toBe('outro');
-    expect(interpretarRespostaConfirmacao('sim!!!')).toBe('outro');
+  it('frase longa (>15 chars sem pontuacao) → "outro"', () => {
+    expect(interpretarConfirmacaoRapida('comi bastante frango grelhado agora')).toBe('outro');
+  });
+
+  it('curto e desconhecido → null (deixa Haiku decidir)', () => {
+    // typos e girias que o fast-path NAO conhece
+    expect(interpretarConfirmacaoRapida('aim')).toBeNull();
+    expect(interpretarConfirmacaoRapida('sinm')).toBeNull();
+    expect(interpretarConfirmacaoRapida('aham')).toBeNull();
+    expect(interpretarConfirmacaoRapida('nap')).toBeNull();
+    expect(interpretarConfirmacaoRapida('simba')).toBeNull();
+    expect(interpretarConfirmacaoRapida('beleza')).toBeNull();
+  });
+});
+
+describe('interpretarRespostaConfirmacao (fast-path + fallback Haiku)', () => {
+  beforeEach(() => {
+    claudeState.text = '{}';
+  });
+
+  it('fast-path: "sim" → sim (nao chama Haiku)', async () => {
+    expect(await interpretarRespostaConfirmacao('sim')).toBe('sim');
+  });
+
+  it('fast-path: "não" → nao (nao chama Haiku)', async () => {
+    expect(await interpretarRespostaConfirmacao('não')).toBe('nao');
+  });
+
+  it('fast-path: descricao com quantidade → outro (nao chama Haiku)', async () => {
+    expect(await interpretarRespostaConfirmacao('comi 200g de peito de frango')).toBe('outro');
+  });
+
+  it('fast-path: pergunta com "?" → outro (nao chama Haiku)', async () => {
+    expect(await interpretarRespostaConfirmacao('qual minha meta de proteina?')).toBe('outro');
+  });
+
+  it('fast-path: string vazia → outro', async () => {
+    expect(await interpretarRespostaConfirmacao('')).toBe('outro');
+    expect(await interpretarRespostaConfirmacao('   ')).toBe('outro');
+  });
+
+  // ---- casos que ANTES viravam 'outro' e cancelavam card no UAT ----
+  // 2026-07-09: paciente digitou "Aim" (typo de "Sim"). Fast-path retorna null,
+  // Haiku decide 'sim'. Bug UAT do card D-06 resolvido.
+
+  it('typo "Aim" → sim (via Haiku fallback)', async () => {
+    claudeState.text = '{"resposta": "sim"}';
+    expect(await interpretarRespostaConfirmacao('Aim')).toBe('sim');
+  });
+
+  it('gíria "aham" → sim (via Haiku fallback)', async () => {
+    claudeState.text = '{"resposta": "sim"}';
+    expect(await interpretarRespostaConfirmacao('aham')).toBe('sim');
+  });
+
+  it('typo "nap" → nao (via Haiku fallback)', async () => {
+    claudeState.text = '{"resposta": "nao"}';
+    expect(await interpretarRespostaConfirmacao('nap')).toBe('nao');
+  });
+
+  it('palavra fora do padrao ("simba") → outro (via Haiku fallback)', async () => {
+    claudeState.text = '{"resposta": "outro"}';
+    expect(await interpretarRespostaConfirmacao('simba')).toBe('outro');
+  });
+
+  it('Haiku retorna valor invalido → fallback "outro"', async () => {
+    claudeState.text = '{"resposta": "banana"}';
+    expect(await interpretarRespostaConfirmacao('aim')).toBe('outro');
+  });
+
+  it('Haiku retorna JSON malformado → fallback "outro"', async () => {
+    claudeState.text = 'nao eh json {{{';
+    expect(await interpretarRespostaConfirmacao('aim')).toBe('outro');
   });
 });
 
