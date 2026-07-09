@@ -1,136 +1,36 @@
 {
-  "_OBSOLETE": "Este arquivo esta desatualizado desde 2026-06-24. O trabalho descrito em remaining_tasks ja foi entregue e novos itens ficaram pendentes. Handoff atual em .planning/NEXT-SESSION.md.",
-  "superseded_by": ".planning/NEXT-SESSION.md",
-  "superseded_at": "2026-07-05",
   "version": "1.0",
-  "timestamp": "2026-06-22T03:30:00Z",
-  "phase": "bot-refinements-batch-1",
-  "phase_name": "Batch 1 refinamentos + #4 lembretes — Fatias 1-3 entregues, relatorio parrudo proximo",
-  "phase_dir": ".planning/",
+  "timestamp": "2026-07-09T00:42:18Z",
+  "context": "research",
+  "phase": null,
+  "phase_name": null,
+  "phase_dir": null,
   "plan": null,
   "task": null,
-  "total_tasks": 18,
-  "status": "obsolete",
-  "completed_tasks": [
-    {"id": 1, "name": "Mapeamento de codigo dos 5 refinamentos", "status": "done", "commit": "3346a33"},
-    {"id": 2, "name": "#5 Relatorio semanal v1 (basico)", "status": "done", "commit": "aa8ccc3"},
-    {"id": 3, "name": "Agua tracking — RPC + endpoint", "status": "done", "commit": "1c2bee4"},
-    {"id": 4, "name": "#2 Barcode produto — strip marca-mae", "status": "done", "commit": "6cc9b93"},
-    {"id": 5, "name": "Workflow N8N relatorio semanal", "status": "done", "commit": "f2ddc20"},
-    {"id": 6, "name": "#1 Entrevista expandida 13 etapas + perfil no Claude", "status": "done", "commit": "5abad73"},
-    {"id": 7, "name": "#3 Macros enriquecidos + Haiku + obterMetas centralizado", "status": "done", "commit": "f99507e"},
-    {"id": 8, "name": "Smoke fim-entrevista + fix Haiku WhatsApp formatacao", "status": "done", "commit": "f2c6c55"},
-    {"id": 9, "name": "#4 Fatia 1 — etapa 14 horarios_refeicoes + parser HH:MM", "status": "done", "commit": "8a664bb"},
-    {"id": 10, "name": "#4 Fatia 2 — sync entrevista -> alertas_config + lembretes via cron existente", "status": "done", "commit": "a182dc2"},
-    {"id": 11, "name": "#4 Fatia 3 — detector overshoot (>110% meta) inline em meal.ts", "status": "done", "commit": "e433917"},
-    {"id": 12, "name": "Migration lanches aplicada no Supabase Cloud via CLI (db push)", "status": "done", "commit": null}
-  ],
-  "remaining_tasks": [
-    {
-      "id": 13,
-      "name": "#5 Relatorio semanal PARRUDO — streak + comparacao semanal + best day + barras ASCII",
-      "status": "not_started",
-      "size": "M",
-      "objetivo": "Transformar o relatorio chapado atual (lista de numeros) em mecanica de habito que faz o paciente querer continuar",
-      "fatias": [
-        "Adicionar streak de dias consecutivos com registro (queries em registros_diarios ordenadas por data)",
-        "Adicionar comparacao com semana anterior (dias com registro, kcal medio, hidratacao — delta com setas ↑↓)",
-        "Adicionar 'best day' callout (ordenar por proximidade da meta, destacar o melhor dia)",
-        "Adicionar barras ASCII de adesao (ex: '▓▓▓▓▓░░ 5/7 dias') usando caracteres unicode",
-        "Reformular prompt do Haiku pra abrir com vitoria concreta e sugerir 1 micro-meta proxima semana",
-        "Smoke programatico cobrindo: streak=0, streak=3, streak=7, sem semana anterior, melhor que semana anterior, pior que semana anterior",
-        "Garantir mensagem cabe em <= 1500 chars (limite UX WhatsApp)"
-      ]
-    },
-    {
-      "id": 14,
-      "name": "Fase 6 Plan 02 — secoes de conteudo da landing",
-      "status": "not_started",
-      "size": "M",
-      "contexto": "Landing nutrichat-landing fora do worktree. Usuario disse 'a landing ja esta pronta' — verificar se Plan 02/03 ainda sao necessarios ou ja foram entregues fora do GSD",
-      "verificar_antes": true
-    },
-    {
-      "id": 15,
-      "name": "Fase 6 Plan 03 — CTA + footer + variacoes",
-      "status": "not_started",
-      "size": "S/M",
-      "verificar_antes": true
-    },
-    {
-      "id": 16,
-      "name": "Fase 7 — Pagamentos (SEM deploy — usuario quer deploy por ultimo)",
-      "status": "not_started",
-      "size": "G",
-      "decisao_pendente": "Stripe / Pix / Mercado Pago? Pacote 1 vs assinatura?"
-    },
-    {
-      "id": 17,
-      "name": "Validacao E2E #3 + Fatia 1+2+3 (carry-over humano)",
-      "status": "in_progress_humano",
-      "detalhe": "Terminar entrevista expandida 14 etapas no WhatsApp; conferir alertas_config populado + cron */15min entregando lembrete; testar overshoot registrando refeicao alta em kcal"
-    },
-    {
-      "id": 18,
-      "name": "Validacao E2E PDF upload + teste barcode Cristal (carry-over humano)",
-      "status": "in_progress_humano"
-    }
+  "total_tasks": null,
+  "status": "session_complete",
+  "session_focus": "Graphify pipeline setup + automation config",
+  "completed_this_session": [
+    {"item": "Rodar pipeline graphify completo (backend + .planning + merge)", "result": "graph.json 417n/901e (backend), .planning/graphify-out/graph.json 134n/154e, merged.json 551n/1055e"},
+    {"item": "Instalar post-commit hook do graphify", "result": "graphify hook install rodado — .git/hooks/post-commit e post-checkout ativos, AST incremental a cada commit (gratis)"},
+    {"item": "Instalar CLAUDE.md integration do graphify", "result": "graphify claude install rodado — secao ## graphify no CLAUDE.md + PreToolUse hooks em .claude/settings.json"},
+    {"item": "Salvar preferencia como memoria de feedback", "result": "feedback_persistir_sempre.md criado, MEMORY.md indexado"},
+    {"item": "Atualizar memoria de estado do graphify", "result": "graphify_setup_pendente_2026_07_08.md marcado como COMPLETO"}
   ],
   "blockers": [],
-  "human_actions_pending": [
-    {
-      "action": "Terminar a entrevista expandida (14 etapas) no WhatsApp; conferir que alertas_config ficou populado + lembrete chega via cron */15min + alerta de overshoot dispara apos registrar refeicao alta em kcal",
-      "context": "Workflow nutrichat-cron-alertas ja ativo no N8N. Migration de lanches aplicada nesta sessao. Paciente deve receber lembretes nos horarios cadastrados e alerta proativo se passar de 110% da meta calorica",
-      "blocking": false
-    },
-    {
-      "action": "(Carry-over) Validar upload de PDF pelo painel → rag_status: indexado + bot responde duvida",
-      "context": "Pendente desde 2026-06-21T08:30Z",
-      "blocking": false
-    },
-    {
-      "action": "Testar barcode com EAN real de Cristal",
-      "context": "Heuristica validada com Coca-Cola e Nestle, mas nao com produto Cristal",
-      "blocking": false
-    }
-  ],
+  "human_actions_pending": [],
   "decisions": [
-    {
-      "decision": "Reaproveitar infra de alertas da Fase 04 (/api/alertas/disparar + cron N8N nutrichat-cron-alertas) em vez de criar /api/lembretes/disparar novo",
-      "rationale": "Investigacao mostrou que toda a infra ja estava em pe — tabela alertas_config + endpoint + worker + cron N8N ativo. Bug era so de ligacao entre etapa 14 da entrevista e alertas_config. Plano original do handoff descartado (~200 linhas evitadas)",
-      "phase": "bot-refinements-batch-1"
-    },
-    {
-      "decision": "Detector overshoot inline em meal.ts (NAO criar cron novo)",
-      "rationale": "Trigger natural e o registro de refeicao em si — cada acumular_registro_diario ja sabe o saldo. Cron seria polling desnecessario. Helper centralizado (dispararAlertaOvershoot) chamado nos 5 callsites de registrarRefeicao",
-      "phase": "bot-refinements-batch-1"
-    },
-    {
-      "decision": "Threshold strict > (110% exato nao alerta — so > 110%)",
-      "rationale": "Evita falso-alarme no limite. Paciente exatamente em 110% ja esta avisado pelo proprio saldo formatado; alerta proativo so quando ja extrapolou",
-      "phase": "bot-refinements-batch-1"
-    },
-    {
-      "decision": "Mensagem de overshoot mostra pct real calculado + saldo/meta absolutos",
-      "rationale": "Mais informativa do que 'voce passou de 110%'. Paciente ve exatamente onde esta (ex: '128% da meta — 2560 / 2000 kcal') e a sugestao concreta (pausar proxima refeicao ou trocar por algo leve)",
-      "phase": "bot-refinements-batch-1"
-    },
-    {
-      "decision": "Migration aplicada via supabase CLI (db push) apos migration repair --status applied",
-      "rationale": "IPv6 timeout que bloqueava antes foi resolvido nesta sessao. Migration repair foi necessario porque o historico local nao tinha as 9 migrations originais marcadas como applied (estavam so como existentes). db push aceitou as 2 novas (lanches + processamento_status)",
-      "phase": "bot-refinements-batch-1"
-    },
-    {
-      "decision": "Para o relatorio semanal parrudo: streak + comparacao vs semana anterior + best day + barras ASCII",
-      "rationale": "4 features de alto retorno motivacional, baseadas em mecanicas de habito comprovadas (streak gera vicio, comparacao mostra progresso, best day celebra vitoria concreta, ASCII da visual sem markdown rico que WhatsApp nao renderiza). Tamanho M, 1 fatia. Mensagem alvo <= 1500 chars",
-      "phase": "bot-refinements-batch-1"
-    }
+    {"decision": "Hook automatico so pro backend (AST puro)", "rationale": "Backend AST e gratis e silencioso; .planning custa ~200k tokens por rebuild, entao fica manual"},
+    {"decision": "Combinar git post-commit hook + CLAUDE.md integration", "rationale": "Post-commit garante update quando trabalho e fechado; CLAUDE.md garante que Claude sempre lembre de checar/atualizar"}
   ],
   "uncommitted_files": [
-    "Modificado: .planning/HANDOFF.json (este arquivo)",
-    "Modificado: .planning/.continue-here.md (atualizado neste pause)",
-    "Modificado: .planning/STATE.md (timestamp da sessao anterior — deixar como esta)"
+    ".planning/STATE.md (M — pre-existente)",
+    "CLAUDE.md (M — modificado pelo graphify claude install)",
+    ".claude/settings.json (M — hooks registrados pelo graphify claude install)",
+    "graphify-out/ (?? — outputs do pipeline)",
+    ".planning/graphify-out/ (?? — outputs do pipeline)",
+    ".git/hooks/post-commit e post-checkout (?? — instalados pelo graphify hook install)"
   ],
-  "next_action": "Proxima sessao Claude: /gsd-resume-work -> arrancar #5 Relatorio semanal parrudo. Ler backend/src/services/relatorio.ts (atual) para entender a base. Adicionar: (1) query de streak em registros_diarios ordenada DESC + count consecutivo; (2) query da semana anterior para delta; (3) ordenacao por proximidade da meta para best day; (4) helper de barra ASCII com unicode blocks; (5) reformular prompt do Haiku pra incluir vitorias contextualmente. Smoke programatico em scripts/smoke-relatorio-parrudo.ts cobrindo combinacoes. Typecheck + commit.",
-  "context_notes": "Sessao entregando #4 Fatia 3 (commit e433917) + aplicando migrations pendentes (lanches + processamento_status). CLI funcionou hoje — IPv6 timeout que bloqueava antes foi resolvido. Migration repair foi necessario porque historico estava desalinhado (9 remotas vs 0 locais marcadas). Usuario informou que 'a landing ja esta pronta' — Plan 06-02 e 06-03 podem nao ser mais necessarios, verificar antes de iniciar. Usuario quer relatorio semanal 'parrudo' — alinhamos em 4 features de habito (streak + comparacao + best day + ASCII). Pausa preventiva em 80% — proximo trabalho merece contexto fresco."
+  "next_action": "Bug 2: Vision false-negative (mesa familia) — ver memoria d06_fechado_bug2_vision_pendente_2026_07_08.md. Usar o grafo pra explorar analisarPrato + handleAmbiguidade.",
+  "context_notes": "Sessao dedicada a infra de continuidade (graphify + memoria automatizada). Nao mexeu em codigo do produto. Grafos prontos pra usar na proxima sessao via 'graphify query pergunta' ou abrindo graphify-out/graph.html."
 }
