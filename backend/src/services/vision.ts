@@ -513,50 +513,81 @@ export async function handleAmbiguidade(
 }
 
 // Reescreve descricoes de alimentos que vieram do Claude no formato AGREGADO
-// (ex: "Arroz ~200g por prato, 2 pratos = ~400g total") pra porcao individual
-// depois da divisao por N pessoas em resolverAmbiguidadeFoto.
-// Estrategia heuristica local (sem custo de API):
-//  1. "X por prato/pessoa/porcao/unidade[, ...]" → mantem o prefixo (X ja e por-unidade).
-//  2. "X 100g cada[, ...]" → mantem o prefixo.
-//  3. "X ~200g no total" ou "X 200g total" → divide o numero por n.
-//  4. Fallback: strip do sufixo "total"/"no total".
-// Se n <= 1, retorna as strings intactas (nao ha o que dividir).
+// (ex: "Arroz (~200g x2 pratos)") pra porcao individual depois da divisao por
+// N pessoas em resolverAmbiguidadeFoto. Estrategia heuristica local (sem API).
+//
+// Padroes que os prompts do Sonnet 4.6 costumam gerar (UAT 2026-07-09):
+//  - "Arroz branco (~200g x2 pratos)"                                → "Arroz branco (~200g)"
+//  - "Arroz ~200g por prato, 2 pratos = ~400g total"                 → "Arroz ~200g"
+//  - "Carne 300g no total"        (com n=3)                          → "Carne 100g"
+//  - "Salada 80g cada"                                               → "Salada 80g"
+//  - "Feijão 200ml em cada prato"                                    → "Feijão 200ml"
+//  - "Macarrão (~150g + tigela extra ~200g)"                         → "Macarrão (~150g)"
+//  - "Farofa (~80g tigela extra)"                                    → "Farofa (~80g)"
+//
+// Se n <= 1, retorna intacto.
 export function normalizarDescricoesIndividuais(alimentos: string[], n: number): string[] {
   if (n <= 1) return alimentos;
   return alimentos.map((a) => normalizarUmAlimento(a, n));
 }
 
+// Sufixos por-unidade: quando presentes, a quantidade JA e individual — so cortar
+// o sufixo. Cobre "por prato", "x2 pratos", "cada", "+ tigela extra", "tigela extra".
+const SUFIXOS_POR_UNIDADE: RegExp[] = [
+  /\s*[,;]?\s+por\s+(?:prato|pessoa|porç[aã]o|porcao|unidade)s?\b[\s\S]*$/i,
+  /\s*[,;]?\s+x\s*\d+\s+(?:pratos?|pessoas?|porç[aã]o|porcao|unidades?)\b[\s\S]*$/i,
+  /\s*[,;]?\s+(?:em\s+)?cada\b[\s\S]*$/i,
+  /\s*[,;]?\s+\+\s+(?:tigela|prato|bandeja|porç[aã]o|porcao)\s+extra\b[\s\S]*$/i,
+  /\s*[,;]?\s+(?:na|no)\s+(?:tigela|prato|bandeja)\s+extra\b[\s\S]*$/i,
+  /\s*[,;]?\s+(?:tigela|prato|bandeja)\s+extra\b[\s\S]*$/i,
+];
+
+// "Xg total" / "Xg no total" imediatamente antes do fim: quantidade e agregada,
+// deve ser dividida. Ancorado em \s+ para nao confundir com "total" em substring.
+const REGEX_TOTAL_NUM = /^(.+?)([~≈]?\s*)([\d]+(?:[.,][\d]+)?)\s*(g|ml|kcal)\s*(?:no\s+)?total\b\.?\s*$/i;
+
+// Sufixo "total" isolado (quando nao ha numero pra dividir): so trunca.
+const SUFIXO_TOTAL_ISOLADO = /[,;]?\s*(?:no\s+)?total\b\.?\s*$/i;
+
 function normalizarUmAlimento(desc: string, n: number): string {
   const original = desc.trim();
 
-  // Caso 1: "X ~200g por prato, 2 pratos = ~400g total" ou "X 100g por pessoa, ..."
-  const porUnidade = original.match(
-    /^(.+?)\s+por\s+(prato|pessoa|porç[aã]o|porcao|unidade)s?\b[\s\S]*$/i,
-  );
-  if (porUnidade) return porUnidade[1].trim();
-
-  // Caso 2: "X 100g cada" / "X 100g cada prato" / "X 100g em cada prato"
-  const cadaPattern = original.match(/^(.+?)\s+(?:em\s+)?cada\b[\s\S]*$/i);
-  if (cadaPattern) return cadaPattern[1].trim();
-
-  // Caso 3: "X ~200g no total" / "X 200g total" → divide numero por n
-  const totalNum = original.match(
-    /^(.+?)([~≈]?\s*)([\d]+(?:[.,][\d]+)?)\s*(g|ml|kcal)\b(.*?)\s+(?:no\s+)?total\b\.?\s*$/i,
-  );
-  if (totalNum) {
-    const prefixo = totalNum[1].trim();
-    const tilde = totalNum[2].trim();
-    const valor = parseFloat(totalNum[3].replace(',', '.'));
-    const unidade = totalNum[4];
-    if (Number.isFinite(valor) && valor > 0) {
-      const dividido = Math.round(valor / n);
-      const sepTilde = tilde ? `${tilde}` : '';
-      return `${prefixo} ${sepTilde}${dividido}${unidade}`.trim();
-    }
+  // Padrao "Nome (conteudo)": processa dentro dos parenteses para preservar
+  // o wrapper visual do card D-06.
+  const parenteses = original.match(/^(.+?)\s*\(([^()]+)\)\s*$/);
+  if (parenteses) {
+    const nome = parenteses[1].trim();
+    const conteudo = parenteses[2].trim();
+    const processado = processarConteudo(conteudo, n);
+    return processado === '' ? nome : `${nome} (${processado})`;
   }
 
-  // Fallback: remove sufixo "total" / "no total"
-  return original.replace(/[,;]?\s*(?:no\s+)?total\b\.?\s*$/i, '').trim();
+  return processarConteudo(original, n);
+}
+
+// Ordem: (1) sufixos por-unidade truncados; (2) "Xg total" dividido; (3) "total"
+// isolado truncado. Nunca combina os dois — o primeiro que casar decide.
+function processarConteudo(str: string, n: number): string {
+  for (const r of SUFIXOS_POR_UNIDADE) {
+    const novo = str.replace(r, '').trim();
+    if (novo !== str) return novo;
+  }
+  const m = str.match(REGEX_TOTAL_NUM);
+  if (m) {
+    const dividido = dividirTotal(m, n);
+    if (dividido) return dividido;
+  }
+  return str.replace(SUFIXO_TOTAL_ISOLADO, '').trim();
+}
+
+function dividirTotal(m: RegExpMatchArray, n: number): string | null {
+  const prefixo = m[1].trim();
+  const tilde = m[2].trim();
+  const valor = parseFloat(m[3].replace(',', '.'));
+  const unidade = m[4];
+  if (!Number.isFinite(valor) || valor <= 0) return null;
+  const dividido = Math.round(valor / n);
+  return `${prefixo} ${tilde}${dividido}${unidade}`.trim();
 }
 
 // Chamado por agent.ts quando o paciente responde a pergunta de ambiguidade.

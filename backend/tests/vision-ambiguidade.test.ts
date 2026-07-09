@@ -357,4 +357,70 @@ describe('normalizarDescricoesIndividuais', () => {
       'Farofa 50g',
     ]);
   });
+
+  // Novos padroes capturados no UAT do polish (2026-07-09 00:39):
+  // Claude Sonnet 4.6 gerou formato "Alimento (~valor unidade sufixo_agregacao)"
+  // com sufixos "x2 pratos", "+ tigela extra", "tigela extra".
+
+  it('"Alimento (~200g x2 pratos)" → "Alimento (~200g)" (dentro de parenteses)', () => {
+    expect(normalizarDescricoesIndividuais(
+      ['Arroz branco cozido (~200g x2 pratos)'],
+      2,
+    )).toEqual(['Arroz branco cozido (~200g)']);
+  });
+
+  it('"Alimento (~120g x1 prato)" (singular) → mantem quantidade individual', () => {
+    expect(normalizarDescricoesIndividuais(
+      ['Costela/carne suína assada (~120g x1 prato)'],
+      2,
+    )).toEqual(['Costela/carne suína assada (~120g)']);
+  });
+
+  it('"Alimento (~150g + tigela extra ~200g)" → "Alimento (~150g)"', () => {
+    expect(normalizarDescricoesIndividuais(
+      ['Macarrão espaguete ao molho de tomate (~150g + tigela extra ~200g)'],
+      2,
+    )).toEqual(['Macarrão espaguete ao molho de tomate (~150g)']);
+  });
+
+  it('"Alimento (~80g tigela extra)" → "Alimento (~80g)"', () => {
+    expect(normalizarDescricoesIndividuais(['Farofa (~80g tigela extra)'], 2))
+      .toEqual(['Farofa (~80g)']);
+  });
+
+  it('"Alimento (~100g na tigela extra)" → "Alimento (~100g)"', () => {
+    expect(normalizarDescricoesIndividuais(['Farofa (~100g na tigela extra)'], 2))
+      .toEqual(['Farofa (~100g)']);
+  });
+
+  it('cenario integral do UAT (12 alimentos com padroes mistos dentro de parenteses)', () => {
+    const entrada = [
+      'Arroz branco cozido (~200g x2 pratos)',
+      'Feijão caldo/sopa de feijão com legumes (~200ml x2 pratos)',
+      'Carne bovina em cubos/ensopado (~150g x2 pratos)',
+      'Costela/carne suína assada (~120g x1 prato)',
+      'Macarrão espaguete ao molho de tomate (~150g + tigela extra ~200g)',
+      'Farofa (~80g tigela extra)',
+      'Beterraba fatiada (~40g x2 pratos)',
+      'Tomate cereja (~30g x2 pratos)',
+      'Alface/rúcula/folhas verdes (~20g x2 pratos)',
+      'Cenoura ralada (~20g x2 pratos)',
+      'Pimentão amarelo/abobrinha (~20g x2 pratos)',
+      'Banana da terra/legume amarelo fatiado (~30g x2 pratos)',
+    ];
+    expect(normalizarDescricoesIndividuais(entrada, 2)).toEqual([
+      'Arroz branco cozido (~200g)',
+      'Feijão caldo/sopa de feijão com legumes (~200ml)',
+      'Carne bovina em cubos/ensopado (~150g)',
+      'Costela/carne suína assada (~120g)',
+      'Macarrão espaguete ao molho de tomate (~150g)',
+      'Farofa (~80g)',
+      'Beterraba fatiada (~40g)',
+      'Tomate cereja (~30g)',
+      'Alface/rúcula/folhas verdes (~20g)',
+      'Cenoura ralada (~20g)',
+      'Pimentão amarelo/abobrinha (~20g)',
+      'Banana da terra/legume amarelo fatiado (~30g)',
+    ]);
+  });
 });
