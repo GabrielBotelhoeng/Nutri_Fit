@@ -65,7 +65,7 @@ export interface AnalisePrato {
   refeicoes?: RefeicaoPratoDetectada[];
 }
 
-async function analisarPrato(base64s: string[], mimetype: string): Promise<AnalisePrato> {
+export async function analisarPrato(base64s: string[], mimetype: string): Promise<AnalisePrato> {
   const mimeClean = mimetype.split(';')[0].trim() as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
 
   const imageBlocks = base64s.map((b64) => ({
@@ -74,7 +74,7 @@ async function analisarPrato(base64s: string[], mimetype: string): Promise<Anali
   }));
 
   const promptAviso = base64s.length === 2
-    ? '\n\nO paciente enviou 2 ângulos do prato — use ambas as fotos para melhor estimativa de porção.'
+    ? '\n\nO paciente enviou 2 fotos — podem ser 2 ângulos do MESMO prato OU cenas diferentes (mesa da família, várias porções). ANALISE cada foto e reflita isso no campo `ambiguidade`.'
     : '\n\n⚠️ Apenas 1 foto disponível — estime porção conservadoramente e indique limitação no campo aviso.';
 
   const response = await claude.messages.create({
@@ -90,10 +90,20 @@ async function analisarPrato(base64s: string[], mimetype: string): Promise<Anali
 
 TAREFA: Identifique os alimentos visíveis, estime os macronutrientes e classifique se a foto tem múltiplas "unidades" ambíguas.
 
+⚠️ ANTES DE TUDO: CONTE os recipientes de comida individuais visíveis (pratos servidos, tigelas, bandejas de servir, travessas, potes, marmitas). Se houver 2+ recipientes com comida, a foto NÃO é 1 refeição individual — provavelmente é mesa de compartilhar OU mesa família. Só use ambiguidade="nenhuma" quando for CLARAMENTE 1 prato/marmita individual do paciente (podendo ter uma bebida ou sobremesa acompanhando). Duas mãos segurando pratos, mesa com pratos individuais parecidos, ou mesa com bandejas/travessas de servir = NUNCA é "nenhuma".
+
 Ambiguidade:
-- "nenhuma": 1 prato com vários alimentos (arroz+feijão+frango), ou 1 prato + 1 sobremesa/bebida acompanhando (é 1 refeição completa), ou apenas 1 recipiente/bebida.
-- "multiplos_pratos_parecidos": 2+ pratos VISUALMENTE PARECIDOS (mesmo tipo de comida, mesma louça) — provável mesa da família, não o paciente comendo 2×. Também vale pra 2+ bebidas iguais em série (2 latas iguais, 2 copos idênticos).
-- "refeicoes_distintas": 2+ pratos CLARAMENTE DIFERENTES a ponto de parecerem refeições distintas (ex: prato com arroz+carne + prato com panqueca+ovo = almoço + café; ou 1 marmita + 1 lanche).
+- "nenhuma": 1 prato individual/marmita com vários alimentos (arroz+feijão+frango), ou 1 prato + 1 sobremesa/bebida acompanhando (é 1 refeição completa do paciente), ou apenas 1 recipiente/bebida.
+- "multiplos_pratos_parecidos": 2+ pratos individuais parecidos (mesa da família — cada um com o próprio prato), OU **mesa de servir com bandejas/travessas de compartilhamento** (ex: 1 travessa de arroz + 1 bandeja de carne + 1 pote de feijão + 1 pote de farofa numa mesa — o paciente só vai pegar a porção dele daquilo tudo), OU 2+ bebidas iguais em série (2 latas, 2 copos idênticos). Em todos esses casos, a soma dos macros ≠ o que o paciente comeu.
+- "refeicoes_distintas": 2+ pratos/marmitas do MESMO paciente contendo refeições CLARAMENTE DIFERENTES (ex: prato com arroz+carne + prato com panqueca+ovo = almoço + café; ou 1 marmita + 1 lanche).
+
+EXEMPLOS:
+1. Foto: 1 prato com arroz, feijão, frango grelhado e salada → ambiguidade="nenhuma" (é 1 refeição individual do paciente).
+2. Foto: mesa com 3 pratos parecidos (cada um com arroz+feijão+carne) → ambiguidade="multiplos_pratos_parecidos" (mesa da família com pratos individuais).
+3. Foto: 2 mãos segurando 2 pratos com comida similar → ambiguidade="multiplos_pratos_parecidos".
+4. Foto: mesa com 1 bandeja de carne fatiada + 1 bandeja de arroz+batata frita + 1 pote de feijão + 1 pote de farofa (bandejas de servir/self-service familiar) → ambiguidade="multiplos_pratos_parecidos" (a soma das bandejas é a comida da mesa toda, não a porção do paciente).
+5. Foto: 1 marmita com panqueca+ovo + 1 marmita ao lado com arroz+carne → ambiguidade="refeicoes_distintas" (café + almoço do mesmo paciente).
+6. Foto: 1 hambúrguer + batata frita + refrigerante em um único conjunto → ambiguidade="nenhuma" (1 combo, 1 refeição).
 
 RESPONDA EM JSON com exatamente este formato:
 {"alimentos": ["alimento 1 com quantidade estimada", "alimento 2..."], "confianca": "alta", "kcal": 500, "proteina_g": 30, "carbo_g": 60, "gordura_g": 15, "aviso": null, "ambiguidade": "nenhuma", "refeicoes": null}
