@@ -77,6 +77,7 @@ vi.mock('../src/services/barcode', () => ({
 import {
   handleAmbiguidade,
   resolverAmbiguidadeFoto,
+  normalizarDescricoesIndividuais,
   AnalisePrato,
 } from '../src/services/vision';
 import type { PacienteInfo } from '../src/services/conversation';
@@ -188,6 +189,27 @@ describe('resolverAmbiguidadeFoto — pessoas', () => {
     expect(confirmacao.analise.aviso).toMatch(/dividida por 2/);
   });
 
+  it('"somos 2" → descrições agregadas ("total"/"por prato") são reescritas em porção individual', async () => {
+    const analise = analiseBase({
+      ambiguidade: 'multiplos_pratos_parecidos',
+      alimentos: [
+        'Arroz ~200g por prato, 2 pratos = ~400g total',
+        'Carne 300g no total',
+        'Feijão 200ml cada prato',
+      ],
+    });
+
+    await resolverAmbiguidadeFoto('5562999999999', paciente, { tipo: 'pessoas', analise }, 'somos 2');
+
+    const conf = ultimoEstadoCom('confirmacao_pendente');
+    const confirmacao = conf!['confirmacao_pendente'] as { analise: AnalisePrato };
+    expect(confirmacao.analise.alimentos).toEqual([
+      'Arroz ~200g',
+      'Carne 150g',
+      'Feijão 200ml',
+    ]);
+  });
+
   it('"não sei" → retorna false, NAO limpa estado nem envia confirmação', async () => {
     const analise = analiseBase({ ambiguidade: 'multiplos_pratos_parecidos' });
 
@@ -274,5 +296,65 @@ describe('resolverAmbiguidadeFoto — refeicoes', () => {
     expect(atualizarEstadoSpy).not.toHaveBeenCalled();
     expect(registrarRefeicaoSpy).not.toHaveBeenCalled();
     expect(sendTextSpy).not.toHaveBeenCalled();
+  });
+});
+
+// ------------------------------------------------------------------------
+// normalizarDescricoesIndividuais — helper puro usado na divisao por N
+// ------------------------------------------------------------------------
+
+describe('normalizarDescricoesIndividuais', () => {
+  it('n=1 → retorna as descricoes intactas (sem divisao)', () => {
+    const entrada = ['Arroz 200g no total', 'Feijão 100g por prato'];
+    expect(normalizarDescricoesIndividuais(entrada, 1)).toEqual(entrada);
+  });
+
+  it('"X por prato, N pratos = ~Yg total" → mantem só o prefixo por-unidade', () => {
+    expect(normalizarDescricoesIndividuais(
+      ['Arroz ~200g por prato, 2 pratos = ~400g total'],
+      2,
+    )).toEqual(['Arroz ~200g']);
+  });
+
+  it('"X por pessoa" → mantem prefixo', () => {
+    expect(normalizarDescricoesIndividuais(['Feijão 100g por pessoa'], 3))
+      .toEqual(['Feijão 100g']);
+  });
+
+  it('"X 100g cada" e "X em cada prato" → mantem prefixo', () => {
+    expect(normalizarDescricoesIndividuais(
+      ['Salada 80g cada', 'Batata 150g em cada prato'],
+      2,
+    )).toEqual(['Salada 80g', 'Batata 150g']);
+  });
+
+  it('"X 300g no total" com n=3 → divide numero por n', () => {
+    expect(normalizarDescricoesIndividuais(['Batata 300g no total'], 3))
+      .toEqual(['Batata 100g']);
+  });
+
+  it('"X 200ml total" (sem "no") com n=2 → divide', () => {
+    expect(normalizarDescricoesIndividuais(['Suco 200ml total'], 2))
+      .toEqual(['Suco 100ml']);
+  });
+
+  it('sem sufixo de agregacao → devolve string como veio', () => {
+    expect(normalizarDescricoesIndividuais(['Arroz 200g', 'Salada'], 2))
+      .toEqual(['Arroz 200g', 'Salada']);
+  });
+
+  it('mistura de padroes numa unica chamada (cenario real da foto de mesa família)', () => {
+    const entrada = [
+      'Arroz ~200g por prato, 2 pratos = ~400g total',
+      'Carne 300g no total',
+      'Feijão 200ml cada prato',
+      'Farofa 50g',
+    ];
+    expect(normalizarDescricoesIndividuais(entrada, 2)).toEqual([
+      'Arroz ~200g',
+      'Carne 150g',
+      'Feijão 200ml',
+      'Farofa 50g',
+    ]);
   });
 });

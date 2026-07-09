@@ -512,6 +512,53 @@ export async function handleAmbiguidade(
   await sendText(phone, pergunta);
 }
 
+// Reescreve descricoes de alimentos que vieram do Claude no formato AGREGADO
+// (ex: "Arroz ~200g por prato, 2 pratos = ~400g total") pra porcao individual
+// depois da divisao por N pessoas em resolverAmbiguidadeFoto.
+// Estrategia heuristica local (sem custo de API):
+//  1. "X por prato/pessoa/porcao/unidade[, ...]" → mantem o prefixo (X ja e por-unidade).
+//  2. "X 100g cada[, ...]" → mantem o prefixo.
+//  3. "X ~200g no total" ou "X 200g total" → divide o numero por n.
+//  4. Fallback: strip do sufixo "total"/"no total".
+// Se n <= 1, retorna as strings intactas (nao ha o que dividir).
+export function normalizarDescricoesIndividuais(alimentos: string[], n: number): string[] {
+  if (n <= 1) return alimentos;
+  return alimentos.map((a) => normalizarUmAlimento(a, n));
+}
+
+function normalizarUmAlimento(desc: string, n: number): string {
+  const original = desc.trim();
+
+  // Caso 1: "X ~200g por prato, 2 pratos = ~400g total" ou "X 100g por pessoa, ..."
+  const porUnidade = original.match(
+    /^(.+?)\s+por\s+(prato|pessoa|porç[aã]o|porcao|unidade)s?\b[\s\S]*$/i,
+  );
+  if (porUnidade) return porUnidade[1].trim();
+
+  // Caso 2: "X 100g cada" / "X 100g cada prato" / "X 100g em cada prato"
+  const cadaPattern = original.match(/^(.+?)\s+(?:em\s+)?cada\b[\s\S]*$/i);
+  if (cadaPattern) return cadaPattern[1].trim();
+
+  // Caso 3: "X ~200g no total" / "X 200g total" → divide numero por n
+  const totalNum = original.match(
+    /^(.+?)([~≈]?\s*)([\d]+(?:[.,][\d]+)?)\s*(g|ml|kcal)\b(.*?)\s+(?:no\s+)?total\b\.?\s*$/i,
+  );
+  if (totalNum) {
+    const prefixo = totalNum[1].trim();
+    const tilde = totalNum[2].trim();
+    const valor = parseFloat(totalNum[3].replace(',', '.'));
+    const unidade = totalNum[4];
+    if (Number.isFinite(valor) && valor > 0) {
+      const dividido = Math.round(valor / n);
+      const sepTilde = tilde ? `${tilde}` : '';
+      return `${prefixo} ${sepTilde}${dividido}${unidade}`.trim();
+    }
+  }
+
+  // Fallback: remove sufixo "total" / "no total"
+  return original.replace(/[,;]?\s*(?:no\s+)?total\b\.?\s*$/i, '').trim();
+}
+
 // Chamado por agent.ts quando o paciente responde a pergunta de ambiguidade.
 // Retorna true se resolveu, false se resposta invalida (agent.ts re-pergunta).
 export async function resolverAmbiguidadeFoto(
@@ -543,6 +590,7 @@ export async function resolverAmbiguidadeFoto(
     } else {
       const divididos: AnalisePrato = {
         ...pendente.analise,
+        alimentos: normalizarDescricoesIndividuais(pendente.analise.alimentos, n),
         macros: {
           kcal:       pendente.analise.macros.kcal / n,
           proteina_g: pendente.analise.macros.proteina_g / n,
