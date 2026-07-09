@@ -1,0 +1,342 @@
+{
+  "HANDOFF.json": {
+    "mtime": 1783226916.4150162,
+    "ast_hash": "5bf40e479f95cce51b5776b4f485d7a9",
+    "semantic_hash": "5bf40e479f95cce51b5776b4f485d7a9"
+  },
+  "config.json": {
+    "mtime": 1776827646.1286483,
+    "ast_hash": "b7b652f5fb9e1bab947f4b1b6ba8d961",
+    "semantic_hash": "b7b652f5fb9e1bab947f4b1b6ba8d961"
+  },
+  ".continue-here.md": {
+    "mtime": 1782098385.280538,
+    "ast_hash": "74205fb4e1b7093e35c56e47797ae679",
+    "semantic_hash": "74205fb4e1b7093e35c56e47797ae679"
+  },
+  "NEXT-SESSION.md": {
+    "mtime": 1783396813.29873,
+    "ast_hash": "17980fc82740a09a2190dfab50ee99b6",
+    "semantic_hash": "17980fc82740a09a2190dfab50ee99b6"
+  },
+  "P1-6-PLANO.md": {
+    "mtime": 1782179578.0874805,
+    "ast_hash": "8c261a1dc624472882b7e9b4dce2e3ad",
+    "semantic_hash": "8c261a1dc624472882b7e9b4dce2e3ad"
+  },
+  "PROJECT.md": {
+    "mtime": 1776827685.8549464,
+    "ast_hash": "c4037dfd7bd158887156b0b3cd4dcf08",
+    "semantic_hash": "c4037dfd7bd158887156b0b3cd4dcf08"
+  },
+  "REFINAMENTO-AGENTE.md": {
+    "mtime": 1782154319.4833026,
+    "ast_hash": "8745cc16898461f1b36987677415cf81",
+    "semantic_hash": "8745cc16898461f1b36987677415cf81"
+  },
+  "REQUIREMENTS.md": {
+    "mtime": 1776827898.7886713,
+    "ast_hash": "aba533cb04f39dc998575fc679d84391",
+    "semantic_hash": "aba533cb04f39dc998575fc679d84391"
+  },
+  "ROADMAP.md": {
+    "mtime": 1777432932.2053778,
+    "ast_hash": "7395e947db078a533bf184e0415b3ead",
+    "semantic_hash": "7395e947db078a533bf184e0415b3ead"
+  },
+  "STATE.md": {
+    "mtime": 1783546831.4976227,
+    "ast_hash": "761f3fdef0e80c3e10af227eea0c7740",
+    "semantic_hash": "761f3fdef0e80c3e10af227eea0c7740"
+  },
+  "phases/01-infraestrutura-ambiente/01-01-PLAN.md": {
+    "mtime": 1776875738.6549342,
+    "ast_hash": "c149be1edc13d0afe231e012beb59d57",
+    "semantic_hash": "c149be1edc13d0afe231e012beb59d57"
+  },
+  "phases/01-infraestrutura-ambiente/01-01-SUMMARY.md": {
+    "mtime": 1776913449.6351151,
+    "ast_hash": "9c00c85933f07a57874cb912eb18b274",
+    "semantic_hash": "9c00c85933f07a57874cb912eb18b274"
+  },
+  "phases/01-infraestrutura-ambiente/01-02-PLAN.md": {
+    "mtime": 1776875834.4827812,
+    "ast_hash": "d5ce533822f720d566f47f9b735324d1",
+    "semantic_hash": "d5ce533822f720d566f47f9b735324d1"
+  },
+  "phases/01-infraestrutura-ambiente/01-02-SUMMARY.md": {
+    "mtime": 1776913498.972617,
+    "ast_hash": "a0cb2986ca2538fc8afd1999dd4a599c",
+    "semantic_hash": "a0cb2986ca2538fc8afd1999dd4a599c"
+  },
+  "phases/01-infraestrutura-ambiente/01-03-PLAN.md": {
+    "mtime": 1776875928.3435314,
+    "ast_hash": "6e5357733fe450af68c095a6bb96d79d",
+    "semantic_hash": "6e5357733fe450af68c095a6bb96d79d"
+  },
+  "phases/01-infraestrutura-ambiente/01-03-SUMMARY.md": {
+    "mtime": 1776914193.666449,
+    "ast_hash": "12bc78d29fdf00d730ed18cd2b8ccafd",
+    "semantic_hash": "12bc78d29fdf00d730ed18cd2b8ccafd"
+  },
+  "phases/01-infraestrutura-ambiente/01-CONTEXT.md": {
+    "mtime": 1776874826.8766131,
+    "ast_hash": "91238b91b653dea1f199eb43f9bdafe4",
+    "semantic_hash": "91238b91b653dea1f199eb43f9bdafe4"
+  },
+  "phases/01-infraestrutura-ambiente/01-DISCUSSION-LOG.md": {
+    "mtime": 1776874846.5572288,
+    "ast_hash": "cb6449655554eb83e914a5c2cc961cbf",
+    "semantic_hash": "cb6449655554eb83e914a5c2cc961cbf"
+  },
+  "phases/02-core-agente-onboarding-rag/02-01-PLAN.md": {
+    "mtime": 1776971705.208854,
+    "ast_hash": "a9624f25c212bb02fd5aaf3d92f2d9cb",
+    "semantic_hash": "a9624f25c212bb02fd5aaf3d92f2d9cb"
+  },
+  "phases/02-core-agente-onboarding-rag/02-01-SUMMARY.md": {
+    "mtime": 1776972155.8195238,
+    "ast_hash": "d941faf81248c080541053fec51c6196",
+    "semantic_hash": "d941faf81248c080541053fec51c6196"
+  },
+  "phases/02-core-agente-onboarding-rag/02-02-PLAN.md": {
+    "mtime": 1776971778.020617,
+    "ast_hash": "69e7b14768178e5ee9147b56c5683875",
+    "semantic_hash": "69e7b14768178e5ee9147b56c5683875"
+  },
+  "phases/02-core-agente-onboarding-rag/02-02-SUMMARY.md": {
+    "mtime": 1776972485.514503,
+    "ast_hash": "ca9e03f5e5a26e95b4e6450c80123b4f",
+    "semantic_hash": "ca9e03f5e5a26e95b4e6450c80123b4f"
+  },
+  "phases/02-core-agente-onboarding-rag/02-03-PLAN.md": {
+    "mtime": 1776971884.4070096,
+    "ast_hash": "4a057de250702808eeb4c4c91c21d747",
+    "semantic_hash": "4a057de250702808eeb4c4c91c21d747"
+  },
+  "phases/02-core-agente-onboarding-rag/02-03-SUMMARY.md": {
+    "mtime": 1776987475.1059916,
+    "ast_hash": "9482fe19488f2164c55e40e02d026c7c",
+    "semantic_hash": "9482fe19488f2164c55e40e02d026c7c"
+  },
+  "phases/02-core-agente-onboarding-rag/02-04-PLAN.md": {
+    "mtime": 1776971958.3718476,
+    "ast_hash": "127e31af08342ecb7fb5456e6af66607",
+    "semantic_hash": "127e31af08342ecb7fb5456e6af66607"
+  },
+  "phases/02-core-agente-onboarding-rag/02-04-SUMMARY.md": {
+    "mtime": 1776987665.663519,
+    "ast_hash": "2e39e6cab00b700a52f86950608a7e3c",
+    "semantic_hash": "2e39e6cab00b700a52f86950608a7e3c"
+  },
+  "phases/02-core-agente-onboarding-rag/02-HUMAN-UAT.md": {
+    "mtime": 1776988098.1263614,
+    "ast_hash": "dbbb5992881152a22bb9d067789e35a0",
+    "semantic_hash": "dbbb5992881152a22bb9d067789e35a0"
+  },
+  "phases/02-core-agente-onboarding-rag/02-REVIEW-FIX.md": {
+    "mtime": 1776988462.9647655,
+    "ast_hash": "490394226a4f23b46752fb9ef2100074",
+    "semantic_hash": "490394226a4f23b46752fb9ef2100074"
+  },
+  "phases/02-core-agente-onboarding-rag/02-REVIEW.md": {
+    "mtime": 1776987848.0753362,
+    "ast_hash": "65da0216fe3089df9fe708c6f77a6cc8",
+    "semantic_hash": "65da0216fe3089df9fe708c6f77a6cc8"
+  },
+  "phases/02-core-agente-onboarding-rag/02-VERIFICATION.md": {
+    "mtime": 1776988067.9735656,
+    "ast_hash": "48d7c9b638704cbe82ae4ddf0e75f73d",
+    "semantic_hash": "48d7c9b638704cbe82ae4ddf0e75f73d"
+  },
+  "phases/03-registro-refeicoes-multimodal/03-01-PLAN.md": {
+    "mtime": 1777064488.6341834,
+    "ast_hash": "f921b334dcd2d2b9f3f1523e83af288a",
+    "semantic_hash": "f921b334dcd2d2b9f3f1523e83af288a"
+  },
+  "phases/03-registro-refeicoes-multimodal/03-01-SUMMARY.md": {
+    "mtime": 1777145623.9024131,
+    "ast_hash": "3edd1b06831622ef1f66740b2372b8e5",
+    "semantic_hash": "3edd1b06831622ef1f66740b2372b8e5"
+  },
+  "phases/03-registro-refeicoes-multimodal/03-02-PLAN.md": {
+    "mtime": 1777064639.769567,
+    "ast_hash": "11c62f5018e558a211f0d4ef7a3e77e3",
+    "semantic_hash": "11c62f5018e558a211f0d4ef7a3e77e3"
+  },
+  "phases/03-registro-refeicoes-multimodal/03-02-SUMMARY.md": {
+    "mtime": 1777145633.4773154,
+    "ast_hash": "c5fc8a55f40b2e2f2a58337531c7126e",
+    "semantic_hash": "c5fc8a55f40b2e2f2a58337531c7126e"
+  },
+  "phases/03-registro-refeicoes-multimodal/03-03-PLAN.md": {
+    "mtime": 1777064027.712803,
+    "ast_hash": "6642e7330394b3abb7a66d20120df308",
+    "semantic_hash": "6642e7330394b3abb7a66d20120df308"
+  },
+  "phases/03-registro-refeicoes-multimodal/03-03-SUMMARY.md": {
+    "mtime": 1777145279.7735074,
+    "ast_hash": "7e94355eb90c62423b2caffdc7a9b622",
+    "semantic_hash": "7e94355eb90c62423b2caffdc7a9b622"
+  },
+  "phases/03-registro-refeicoes-multimodal/03-04-PLAN.md": {
+    "mtime": 1777063852.0778673,
+    "ast_hash": "1b674dd564493f13edd0b6ea0eb83b1a",
+    "semantic_hash": "1b674dd564493f13edd0b6ea0eb83b1a"
+  },
+  "phases/03-registro-refeicoes-multimodal/03-04-SUMMARY.md": {
+    "mtime": 1777145136.676782,
+    "ast_hash": "538bc2bb2f64704e29a8a35d2183997a",
+    "semantic_hash": "538bc2bb2f64704e29a8a35d2183997a"
+  },
+  "phases/03-registro-refeicoes-multimodal/03-CONTEXT.md": {
+    "mtime": 1777062599.7031043,
+    "ast_hash": "8155f0fe8bc8edbb7c81bd7ec9660935",
+    "semantic_hash": "8155f0fe8bc8edbb7c81bd7ec9660935"
+  },
+  "phases/03-registro-refeicoes-multimodal/03-DISCUSSION-LOG.md": {
+    "mtime": 1777062626.2957473,
+    "ast_hash": "02cd720418a277e604c0436113edfb79",
+    "semantic_hash": "02cd720418a277e604c0436113edfb79"
+  },
+  "phases/03-registro-refeicoes-multimodal/03-RESEARCH.md": {
+    "mtime": 1777063702.7378697,
+    "ast_hash": "26d44ce4c727e8d74fe161c5e0348689",
+    "semantic_hash": "26d44ce4c727e8d74fe161c5e0348689"
+  },
+  "phases/04-alertas-expiracao-relatorio-semanal/04-01-PLAN.md": {
+    "mtime": 1777152333.0459535,
+    "ast_hash": "df4ad01910a860da622f5fead020b7d7",
+    "semantic_hash": "df4ad01910a860da622f5fead020b7d7"
+  },
+  "phases/04-alertas-expiracao-relatorio-semanal/04-01-SUMMARY.md": {
+    "mtime": 1777166561.0701618,
+    "ast_hash": "a839b46701b1ce7be0f2a16e2ae74871",
+    "semantic_hash": "a839b46701b1ce7be0f2a16e2ae74871"
+  },
+  "phases/04-alertas-expiracao-relatorio-semanal/04-02-PLAN.md": {
+    "mtime": 1777152428.5927205,
+    "ast_hash": "44d6d2c419ae7985b7aba40c332c2aac",
+    "semantic_hash": "44d6d2c419ae7985b7aba40c332c2aac"
+  },
+  "phases/04-alertas-expiracao-relatorio-semanal/04-02-SUMMARY.md": {
+    "mtime": 1777163785.240176,
+    "ast_hash": "c80013ba2b58844bafc39b7791041ab2",
+    "semantic_hash": "c80013ba2b58844bafc39b7791041ab2"
+  },
+  "phases/04-alertas-expiracao-relatorio-semanal/04-03-PLAN.md": {
+    "mtime": 1777152574.060196,
+    "ast_hash": "13916741847672906d58fcad2f135aca",
+    "semantic_hash": "13916741847672906d58fcad2f135aca"
+  },
+  "phases/04-alertas-expiracao-relatorio-semanal/04-03-SUMMARY.md": {
+    "mtime": 1777170237.3243139,
+    "ast_hash": "3fa5318b90815636217a616d0277100a",
+    "semantic_hash": "3fa5318b90815636217a616d0277100a"
+  },
+  "phases/04-alertas-expiracao-relatorio-semanal/04-RESEARCH.md": {
+    "mtime": 1777151736.1557386,
+    "ast_hash": "4751ba555ffae7cf8d265fd46d631eec",
+    "semantic_hash": "4751ba555ffae7cf8d265fd46d631eec"
+  },
+  "phases/05-painel-do-nutricionista/05-01-PLAN.md": {
+    "mtime": 1777183888.2575488,
+    "ast_hash": "b36947a32b8d0966d77906a03d3675e8",
+    "semantic_hash": "b36947a32b8d0966d77906a03d3675e8"
+  },
+  "phases/05-painel-do-nutricionista/05-01-SUMMARY.md": {
+    "mtime": 1777224810.9929092,
+    "ast_hash": "fc75aaa4a1839a656cd35ce0e8f30137",
+    "semantic_hash": "fc75aaa4a1839a656cd35ce0e8f30137"
+  },
+  "phases/05-painel-do-nutricionista/05-02-PLAN.md": {
+    "mtime": 1777183988.4544137,
+    "ast_hash": "b9ddf7f2d01653988b8fe86cc351e90f",
+    "semantic_hash": "b9ddf7f2d01653988b8fe86cc351e90f"
+  },
+  "phases/05-painel-do-nutricionista/05-02-SUMMARY.md": {
+    "mtime": 1777225108.5615532,
+    "ast_hash": "35c77c41e05681335ec18d0c707a6b7d",
+    "semantic_hash": "35c77c41e05681335ec18d0c707a6b7d"
+  },
+  "phases/05-painel-do-nutricionista/05-03-PLAN.md": {
+    "mtime": 1777184112.948324,
+    "ast_hash": "f8d7f7fc095e0d3b19c2a844e9b2ae06",
+    "semantic_hash": "f8d7f7fc095e0d3b19c2a844e9b2ae06"
+  },
+  "phases/05-painel-do-nutricionista/05-03-SUMMARY.md": {
+    "mtime": 1777225251.995768,
+    "ast_hash": "a77b96a23e1ec61cf98344a44e9f3f51",
+    "semantic_hash": "a77b96a23e1ec61cf98344a44e9f3f51"
+  },
+  "phases/05-painel-do-nutricionista/05-CONTEXT.md": {
+    "mtime": 1777182603.6463814,
+    "ast_hash": "c23517f3a3cad3e0be00322c6c6b5a69",
+    "semantic_hash": "c23517f3a3cad3e0be00322c6c6b5a69"
+  },
+  "phases/05-painel-do-nutricionista/05-DISCUSSION-LOG.md": {
+    "mtime": 1777182626.0287428,
+    "ast_hash": "790f15cc4f479e9c77b063b52b84a422",
+    "semantic_hash": "790f15cc4f479e9c77b063b52b84a422"
+  },
+  "phases/05-painel-do-nutricionista/05-PATTERNS.md": {
+    "mtime": 1777183712.8996491,
+    "ast_hash": "071d70612ea2be380b1471bd5b870b3b",
+    "semantic_hash": "071d70612ea2be380b1471bd5b870b3b"
+  },
+  "phases/05-painel-do-nutricionista/05-RESEARCH.md": {
+    "mtime": 1777183475.3637433,
+    "ast_hash": "c52d6ce0455c5c002c577ebf6206c579",
+    "semantic_hash": "c52d6ce0455c5c002c577ebf6206c579"
+  },
+  "phases/05-painel-do-nutricionista/05-VALIDATION.md": {
+    "mtime": 1777183570.434,
+    "ast_hash": "d64a5dc8428c5b42dfeb983d3178d235",
+    "semantic_hash": "d64a5dc8428c5b42dfeb983d3178d235"
+  },
+  "phases/06-landing-page/06-01-PLAN.md": {
+    "mtime": 1777431703.4521139,
+    "ast_hash": "b620f76e0b3e803f13166329b4916980",
+    "semantic_hash": "b620f76e0b3e803f13166329b4916980"
+  },
+  "phases/06-landing-page/06-01-SUMMARY.md": {
+    "mtime": 1777432909.6364503,
+    "ast_hash": "6afb5fc0335b637242d8f2ca38147905",
+    "semantic_hash": "6afb5fc0335b637242d8f2ca38147905"
+  },
+  "phases/06-landing-page/06-02-PLAN.md": {
+    "mtime": 1777431794.7830906,
+    "ast_hash": "d5f9a869b02912e5e88830780d3b2e65",
+    "semantic_hash": "d5f9a869b02912e5e88830780d3b2e65"
+  },
+  "phases/06-landing-page/06-03-PLAN.md": {
+    "mtime": 1777431890.2969065,
+    "ast_hash": "00e69cfec54df2cc02f32c8908806910",
+    "semantic_hash": "00e69cfec54df2cc02f32c8908806910"
+  },
+  "phases/06-landing-page/06-CONTEXT.md": {
+    "mtime": 1777396482.978348,
+    "ast_hash": "6bc280ad4373bdd09e89a64f1e6a4e19",
+    "semantic_hash": "6bc280ad4373bdd09e89a64f1e6a4e19"
+  },
+  "phases/06-landing-page/06-DISCUSSION-LOG.md": {
+    "mtime": 1777396498.6754405,
+    "ast_hash": "0f9476a77f90ffdbcbfcacae725d91e4",
+    "semantic_hash": "0f9476a77f90ffdbcbfcacae725d91e4"
+  },
+  "phases/06-landing-page/06-PATTERNS.md": {
+    "mtime": 1777431487.8079116,
+    "ast_hash": "7f3fecffc09c302d3b7dbbaa0a31dd5c",
+    "semantic_hash": "7f3fecffc09c302d3b7dbbaa0a31dd5c"
+  },
+  "phases/06-landing-page/06-RESEARCH.md": {
+    "mtime": 1777431280.9343443,
+    "ast_hash": "c6256231574175e30555f6b8c84ae464",
+    "semantic_hash": "c6256231574175e30555f6b8c84ae464"
+  },
+  "phases/06-landing-page/06-UI-SPEC.md": {
+    "mtime": 1777396994.7536712,
+    "ast_hash": "1a0af53f553b57e0d96cb9d7782bc626",
+    "semantic_hash": "1a0af53f553b57e0d96cb9d7782bc626"
+  }
+}

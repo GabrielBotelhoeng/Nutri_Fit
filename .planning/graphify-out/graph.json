@@ -1,0 +1,3148 @@
+{
+  "directed": false,
+  "multigraph": false,
+  "graph": {
+    "hyperedges": [
+      {
+        "nodes": [
+          "phases_01_01_plan",
+          "phases_01_02_plan",
+          "phases_01_03_plan",
+          "phases_01_context",
+          "phases_01_discussion_log"
+        ],
+        "shared_concept": "Phase 01 Infrastructure Bundle \u2014 all artifacts produced during Phase 01 execution covering schema, backend scaffold, Evolution and N8N provisioning."
+      },
+      {
+        "nodes": [
+          "phases_02_02_plan",
+          "concept_rag_pipeline",
+          "concept_pgvector",
+          "concept_openai_embeddings"
+        ],
+        "shared_concept": "RAG Pipeline Assembly \u2014 the plan, retrieval strategy, vector store and embedder that together let the agent answer diet questions grounded in the patient PDF."
+      },
+      {
+        "nodes": [
+          "bug_p0_1",
+          "bug_p2_7",
+          "bug_p2_8",
+          "concept_fire_forget_webhook"
+        ],
+        "shared_concept": "Concurrency Cluster \u2014 fire-and-forget webhook design surfaces idempotency (P2-7), double-count (P0-1) and race between welcome and diet processing (P2-8)."
+      },
+      {
+        "id": "phases_02_core_agente_onboarding_rag_02_04_calculos_group",
+        "label": "Trio de calculos nutricionais pos-entrevista",
+        "nodes": [
+          "phases_02_core_agente_onboarding_rag_02_04_plan_mifflin_st_jeor",
+          "phases_02_core_agente_onboarding_rag_02_04_plan_calcular_hidratacao",
+          "phases_02_core_agente_onboarding_rag_02_04_plan_calcular_creatina"
+        ],
+        "relation": "participate_in",
+        "confidence": "EXTRACTED",
+        "confidence_score": 1.0,
+        "source_file": "phases/02-core-agente-onboarding-rag/02-04-PLAN.md"
+      },
+      {
+        "id": "phases_03_registro_refeicoes_multimodal_03_multimodal_group",
+        "label": "Fase 03 multimodal: texto/audio/imagem/refinamentos",
+        "nodes": [
+          "phases_03_registro_refeicoes_multimodal_03_01_plan",
+          "phases_03_registro_refeicoes_multimodal_03_02_plan",
+          "phases_03_registro_refeicoes_multimodal_03_03_plan",
+          "phases_03_registro_refeicoes_multimodal_03_04_plan"
+        ],
+        "relation": "form",
+        "confidence": "INFERRED",
+        "confidence_score": 0.85,
+        "source_file": "phases/03-registro-refeicoes-multimodal/03-CONTEXT.md"
+      },
+      {
+        "id": "phases_04_alertas_expiracao_relatorio_semanal_04_group",
+        "label": "Fase 04 alertas e relatorio semanal",
+        "nodes": [
+          "phases_04_alertas_expiracao_relatorio_semanal_04_01_plan",
+          "phases_04_alertas_expiracao_relatorio_semanal_04_02_plan",
+          "phases_04_alertas_expiracao_relatorio_semanal_04_03_plan"
+        ],
+        "relation": "form",
+        "confidence": "INFERRED",
+        "confidence_score": 0.85,
+        "source_file": "phases/04-alertas-expiracao-relatorio-semanal/04-01-PLAN.md"
+      },
+      {
+        "id": "phase_4_wave3_relatorio_flow",
+        "label": "Wave 3 Relatorio Semanal flow (RPC + service + cron)",
+        "nodes": [
+          "phases_04_alertas_expiracao_relatorio_semanal_04_03_summary_rpc_registrar_agua_diaria",
+          "phases_04_alertas_expiracao_relatorio_semanal_04_03_summary_gerar_relatorio_semanal",
+          "phases_04_alertas_expiracao_relatorio_semanal_04_03_summary_cron_relatorio_semanal"
+        ],
+        "relation": "participate_in",
+        "confidence": "EXTRACTED",
+        "confidence_score": 1.0,
+        "source_file": "phases/04-alertas-expiracao-relatorio-semanal/04-03-SUMMARY.md"
+      },
+      {
+        "id": "phase_5_panel_stack_decisions",
+        "label": "Painel Stack (React+Vite / Auth Supabase / PANEL_API_KEY)",
+        "nodes": [
+          "phases_05_painel_do_nutricionista_05_context_react_vite_separated",
+          "phases_05_painel_do_nutricionista_05_context_supabase_auth_client",
+          "phases_05_painel_do_nutricionista_05_context_panel_api_key"
+        ],
+        "relation": "form",
+        "confidence": "EXTRACTED",
+        "confidence_score": 1.0,
+        "source_file": "phases/05-painel-do-nutricionista/05-CONTEXT.md"
+      },
+      {
+        "id": "phase_6_hero_3d_stack",
+        "label": "Landing Hero 3D + Motion + Mobile Fallback",
+        "nodes": [
+          "phases_06_landing_page_06_context_react_three_fiber",
+          "phases_06_landing_page_06_context_framer_motion",
+          "phases_06_landing_page_06_context_mobile_fallback"
+        ],
+        "relation": "implement",
+        "confidence": "EXTRACTED",
+        "confidence_score": 1.0,
+        "source_file": "phases/06-landing-page/06-CONTEXT.md"
+      }
+    ]
+  },
+  "nodes": [
+    {
+      "label": ".continue-here",
+      "file_type": "document",
+      "description": "Historical handoff document (2026-06-22) documenting pending work on lembretes (item #4) and relatorio parrudo (item #5) after refinamento agente session.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "continue_here",
+      "community": 1,
+      "norm_label": ".continue-here"
+    },
+    {
+      "label": "NEXT-SESSION",
+      "file_type": "document",
+      "description": "Current handoff (2026-07-05) documenting PR #1 with streaks + P0-2b + 5 auditoria fixes on branch claude/nutrichat-streaks-feature-ongoxm, 267 tests green.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "next_session",
+      "community": 1,
+      "norm_label": "next-session"
+    },
+    {
+      "label": "P1-6-PLANO",
+      "file_type": "document",
+      "description": "Plan to extract meal times from diet PDF before asking in interview step 14. Avoids inventing schedules and syncing wrong data to alertas_config.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "p1_6_plano",
+      "community": 1,
+      "norm_label": "p1-6-plano"
+    },
+    {
+      "label": "PROJECT",
+      "file_type": "document",
+      "description": "Project overview for NutriChat: WhatsApp nutritional assistant with stack table, requirements, key decisions and visual identity (colors, plans).",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "project",
+      "community": 4,
+      "norm_label": "project"
+    },
+    {
+      "label": "REFINAMENTO-AGENTE",
+      "file_type": "document",
+      "description": "Bug catalog with P0-1 (double-count), P0-2 (silent quantity), P0-2b (preparo), P1-3/4/5/6, P2-7/8/9, SEC-1/2/3, plus new message experience design.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "refinamento_agente",
+      "community": 1,
+      "norm_label": "refinamento-agente"
+    },
+    {
+      "label": "REQUIREMENTS",
+      "file_type": "document",
+      "description": "44 v1 requirements: AGENT-01 to 20, AUTH-01/02/03, PANEL-01 to 06, LANDING-01 to 08, INFRA-01 to 07, with phase traceability matrix.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "requirements",
+      "community": 7,
+      "norm_label": "requirements"
+    },
+    {
+      "label": "ROADMAP",
+      "file_type": "document",
+      "description": "7-phase roadmap covering plans, dependencies and success criteria for NutriChat v1.0 milestone.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "roadmap",
+      "community": 7,
+      "norm_label": "roadmap"
+    },
+    {
+      "label": "STATE",
+      "file_type": "document",
+      "description": "Project state at 90% completion of v1.0 milestone. Executing Phase 6 landing page, plan 06-01 done, 06-02 pending.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "state",
+      "community": 7,
+      "norm_label": "state"
+    },
+    {
+      "label": "01-01-PLAN",
+      "file_type": "document",
+      "description": "Phase 1 Plan 01: Supabase schema migrations creating 5 tables plus pgvector extension for RAG chunks.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "phases_01_01_plan",
+      "community": 2,
+      "norm_label": "01-01-plan"
+    },
+    {
+      "label": "01-01-SUMMARY",
+      "file_type": "document",
+      "description": "Summary of Phase 1 Plan 01 execution: schema created in Supabase project iqpoohthfhmjkvrqxzns.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "phases_01_01_summary",
+      "community": 2,
+      "norm_label": "01-01-summary"
+    },
+    {
+      "label": "01-02-PLAN",
+      "file_type": "document",
+      "description": "Phase 1 Plan 02: Backend Express/TypeScript scaffold plus Docker Compose plus Railway deploy prep.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "phases_01_02_plan",
+      "community": 6,
+      "norm_label": "01-02-plan"
+    },
+    {
+      "label": "01-02-SUMMARY",
+      "file_type": "document",
+      "description": "Summary of Phase 1 Plan 02 execution: backend scaffolded with Express, TypeScript, Docker Compose local infrastructure.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "phases_01_02_summary",
+      "community": 6,
+      "norm_label": "01-02-summary"
+    },
+    {
+      "label": "01-03-PLAN",
+      "file_type": "document",
+      "description": "Phase 1 Plan 03: Evolution API v2.3.7 setup and N8N workflows scaffolding on local Docker environment.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "phases_01_03_plan",
+      "community": 4,
+      "norm_label": "01-03-plan"
+    },
+    {
+      "label": "01-03-SUMMARY",
+      "file_type": "document",
+      "description": "Summary of Phase 1 Plan 03: Evolution API and N8N containers up on ports 8081/5678 respectively.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "phases_01_03_summary",
+      "community": 4,
+      "norm_label": "01-03-summary"
+    },
+    {
+      "label": "01-CONTEXT",
+      "file_type": "document",
+      "description": "Phase 1 decisions catalog D-01 through D-11 covering schema, TypeScript, Evolution API, dev environment.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "phases_01_context",
+      "community": 6,
+      "norm_label": "01-context"
+    },
+    {
+      "label": "01-DISCUSSION-LOG",
+      "file_type": "document",
+      "description": "Phase 1 discussion log with options considered per decision (alternative stacks, tradeoffs).",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "phases_01_discussion_log",
+      "community": 7,
+      "norm_label": "01-discussion-log"
+    },
+    {
+      "label": "02-01-PLAN",
+      "file_type": "document",
+      "description": "Phase 2 Plan 01: Webhook routing implementation covering backend/src/routes/webhook.ts, services/evolution.ts, routes/api.ts.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "phases_02_01_plan",
+      "community": 11,
+      "norm_label": "02-01-plan"
+    },
+    {
+      "label": "02-01-SUMMARY",
+      "file_type": "document",
+      "description": "Summary of Phase 2 Plan 01: fire-and-forget webhook pattern implemented, N8N integration validated.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "phases_02_01_summary",
+      "community": 11,
+      "norm_label": "02-01-summary"
+    },
+    {
+      "label": "02-02-PLAN",
+      "file_type": "document",
+      "description": "Phase 2 Plan 02: RAG pipeline implementation with services/rag.ts and migration 005 creating dieta_chunks table with pgvector HNSW index.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "phases_02_02_plan",
+      "community": 2,
+      "norm_label": "02-02-plan"
+    },
+    {
+      "label": "02-02-SUMMARY",
+      "file_type": "document",
+      "description": "Summary of Phase 2 Plan 02: RAG pipeline operational with OpenAI text-embedding-3-small (1536 dims) and pgvector.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "phases_02_02_summary",
+      "community": 2,
+      "norm_label": "02-02-summary"
+    },
+    {
+      "label": "02-03-PLAN",
+      "file_type": "document",
+      "description": "Phase 2 Plan 03: Boas-vindas and 7-step interview implementation in services/agent.ts, services/conversation.ts plus migration 006 for entrevista tables.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "phases_02_03_plan",
+      "community": 4,
+      "norm_label": "02-03-plan"
+    },
+    {
+      "label": "02-03-SUMMARY",
+      "file_type": "document",
+      "description": "Summary of Phase 2 Plan 03: onboarding flow operational, TMB/hidratacao/creatina calculations working.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "phases_02_03_summary",
+      "community": 4,
+      "norm_label": "02-03-summary"
+    },
+    {
+      "label": "NutriChat Project",
+      "file_type": "concept",
+      "description": "WhatsApp-based nutritional assistant in pt-BR that automates onboarding, indexes diet PDFs via RAG, and answers patient questions using Claude AI.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "concept_nutrichat",
+      "community": 4,
+      "norm_label": "nutrichat project"
+    },
+    {
+      "label": "Supabase Cloud",
+      "file_type": "concept",
+      "description": "Database, storage and pgvector host. Project iqpoohthfhmjkvrqxzns hosts pacientes, dietas, mensagens, entrevistas, registros_diarios and dieta_chunks tables.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "concept_supabase",
+      "community": 2,
+      "norm_label": "supabase cloud"
+    },
+    {
+      "label": "Evolution API v2.3.7",
+      "file_type": "concept",
+      "description": "Open-source WhatsApp gateway running in Docker on port 8081. Sends messages.upsert events to backend webhook.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "concept_evolution_api",
+      "community": 4,
+      "norm_label": "evolution api v2.3.7"
+    },
+    {
+      "label": "N8N",
+      "file_type": "concept",
+      "description": "Workflow orchestrator for alerts, daily reports and diet expiration. Runs in Docker on port 5678. Not in message hot path (Evolution posts directly to backend).",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "concept_n8n",
+      "community": 4,
+      "norm_label": "n8n"
+    },
+    {
+      "label": "Claude AI",
+      "file_type": "concept",
+      "description": "Claude Sonnet 4.6 powers the agent conversations. Claude Haiku 4.5 handles macros and classifier tasks. Accessed via Anthropic SDK.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "concept_claude_ai",
+      "community": 4,
+      "norm_label": "claude ai"
+    },
+    {
+      "label": "RAG Pipeline",
+      "file_type": "concept",
+      "description": "PDF is parsed via pdf-parse, chunked with RecursiveCharacterTextSplitter, embedded via OpenAI text-embedding-3-small (1536 dims), stored in pgvector with HNSW index.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "concept_rag_pipeline",
+      "community": 2,
+      "norm_label": "rag pipeline"
+    },
+    {
+      "label": "Backend Express/TypeScript",
+      "file_type": "concept",
+      "description": "Node.js 20 Express server in /backend directory. Fire-and-forget webhook pattern returns 200 before processing to avoid N8N timeout.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "concept_backend",
+      "community": 6,
+      "norm_label": "backend express/typescript"
+    },
+    {
+      "label": "Docker Compose Local",
+      "file_type": "concept",
+      "description": "5-service local stack: postgres, redis, evolution-api, n8n, backend. Provides isolated dev environment mirroring Railway production.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "concept_docker_compose",
+      "community": 6,
+      "norm_label": "docker compose local"
+    },
+    {
+      "label": "pgvector HNSW",
+      "file_type": "concept",
+      "description": "PostgreSQL extension providing vector similarity search. HNSW index accelerates cosine similarity queries over 1536-dim OpenAI embeddings.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "concept_pgvector",
+      "community": 2,
+      "norm_label": "pgvector hnsw"
+    },
+    {
+      "label": "Row-Level Security",
+      "file_type": "concept",
+      "description": "Supabase Postgres RLS policies isolate patient data. Enforced at row-level per paciente_id for pacientes, dietas, mensagens, registros_diarios tables.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "concept_rls",
+      "community": 1,
+      "norm_label": "row-level security"
+    },
+    {
+      "label": "registros_diarios",
+      "file_type": "concept",
+      "description": "Meal accumulation table with UNIQUE(paciente_id, data) constraint. RPC acumular_registro_diario upserts daily totals for calories/macros.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "concept_registros_diarios",
+      "community": 2,
+      "norm_label": "registros_diarios"
+    },
+    {
+      "label": "Railway",
+      "file_type": "concept",
+      "description": "Backend and N8N hosting platform chosen for its git-driven deploys and simple pricing model. Alternative to Fly.io and Render considered in discussion log.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "concept_railway",
+      "community": 6,
+      "norm_label": "railway"
+    },
+    {
+      "label": "OpenAI text-embedding-3-small",
+      "file_type": "concept",
+      "description": "Embedding model producing 1536-dim vectors. Used via LangChain OpenAIEmbeddings wrapper. Batched to 20 to respect rate limit.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "concept_openai_embeddings",
+      "community": 2,
+      "norm_label": "openai text-embedding-3-small"
+    },
+    {
+      "label": "Groq Whisper",
+      "file_type": "concept",
+      "description": "Audio transcription service for WhatsApp voice notes. Planned for Phase 3 multimodal support.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "concept_groq_whisper",
+      "community": 4,
+      "norm_label": "groq whisper"
+    },
+    {
+      "label": "GSD Framework",
+      "file_type": "concept",
+      "description": "Get Shit Done phased planning framework producing XX-YY-PLAN, XX-YY-SUMMARY, XX-CONTEXT and XX-DISCUSSION-LOG artifacts per phase.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "concept_gsd_framework",
+      "community": 7,
+      "norm_label": "gsd framework"
+    },
+    {
+      "label": "Fire-and-Forget Webhook",
+      "file_type": "rationale",
+      "description": "Webhook returns res.status(200) BEFORE async processing to prevent N8N/Evolution timeout when Claude call takes several seconds. Documented as decision in 02-01.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "concept_fire_forget_webhook",
+      "community": 11,
+      "norm_label": "fire-and-forget webhook"
+    },
+    {
+      "label": "7-Step Interview",
+      "file_type": "concept",
+      "description": "Onboarding conversation collecting: nome, idade, sexo, peso, altura, atividade fisica, horarios refeicoes. Feeds TMB, hidratacao and creatina calculations.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "concept_seven_step_interview",
+      "community": 1,
+      "norm_label": "7-step interview"
+    },
+    {
+      "label": "P0-1 Double Count",
+      "file_type": "concept",
+      "description": "Bug where confirmed meal was accumulated twice due to non-idempotent upsert. Requires webhook idempotency (see P2-7).",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "bug_p0_1",
+      "community": 2,
+      "norm_label": "p0-1 double count"
+    },
+    {
+      "label": "P0-2 Silent Quantity",
+      "file_type": "concept",
+      "description": "Bug where agent silently assumes portion size without asking user, distorting daily nutritional accounting.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "bug_p0_2",
+      "community": 1,
+      "norm_label": "p0-2 silent quantity"
+    },
+    {
+      "label": "P0-2b Preparo",
+      "file_type": "concept",
+      "description": "Bug where preparation method (fried vs grilled) is ignored when computing calories/macros. Fixed as part of PR #1 auditoria.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "bug_p0_2b",
+      "community": 1,
+      "norm_label": "p0-2b preparo"
+    },
+    {
+      "label": "P1-3 Intent Regex",
+      "file_type": "concept",
+      "description": "Bug in intent detection regex causing saldo/reset commands to not fire. Fixed via SALDO_RE pattern and backoff in Fase A refinamento.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "bug_p1_3",
+      "community": 1,
+      "norm_label": "p1-3 intent regex"
+    },
+    {
+      "label": "P1-4 Activity Factor",
+      "file_type": "concept",
+      "description": "Bug where activity factor for TMB calculation used wrong coefficient tier. Requires interview step 6 clarification.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "bug_p1_4",
+      "community": 1,
+      "norm_label": "p1-4 activity factor"
+    },
+    {
+      "label": "P1-5 MyFitnessPal",
+      "file_type": "concept",
+      "description": "Bug/gap where MyFitnessPal-style database lookups fall back inconsistently. Design refinement pending.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "bug_p1_5",
+      "community": 1,
+      "norm_label": "p1-5 myfitnesspal"
+    },
+    {
+      "label": "P1-6 Diet Times",
+      "file_type": "concept",
+      "description": "Bug where interview asks meal times even when PDF diet already specifies them. Plan documents extraction via Claude Haiku with temperature 0.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "bug_p1_6",
+      "community": 1,
+      "norm_label": "p1-6 diet times"
+    },
+    {
+      "label": "P2-7 Webhook Idempotency",
+      "file_type": "concept",
+      "description": "Concurrency bug: duplicate messages.upsert events cause double processing. Solution requires message_id dedup key.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "bug_p2_7",
+      "community": 2,
+      "norm_label": "p2-7 webhook idempotency"
+    },
+    {
+      "label": "P2-8 Race Condition",
+      "file_type": "concept",
+      "description": "Race between enviarBoasVindas and processarDieta both fire-and-forget: interview may reach step 14 before PDF is processed.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "bug_p2_8",
+      "community": 11,
+      "norm_label": "p2-8 race condition"
+    },
+    {
+      "label": "P2-9 Memory",
+      "file_type": "concept",
+      "description": "Bug where conversation memory context grows unboundedly. Requires summarization or windowed compaction.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "bug_p2_9",
+      "community": 1,
+      "norm_label": "p2-9 memory"
+    },
+    {
+      "label": "SEC-1",
+      "file_type": "concept",
+      "description": "Security item covering API key rotation and env var hygiene. Cataloged in REFINAMENTO-AGENTE.",
+      "confidence_score": 0.85,
+      "extraction_type": "INFERRED",
+      "id": "sec_1",
+      "community": 1,
+      "norm_label": "sec-1"
+    },
+    {
+      "label": "SEC-2",
+      "file_type": "concept",
+      "description": "Security item covering RLS coverage audit for new tables (registros_diarios, entrevistas).",
+      "confidence_score": 0.85,
+      "extraction_type": "INFERRED",
+      "id": "sec_2",
+      "community": 1,
+      "norm_label": "sec-2"
+    },
+    {
+      "label": "SEC-3",
+      "file_type": "concept",
+      "description": "Security item covering webhook signature verification for Evolution API events.",
+      "confidence_score": 0.85,
+      "extraction_type": "INFERRED",
+      "id": "sec_3",
+      "community": 1,
+      "norm_label": "sec-3"
+    },
+    {
+      "label": "D-01",
+      "file_type": "rationale",
+      "description": "Decision to use Supabase Cloud as the single-vendor Postgres + Storage + pgvector host.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "decision_d_01",
+      "community": 2,
+      "norm_label": "d-01"
+    },
+    {
+      "label": "D-02",
+      "file_type": "rationale",
+      "description": "Decision to use TypeScript with strict mode for backend to catch nutritional math errors at compile time.",
+      "confidence_score": 0.95,
+      "extraction_type": "INFERRED",
+      "id": "decision_d_02",
+      "community": 6,
+      "norm_label": "d-02"
+    },
+    {
+      "label": "D-03",
+      "file_type": "rationale",
+      "description": "Decision to adopt Evolution API v2.3.7 as WhatsApp gateway to avoid Meta Business API monthly fees.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "decision_d_03",
+      "community": 6,
+      "norm_label": "d-03"
+    },
+    {
+      "label": "D-11",
+      "file_type": "rationale",
+      "description": "Decision on dev environment: Docker Compose locally mirrors Railway production topology for parity.",
+      "confidence_score": 0.85,
+      "extraction_type": "INFERRED",
+      "id": "decision_d_11",
+      "community": 6,
+      "norm_label": "d-11"
+    },
+    {
+      "label": "Phase 01 Infrastructure",
+      "file_type": "concept",
+      "description": "Phase covering Supabase schema, backend scaffold, Evolution API and N8N Docker setup. Complete.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "phase_01",
+      "community": 7,
+      "norm_label": "phase 01 infrastructure"
+    },
+    {
+      "label": "Phase 02 Core Agent",
+      "file_type": "concept",
+      "description": "Phase covering webhook routing, RAG pipeline, boas-vindas and 7-step interview. Complete.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "phase_02",
+      "community": 7,
+      "norm_label": "phase 02 core agent"
+    },
+    {
+      "label": "Phase 06 Landing Page",
+      "file_type": "concept",
+      "description": "Phase covering nutrichat-landing site with Tailwind v4, PhoneCanvas 3D, Header, Hero. Plan 06-01 done; 06-02 pending.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "phase_06",
+      "community": 7,
+      "norm_label": "phase 06 landing page"
+    },
+    {
+      "label": "Streaks Feature",
+      "file_type": "concept",
+      "description": "Gamification feature tracking consecutive days of adherence. Emitted as sprout emoji when streak thresholds hit. Fixed and pushed via PR #1.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "concept_streaks",
+      "community": 1,
+      "norm_label": "streaks feature"
+    },
+    {
+      "label": "v1.0 Milestone",
+      "file_type": "concept",
+      "description": "Current milestone at 90% completion. Covers 7 phases and 20 plans total, with 18 plans completed.",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "id": "concept_milestone_v1",
+      "community": 7,
+      "norm_label": "v1.0 milestone"
+    },
+    {
+      "label": "Calculos de TMB, hidratacao e creatina (02-04-PLAN)",
+      "file_type": "document",
+      "source_file": "phases/02-core-agente-onboarding-rag/02-04-PLAN.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_02_core_agente_onboarding_rag_02_04_plan_calculos_nutricionais",
+      "community": 9,
+      "norm_label": "calculos de tmb, hidratacao e creatina (02-04-plan)"
+    },
+    {
+      "label": "Formula Mifflin-St Jeor",
+      "file_type": "concept",
+      "source_file": "phases/02-core-agente-onboarding-rag/02-04-PLAN.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_02_core_agente_onboarding_rag_02_04_plan_mifflin_st_jeor",
+      "community": 9,
+      "norm_label": "formula mifflin-st jeor"
+    },
+    {
+      "label": "calcularHidratacao 35ml por kg",
+      "file_type": "concept",
+      "source_file": "phases/02-core-agente-onboarding-rag/02-04-PLAN.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_02_core_agente_onboarding_rag_02_04_plan_calcular_hidratacao",
+      "community": 9,
+      "norm_label": "calcularhidratacao 35ml por kg"
+    },
+    {
+      "label": "calcularCreatina 0.03g por kg",
+      "file_type": "concept",
+      "source_file": "phases/02-core-agente-onboarding-rag/02-04-PLAN.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_02_core_agente_onboarding_rag_02_04_plan_calcular_creatina",
+      "community": 9,
+      "norm_label": "calcularcreatina 0.03g por kg"
+    },
+    {
+      "label": "Funcoes puras testaveis sem I/O",
+      "file_type": "rationale",
+      "source_file": "phases/02-core-agente-onboarding-rag/02-04-PLAN.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_02_core_agente_onboarding_rag_02_04_plan_funcoes_puras_rationale",
+      "community": 12,
+      "norm_label": "funcoes puras testaveis sem i/o"
+    },
+    {
+      "label": "02-04 Summary \u2014 calculos nutricionais",
+      "file_type": "document",
+      "source_file": "phases/02-core-agente-onboarding-rag/02-04-SUMMARY.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_02_core_agente_onboarding_rag_02_04_summary",
+      "community": 9,
+      "norm_label": "02-04 summary \u2014 calculos nutricionais"
+    },
+    {
+      "label": "Fase 02 Human UAT",
+      "file_type": "document",
+      "source_file": "phases/02-core-agente-onboarding-rag/02-HUMAN-UAT.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_02_core_agente_onboarding_rag_02_human_uat",
+      "community": 9,
+      "norm_label": "fase 02 human uat"
+    },
+    {
+      "label": "Fase 02 Review Fix",
+      "file_type": "document",
+      "source_file": "phases/02-core-agente-onboarding-rag/02-REVIEW-FIX.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_02_core_agente_onboarding_rag_02_review_fix",
+      "community": 15,
+      "norm_label": "fase 02 review fix"
+    },
+    {
+      "label": "Fase 02 Review",
+      "file_type": "document",
+      "source_file": "phases/02-core-agente-onboarding-rag/02-REVIEW.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_02_core_agente_onboarding_rag_02_review",
+      "community": 15,
+      "norm_label": "fase 02 review"
+    },
+    {
+      "label": "Fase 02 Verification",
+      "file_type": "document",
+      "source_file": "phases/02-core-agente-onboarding-rag/02-VERIFICATION.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_02_core_agente_onboarding_rag_02_verification",
+      "community": 9,
+      "norm_label": "fase 02 verification"
+    },
+    {
+      "label": "Fase 03-01 PLAN \u2014 registro refeicoes texto",
+      "file_type": "document",
+      "source_file": "phases/03-registro-refeicoes-multimodal/03-01-PLAN.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_03_registro_refeicoes_multimodal_03_01_plan",
+      "community": 8,
+      "norm_label": "fase 03-01 plan \u2014 registro refeicoes texto"
+    },
+    {
+      "label": "Fase 03-01 Summary",
+      "file_type": "document",
+      "source_file": "phases/03-registro-refeicoes-multimodal/03-01-SUMMARY.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_03_registro_refeicoes_multimodal_03_01_summary",
+      "community": 8,
+      "norm_label": "fase 03-01 summary"
+    },
+    {
+      "label": "Fase 03-02 PLAN \u2014 registro por audio (Whisper)",
+      "file_type": "document",
+      "source_file": "phases/03-registro-refeicoes-multimodal/03-02-PLAN.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_03_registro_refeicoes_multimodal_03_02_plan",
+      "community": 8,
+      "norm_label": "fase 03-02 plan \u2014 registro por audio (whisper)"
+    },
+    {
+      "label": "Fase 03-02 Summary",
+      "file_type": "document",
+      "source_file": "phases/03-registro-refeicoes-multimodal/03-02-SUMMARY.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_03_registro_refeicoes_multimodal_03_02_summary",
+      "community": 8,
+      "norm_label": "fase 03-02 summary"
+    },
+    {
+      "label": "Fase 03-03 PLAN \u2014 registro por imagem/Vision",
+      "file_type": "document",
+      "source_file": "phases/03-registro-refeicoes-multimodal/03-03-PLAN.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_03_registro_refeicoes_multimodal_03_03_plan",
+      "community": 8,
+      "norm_label": "fase 03-03 plan \u2014 registro por imagem/vision"
+    },
+    {
+      "label": "Fase 03-03 Summary",
+      "file_type": "document",
+      "source_file": "phases/03-registro-refeicoes-multimodal/03-03-SUMMARY.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_03_registro_refeicoes_multimodal_03_03_summary",
+      "community": 8,
+      "norm_label": "fase 03-03 summary"
+    },
+    {
+      "label": "Fase 03-04 PLAN \u2014 refinamentos multimodal",
+      "file_type": "document",
+      "source_file": "phases/03-registro-refeicoes-multimodal/03-04-PLAN.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_03_registro_refeicoes_multimodal_03_04_plan",
+      "community": 13,
+      "norm_label": "fase 03-04 plan \u2014 refinamentos multimodal"
+    },
+    {
+      "label": "Fase 03-04 Summary",
+      "file_type": "document",
+      "source_file": "phases/03-registro-refeicoes-multimodal/03-04-SUMMARY.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_03_registro_refeicoes_multimodal_03_04_summary",
+      "community": 13,
+      "norm_label": "fase 03-04 summary"
+    },
+    {
+      "label": "Fase 03 Context",
+      "file_type": "document",
+      "source_file": "phases/03-registro-refeicoes-multimodal/03-CONTEXT.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_03_registro_refeicoes_multimodal_03_context",
+      "community": 8,
+      "norm_label": "fase 03 context"
+    },
+    {
+      "label": "Fase 03 Discussion Log",
+      "file_type": "document",
+      "source_file": "phases/03-registro-refeicoes-multimodal/03-DISCUSSION-LOG.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_03_registro_refeicoes_multimodal_03_discussion_log",
+      "community": 13,
+      "norm_label": "fase 03 discussion log"
+    },
+    {
+      "label": "Fase 03 Research",
+      "file_type": "document",
+      "source_file": "phases/03-registro-refeicoes-multimodal/03-RESEARCH.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_03_registro_refeicoes_multimodal_03_research",
+      "community": 8,
+      "norm_label": "fase 03 research"
+    },
+    {
+      "label": "Fase 04-01 PLAN \u2014 alertas de expiracao",
+      "file_type": "document",
+      "source_file": "phases/04-alertas-expiracao-relatorio-semanal/04-01-PLAN.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_04_alertas_expiracao_relatorio_semanal_04_01_plan",
+      "community": 10,
+      "norm_label": "fase 04-01 plan \u2014 alertas de expiracao"
+    },
+    {
+      "label": "Fase 04-01 Summary",
+      "file_type": "document",
+      "source_file": "phases/04-alertas-expiracao-relatorio-semanal/04-01-SUMMARY.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_04_alertas_expiracao_relatorio_semanal_04_01_summary",
+      "community": 10,
+      "norm_label": "fase 04-01 summary"
+    },
+    {
+      "label": "Fase 04-02 PLAN \u2014 relatorio semanal",
+      "file_type": "document",
+      "source_file": "phases/04-alertas-expiracao-relatorio-semanal/04-02-PLAN.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_04_alertas_expiracao_relatorio_semanal_04_02_plan",
+      "community": 10,
+      "norm_label": "fase 04-02 plan \u2014 relatorio semanal"
+    },
+    {
+      "label": "Fase 04-02 Summary",
+      "file_type": "document",
+      "source_file": "phases/04-alertas-expiracao-relatorio-semanal/04-02-SUMMARY.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_04_alertas_expiracao_relatorio_semanal_04_02_summary",
+      "community": 10,
+      "norm_label": "fase 04-02 summary"
+    },
+    {
+      "label": "Fase 04-03 PLAN",
+      "file_type": "document",
+      "source_file": "phases/04-alertas-expiracao-relatorio-semanal/04-03-PLAN.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_04_alertas_expiracao_relatorio_semanal_04_03_plan",
+      "community": 10,
+      "norm_label": "fase 04-03 plan"
+    },
+    {
+      "label": "backend/src/services/calculos.ts",
+      "file_type": "code",
+      "source_file": "phases/02-core-agente-onboarding-rag/02-04-PLAN.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_02_core_agente_onboarding_rag_02_04_plan_backend_calculos_ts",
+      "community": 12,
+      "norm_label": "backend/src/services/calculos.ts"
+    },
+    {
+      "label": "backend/src/services/agent.ts",
+      "file_type": "code",
+      "source_file": "phases/02-core-agente-onboarding-rag/02-04-PLAN.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_02_core_agente_onboarding_rag_02_04_plan_backend_agent_ts",
+      "community": 12,
+      "norm_label": "backend/src/services/agent.ts"
+    },
+    {
+      "label": "Plan 04-03 Summary: Relatorio Semanal + Registro de Agua",
+      "file_type": "document",
+      "source_file": "phases/04-alertas-expiracao-relatorio-semanal/04-03-SUMMARY.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_04_alertas_expiracao_relatorio_semanal_04_03_summary",
+      "community": 3,
+      "norm_label": "plan 04-03 summary: relatorio semanal + registro de agua"
+    },
+    {
+      "label": "RPC registrar_agua_diaria",
+      "file_type": "concept",
+      "source_file": "phases/04-alertas-expiracao-relatorio-semanal/04-03-SUMMARY.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_04_alertas_expiracao_relatorio_semanal_04_03_summary_rpc_registrar_agua_diaria",
+      "community": 3,
+      "norm_label": "rpc registrar_agua_diaria"
+    },
+    {
+      "label": "gerarRelatorioSemanal service",
+      "file_type": "concept",
+      "source_file": "phases/04-alertas-expiracao-relatorio-semanal/04-03-SUMMARY.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_04_alertas_expiracao_relatorio_semanal_04_03_summary_gerar_relatorio_semanal",
+      "community": 3,
+      "norm_label": "gerarrelatoriosemanal service"
+    },
+    {
+      "label": "Cron N8N Domingo 08h Relatorio Semanal",
+      "file_type": "concept",
+      "source_file": "phases/04-alertas-expiracao-relatorio-semanal/04-03-SUMMARY.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_04_alertas_expiracao_relatorio_semanal_04_03_summary_cron_relatorio_semanal",
+      "community": 3,
+      "norm_label": "cron n8n domingo 08h relatorio semanal"
+    },
+    {
+      "label": "AGUA_RE regex detection",
+      "file_type": "concept",
+      "source_file": "phases/04-alertas-expiracao-relatorio-semanal/04-03-SUMMARY.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_04_alertas_expiracao_relatorio_semanal_04_03_summary_agua_re_detection",
+      "community": 3,
+      "norm_label": "agua_re regex detection"
+    },
+    {
+      "label": "Phase 4 Research",
+      "file_type": "document",
+      "source_file": "phases/04-alertas-expiracao-relatorio-semanal/04-RESEARCH.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_04_alertas_expiracao_relatorio_semanal_04_research",
+      "community": 3,
+      "norm_label": "phase 4 research"
+    },
+    {
+      "label": "AGENT-17 Alertas agendados",
+      "file_type": "concept",
+      "source_file": "phases/04-alertas-expiracao-relatorio-semanal/04-RESEARCH.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_04_alertas_expiracao_relatorio_semanal_04_research_agent_17",
+      "community": 3,
+      "norm_label": "agent-17 alertas agendados"
+    },
+    {
+      "label": "AGENT-18 Aviso 3 dias antes expiracao",
+      "file_type": "concept",
+      "source_file": "phases/04-alertas-expiracao-relatorio-semanal/04-RESEARCH.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_04_alertas_expiracao_relatorio_semanal_04_research_agent_18",
+      "community": 3,
+      "norm_label": "agent-18 aviso 3 dias antes expiracao"
+    },
+    {
+      "label": "AGENT-19 Bloqueio no vencimento",
+      "file_type": "concept",
+      "source_file": "phases/04-alertas-expiracao-relatorio-semanal/04-RESEARCH.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_04_alertas_expiracao_relatorio_semanal_04_research_agent_19",
+      "community": 3,
+      "norm_label": "agent-19 bloqueio no vencimento"
+    },
+    {
+      "label": "AGENT-20 Relatorio semanal",
+      "file_type": "concept",
+      "source_file": "phases/04-alertas-expiracao-relatorio-semanal/04-RESEARCH.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_04_alertas_expiracao_relatorio_semanal_04_research_agent_20",
+      "community": 3,
+      "norm_label": "agent-20 relatorio semanal"
+    },
+    {
+      "label": "Inconsistencia x-internal-token vs x-internal-key",
+      "file_type": "rationale",
+      "source_file": "phases/04-alertas-expiracao-relatorio-semanal/04-RESEARCH.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_04_alertas_expiracao_relatorio_semanal_04_research_internal_key_inconsistency",
+      "community": 3,
+      "norm_label": "inconsistencia x-internal-token vs x-internal-key"
+    },
+    {
+      "label": "Plan 05-01: Scaffold Painel + Auth",
+      "file_type": "document",
+      "source_file": "phases/05-painel-do-nutricionista/05-01-PLAN.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_05_painel_do_nutricionista_05_01_plan",
+      "community": 0,
+      "norm_label": "plan 05-01: scaffold painel + auth"
+    },
+    {
+      "label": "Summary 05-01: Scaffold nutrichat-painel + Auth Supabase",
+      "file_type": "document",
+      "source_file": "phases/05-painel-do-nutricionista/05-01-SUMMARY.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_05_painel_do_nutricionista_05_01_summary",
+      "community": 0,
+      "norm_label": "summary 05-01: scaffold nutrichat-painel + auth supabase"
+    },
+    {
+      "label": "Plan 05-02: Backend /api/pacientes",
+      "file_type": "document",
+      "source_file": "phases/05-painel-do-nutricionista/05-02-PLAN.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_05_painel_do_nutricionista_05_02_plan",
+      "community": 0,
+      "norm_label": "plan 05-02: backend /api/pacientes"
+    },
+    {
+      "label": "Summary 05-02: /api/pacientes + PANEL_API_KEY",
+      "file_type": "document",
+      "source_file": "phases/05-painel-do-nutricionista/05-02-SUMMARY.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_05_painel_do_nutricionista_05_02_summary",
+      "community": 0,
+      "norm_label": "summary 05-02: /api/pacientes + panel_api_key"
+    },
+    {
+      "label": "Plan 05-03: Dashboard UI + Dockerfile",
+      "file_type": "document",
+      "source_file": "phases/05-painel-do-nutricionista/05-03-PLAN.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_05_painel_do_nutricionista_05_03_plan",
+      "community": 14,
+      "norm_label": "plan 05-03: dashboard ui + dockerfile"
+    },
+    {
+      "label": "Summary 05-03: Dashboard UI + Caddy",
+      "file_type": "document",
+      "source_file": "phases/05-painel-do-nutricionista/05-03-SUMMARY.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_05_painel_do_nutricionista_05_03_summary",
+      "community": 14,
+      "norm_label": "summary 05-03: dashboard ui + caddy"
+    },
+    {
+      "label": "Phase 5 Context: Painel do Nutricionista",
+      "file_type": "document",
+      "source_file": "phases/05-painel-do-nutricionista/05-CONTEXT.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_05_painel_do_nutricionista_05_context",
+      "community": 0,
+      "norm_label": "phase 5 context: painel do nutricionista"
+    },
+    {
+      "label": "D-01 React Vite separado (Railway)",
+      "file_type": "rationale",
+      "source_file": "phases/05-painel-do-nutricionista/05-CONTEXT.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_05_painel_do_nutricionista_05_context_react_vite_separated",
+      "community": 0,
+      "norm_label": "d-01 react vite separado (railway)"
+    },
+    {
+      "label": "D-10 Supabase Auth SDK client-side",
+      "file_type": "rationale",
+      "source_file": "phases/05-painel-do-nutricionista/05-CONTEXT.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_05_painel_do_nutricionista_05_context_supabase_auth_client",
+      "community": 0,
+      "norm_label": "d-10 supabase auth sdk client-side"
+    },
+    {
+      "label": "D-12 X-API-Key PANEL_API_KEY",
+      "file_type": "rationale",
+      "source_file": "phases/05-painel-do-nutricionista/05-CONTEXT.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_05_painel_do_nutricionista_05_context_panel_api_key",
+      "community": 0,
+      "norm_label": "d-12 x-api-key panel_api_key"
+    },
+    {
+      "label": "D-07 D-08 Backend multipart + RAG fire-and-forget",
+      "file_type": "rationale",
+      "source_file": "phases/05-painel-do-nutricionista/05-CONTEXT.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_05_painel_do_nutricionista_05_context_multipart_backend_flow",
+      "community": 0,
+      "norm_label": "d-07 d-08 backend multipart + rag fire-and-forget"
+    },
+    {
+      "label": "Phase 5 Discussion Log",
+      "file_type": "document",
+      "source_file": "phases/05-painel-do-nutricionista/05-DISCUSSION-LOG.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_05_painel_do_nutricionista_05_discussion_log",
+      "community": 0,
+      "norm_label": "phase 5 discussion log"
+    },
+    {
+      "label": "Phase 5 Pattern Map",
+      "file_type": "document",
+      "source_file": "phases/05-painel-do-nutricionista/05-PATTERNS.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_05_painel_do_nutricionista_05_patterns",
+      "community": 0,
+      "norm_label": "phase 5 pattern map"
+    },
+    {
+      "label": "Phase 5 Research",
+      "file_type": "document",
+      "source_file": "phases/05-painel-do-nutricionista/05-RESEARCH.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_05_painel_do_nutricionista_05_research",
+      "community": 0,
+      "norm_label": "phase 5 research"
+    },
+    {
+      "label": "Phase 5 Validation Strategy",
+      "file_type": "document",
+      "source_file": "phases/05-painel-do-nutricionista/05-VALIDATION.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_05_painel_do_nutricionista_05_validation",
+      "community": 0,
+      "norm_label": "phase 5 validation strategy"
+    },
+    {
+      "label": "backend/src/routes/pacientes.ts (Router)",
+      "file_type": "concept",
+      "source_file": "phases/05-painel-do-nutricionista/05-CONTEXT.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_05_painel_do_nutricionista_05_context_pacientes_router",
+      "community": 0,
+      "norm_label": "backend/src/routes/pacientes.ts (router)"
+    },
+    {
+      "label": "Dashboard SPA UI (StatusBadge + PacienteModal)",
+      "file_type": "concept",
+      "source_file": "phases/05-painel-do-nutricionista/05-CONTEXT.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_05_painel_do_nutricionista_05_context_dashboard_ui",
+      "community": 14,
+      "norm_label": "dashboard spa ui (statusbadge + pacientemodal)"
+    },
+    {
+      "label": "Plan 06-01: Landing Setup + Hero 3D",
+      "file_type": "document",
+      "source_file": "phases/06-landing-page/06-01-PLAN.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_06_landing_page_06_01_plan",
+      "community": 5,
+      "norm_label": "plan 06-01: landing setup + hero 3d"
+    },
+    {
+      "label": "Summary 06-01",
+      "file_type": "document",
+      "source_file": "phases/06-landing-page/06-01-SUMMARY.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_06_landing_page_06_01_summary",
+      "community": 5,
+      "norm_label": "summary 06-01"
+    },
+    {
+      "label": "Plan 06-02",
+      "file_type": "document",
+      "source_file": "phases/06-landing-page/06-02-PLAN.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_06_landing_page_06_02_plan",
+      "community": 16,
+      "norm_label": "plan 06-02"
+    },
+    {
+      "label": "Plan 06-03",
+      "file_type": "document",
+      "source_file": "phases/06-landing-page/06-03-PLAN.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_06_landing_page_06_03_plan",
+      "community": 17,
+      "norm_label": "plan 06-03"
+    },
+    {
+      "label": "Phase 6 Context: Landing Page",
+      "file_type": "document",
+      "source_file": "phases/06-landing-page/06-CONTEXT.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_06_landing_page_06_context",
+      "community": 5,
+      "norm_label": "phase 6 context: landing page"
+    },
+    {
+      "label": "D-03 react-three-fiber Hero 3D",
+      "file_type": "rationale",
+      "source_file": "phases/06-landing-page/06-CONTEXT.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_06_landing_page_06_context_react_three_fiber",
+      "community": 5,
+      "norm_label": "d-03 react-three-fiber hero 3d"
+    },
+    {
+      "label": "D-07 Framer Motion scroll-reveal",
+      "file_type": "rationale",
+      "source_file": "phases/06-landing-page/06-CONTEXT.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_06_landing_page_06_context_framer_motion",
+      "community": 5,
+      "norm_label": "d-07 framer motion scroll-reveal"
+    },
+    {
+      "label": "D-09/D-10/D-11 Planos + CTA WhatsApp",
+      "file_type": "rationale",
+      "source_file": "phases/06-landing-page/06-CONTEXT.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_06_landing_page_06_context_planos_cta_whatsapp",
+      "community": 5,
+      "norm_label": "d-09/d-10/d-11 planos + cta whatsapp"
+    },
+    {
+      "label": "D-12/D-13 Mobile fallback imagem estatica",
+      "file_type": "rationale",
+      "source_file": "phases/06-landing-page/06-CONTEXT.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_06_landing_page_06_context_mobile_fallback",
+      "community": 5,
+      "norm_label": "d-12/d-13 mobile fallback imagem estatica"
+    },
+    {
+      "label": "D-01 Next.js + Vercel Deploy",
+      "file_type": "rationale",
+      "source_file": "phases/06-landing-page/06-CONTEXT.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_06_landing_page_06_context_nextjs_vercel",
+      "community": 0,
+      "norm_label": "d-01 next.js + vercel deploy"
+    },
+    {
+      "label": "Phase 6 Discussion Log",
+      "file_type": "document",
+      "source_file": "phases/06-landing-page/06-DISCUSSION-LOG.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_06_landing_page_06_discussion_log",
+      "community": 5,
+      "norm_label": "phase 6 discussion log"
+    },
+    {
+      "label": "Phase 6 Pattern Map",
+      "file_type": "document",
+      "source_file": "phases/06-landing-page/06-PATTERNS.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_06_landing_page_06_patterns",
+      "community": 5,
+      "norm_label": "phase 6 pattern map"
+    },
+    {
+      "label": "Phase 6 Research",
+      "file_type": "document",
+      "source_file": "phases/06-landing-page/06-RESEARCH.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_06_landing_page_06_research",
+      "community": 5,
+      "norm_label": "phase 6 research"
+    },
+    {
+      "label": "Phase 6 UI Design Contract",
+      "file_type": "document",
+      "source_file": "phases/06-landing-page/06-UI-SPEC.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_06_landing_page_06_ui_spec",
+      "community": 0,
+      "norm_label": "phase 6 ui design contract"
+    },
+    {
+      "label": "Inter font choice (UI Spec)",
+      "file_type": "rationale",
+      "source_file": "phases/06-landing-page/06-UI-SPEC.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_06_landing_page_06_ui_spec_inter_font",
+      "community": 0,
+      "norm_label": "inter font choice (ui spec)"
+    },
+    {
+      "label": "Paleta NutriChat (verde floresta / off-white / terra)",
+      "file_type": "concept",
+      "source_file": "phases/05-painel-do-nutricionista/05-CONTEXT.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_shared_paleta_nutrichat",
+      "community": 0,
+      "norm_label": "paleta nutrichat (verde floresta / off-white / terra)"
+    },
+    {
+      "label": "Tailwind v4 stack",
+      "file_type": "concept",
+      "source_file": "phases/05-painel-do-nutricionista/05-CONTEXT.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "phases_shared_tailwind_v4",
+      "community": 0,
+      "norm_label": "tailwind v4 stack"
+    }
+  ],
+  "links": [
+    {
+      "relationship": "superseded by",
+      "confidence_score": 0.95,
+      "extraction_type": "INFERRED",
+      "source_file": "",
+      "source": "continue_here",
+      "target": "next_session"
+    },
+    {
+      "relationship": "documents fix of",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "next_session",
+      "target": "bug_p0_2b"
+    },
+    {
+      "relationship": "documents delivery of",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "next_session",
+      "target": "concept_streaks"
+    },
+    {
+      "relationship": "provides fix plan for",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "p1_6_plano",
+      "target": "bug_p1_6"
+    },
+    {
+      "relationship": "extends with time extraction",
+      "confidence_score": 0.95,
+      "extraction_type": "INFERRED",
+      "source_file": "",
+      "source": "p1_6_plano",
+      "target": "concept_rag_pipeline"
+    },
+    {
+      "relationship": "modifies step 14 of",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "p1_6_plano",
+      "target": "concept_seven_step_interview"
+    },
+    {
+      "relationship": "declares stack",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "project",
+      "target": "concept_claude_ai"
+    },
+    {
+      "relationship": "declares stack",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "project",
+      "target": "concept_evolution_api"
+    },
+    {
+      "relationship": "declares stack",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "project",
+      "target": "concept_n8n"
+    },
+    {
+      "relationship": "describes",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "project",
+      "target": "concept_nutrichat"
+    },
+    {
+      "relationship": "declares stack",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "project",
+      "target": "concept_supabase"
+    },
+    {
+      "relationship": "catalogs",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "refinamento_agente",
+      "target": "bug_p0_1"
+    },
+    {
+      "relationship": "catalogs",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "refinamento_agente",
+      "target": "bug_p0_2"
+    },
+    {
+      "relationship": "catalogs",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "refinamento_agente",
+      "target": "bug_p0_2b"
+    },
+    {
+      "relationship": "catalogs",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "refinamento_agente",
+      "target": "bug_p1_3"
+    },
+    {
+      "relationship": "catalogs",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "refinamento_agente",
+      "target": "bug_p1_4"
+    },
+    {
+      "relationship": "catalogs",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "refinamento_agente",
+      "target": "bug_p1_5"
+    },
+    {
+      "relationship": "catalogs",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "refinamento_agente",
+      "target": "bug_p1_6"
+    },
+    {
+      "relationship": "catalogs",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "refinamento_agente",
+      "target": "bug_p2_7"
+    },
+    {
+      "relationship": "catalogs",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "refinamento_agente",
+      "target": "bug_p2_8"
+    },
+    {
+      "relationship": "catalogs",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "refinamento_agente",
+      "target": "bug_p2_9"
+    },
+    {
+      "relationship": "catalogs",
+      "confidence_score": 0.85,
+      "extraction_type": "INFERRED",
+      "source_file": "",
+      "source": "refinamento_agente",
+      "target": "sec_1"
+    },
+    {
+      "relationship": "catalogs",
+      "confidence_score": 0.85,
+      "extraction_type": "INFERRED",
+      "source_file": "",
+      "source": "refinamento_agente",
+      "target": "sec_2"
+    },
+    {
+      "relationship": "catalogs",
+      "confidence_score": 0.85,
+      "extraction_type": "INFERRED",
+      "source_file": "",
+      "source": "refinamento_agente",
+      "target": "sec_3"
+    },
+    {
+      "relationship": "assigns INFRA requirements to",
+      "confidence_score": 0.95,
+      "extraction_type": "INFERRED",
+      "source_file": "",
+      "source": "requirements",
+      "target": "phase_01"
+    },
+    {
+      "relationship": "assigns AGENT requirements to",
+      "confidence_score": 0.95,
+      "extraction_type": "INFERRED",
+      "source_file": "",
+      "source": "requirements",
+      "target": "phase_02"
+    },
+    {
+      "relationship": "maps requirements to phases via",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "requirements",
+      "target": "roadmap"
+    },
+    {
+      "relationship": "defines phases for",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "roadmap",
+      "target": "concept_milestone_v1"
+    },
+    {
+      "relationship": "sequences",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "roadmap",
+      "target": "phase_01"
+    },
+    {
+      "relationship": "sequences",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "roadmap",
+      "target": "phase_02"
+    },
+    {
+      "relationship": "sequences",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "roadmap",
+      "target": "phase_06"
+    },
+    {
+      "relationship": "tracks progress of",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "state",
+      "target": "concept_milestone_v1"
+    },
+    {
+      "relationship": "currently executing",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "state",
+      "target": "phase_06"
+    },
+    {
+      "relationship": "contains plan",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "phase_01",
+      "target": "phases_01_01_plan"
+    },
+    {
+      "relationship": "enables extension",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "phases_01_01_plan",
+      "target": "concept_pgvector"
+    },
+    {
+      "relationship": "creates table",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "phases_01_01_plan",
+      "target": "concept_registros_diarios"
+    },
+    {
+      "relationship": "provisions schema in",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "phases_01_01_plan",
+      "target": "concept_supabase"
+    },
+    {
+      "relationship": "executed to produce",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "phases_01_01_plan",
+      "target": "phases_01_01_summary"
+    },
+    {
+      "relationship": "contains plan",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "phase_01",
+      "target": "phases_01_02_plan"
+    },
+    {
+      "relationship": "scaffolds",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "phases_01_02_plan",
+      "target": "concept_backend"
+    },
+    {
+      "relationship": "sets up",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "phases_01_02_plan",
+      "target": "concept_docker_compose"
+    },
+    {
+      "relationship": "prepares deploy target",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "phases_01_02_plan",
+      "target": "concept_railway"
+    },
+    {
+      "relationship": "executed to produce",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "phases_01_02_plan",
+      "target": "phases_01_02_summary"
+    },
+    {
+      "relationship": "contains plan",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "phase_01",
+      "target": "phases_01_03_plan"
+    },
+    {
+      "relationship": "provisions",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "phases_01_03_plan",
+      "target": "concept_evolution_api"
+    },
+    {
+      "relationship": "provisions",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "phases_01_03_plan",
+      "target": "concept_n8n"
+    },
+    {
+      "relationship": "executed to produce",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "phases_01_03_plan",
+      "target": "phases_01_03_summary"
+    },
+    {
+      "relationship": "documents decisions in",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "phase_01",
+      "target": "phases_01_context"
+    },
+    {
+      "relationship": "documents",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "phases_01_context",
+      "target": "decision_d_01"
+    },
+    {
+      "relationship": "documents",
+      "confidence_score": 0.85,
+      "extraction_type": "INFERRED",
+      "source_file": "",
+      "source": "phases_01_context",
+      "target": "decision_d_02"
+    },
+    {
+      "relationship": "documents",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "phases_01_context",
+      "target": "decision_d_03"
+    },
+    {
+      "relationship": "documents",
+      "confidence_score": 0.85,
+      "extraction_type": "INFERRED",
+      "source_file": "",
+      "source": "phases_01_context",
+      "target": "decision_d_11"
+    },
+    {
+      "relationship": "records alternatives in",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "phase_01",
+      "target": "phases_01_discussion_log"
+    },
+    {
+      "relationship": "contains plan",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "phase_02",
+      "target": "phases_02_01_plan"
+    },
+    {
+      "relationship": "consumes events from",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "phases_02_01_plan",
+      "target": "concept_evolution_api"
+    },
+    {
+      "relationship": "implements pattern",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "phases_02_01_plan",
+      "target": "concept_fire_forget_webhook"
+    },
+    {
+      "relationship": "executed to produce",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "phases_02_01_plan",
+      "target": "phases_02_01_summary"
+    },
+    {
+      "relationship": "contains plan",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "phase_02",
+      "target": "phases_02_02_plan"
+    },
+    {
+      "relationship": "processarDieta races with boas-vindas causing",
+      "confidence_score": 0.95,
+      "extraction_type": "INFERRED",
+      "source_file": "",
+      "source": "phases_02_02_plan",
+      "target": "bug_p2_8"
+    },
+    {
+      "relationship": "uses embedder",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "phases_02_02_plan",
+      "target": "concept_openai_embeddings"
+    },
+    {
+      "relationship": "stores embeddings in",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "phases_02_02_plan",
+      "target": "concept_pgvector"
+    },
+    {
+      "relationship": "implements",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "phases_02_02_plan",
+      "target": "concept_rag_pipeline"
+    },
+    {
+      "relationship": "executed to produce",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "phases_02_02_plan",
+      "target": "phases_02_02_summary"
+    },
+    {
+      "relationship": "contains plan",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "phase_02",
+      "target": "phases_02_03_plan"
+    },
+    {
+      "relationship": "invokes for reasoning",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "phases_02_03_plan",
+      "target": "concept_claude_ai"
+    },
+    {
+      "relationship": "implements",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "phases_02_03_plan",
+      "target": "concept_seven_step_interview"
+    },
+    {
+      "relationship": "executed to produce",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "phases_02_03_plan",
+      "target": "phases_02_03_summary"
+    },
+    {
+      "relationship": "planned integration for",
+      "confidence_score": 0.85,
+      "extraction_type": "INFERRED",
+      "source_file": "",
+      "source": "concept_groq_whisper",
+      "target": "concept_nutrichat"
+    },
+    {
+      "relationship": "reasons with",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "concept_nutrichat",
+      "target": "concept_claude_ai"
+    },
+    {
+      "relationship": "reaches users via",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "concept_nutrichat",
+      "target": "concept_evolution_api"
+    },
+    {
+      "relationship": "retrieves context via",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "concept_nutrichat",
+      "target": "concept_rag_pipeline"
+    },
+    {
+      "relationship": "hosts extension",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "concept_supabase",
+      "target": "concept_pgvector"
+    },
+    {
+      "relationship": "hosts table",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "concept_supabase",
+      "target": "concept_registros_diarios"
+    },
+    {
+      "relationship": "enforces",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "concept_supabase",
+      "target": "concept_rls"
+    },
+    {
+      "relationship": "chooses",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "decision_d_01",
+      "target": "concept_supabase"
+    },
+    {
+      "relationship": "chooses",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "decision_d_03",
+      "target": "concept_evolution_api"
+    },
+    {
+      "relationship": "verifies signatures from",
+      "confidence_score": 0.85,
+      "extraction_type": "INFERRED",
+      "source_file": "",
+      "source": "sec_3",
+      "target": "concept_evolution_api"
+    },
+    {
+      "relationship": "embeds via",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "concept_rag_pipeline",
+      "target": "concept_openai_embeddings"
+    },
+    {
+      "relationship": "backed by",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "concept_rag_pipeline",
+      "target": "concept_pgvector"
+    },
+    {
+      "relationship": "runs inside",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "concept_backend",
+      "target": "concept_docker_compose"
+    },
+    {
+      "relationship": "deploys to",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "concept_backend",
+      "target": "concept_railway"
+    },
+    {
+      "relationship": "chooses",
+      "confidence_score": 0.85,
+      "extraction_type": "INFERRED",
+      "source_file": "",
+      "source": "decision_d_11",
+      "target": "concept_docker_compose"
+    },
+    {
+      "relationship": "audits",
+      "confidence_score": 0.85,
+      "extraction_type": "INFERRED",
+      "source_file": "",
+      "source": "sec_2",
+      "target": "concept_rls"
+    },
+    {
+      "relationship": "affected by",
+      "confidence_score": 0.95,
+      "extraction_type": "INFERRED",
+      "source_file": "",
+      "source": "concept_registros_diarios",
+      "target": "bug_p0_1"
+    },
+    {
+      "relationship": "structures",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "concept_gsd_framework",
+      "target": "phase_01"
+    },
+    {
+      "relationship": "structures",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "concept_gsd_framework",
+      "target": "phase_02"
+    },
+    {
+      "relationship": "structures",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "concept_gsd_framework",
+      "target": "phase_06"
+    },
+    {
+      "relationship": "race is side effect of",
+      "confidence_score": 1.0,
+      "extraction_type": "EXTRACTED",
+      "source_file": "",
+      "source": "bug_p2_8",
+      "target": "concept_fire_forget_webhook"
+    },
+    {
+      "relationship": "step 6 impacted by",
+      "confidence_score": 0.85,
+      "extraction_type": "INFERRED",
+      "source_file": "",
+      "source": "concept_seven_step_interview",
+      "target": "bug_p1_4"
+    },
+    {
+      "relationship": "root cause tracked as",
+      "confidence_score": 0.95,
+      "extraction_type": "INFERRED",
+      "source_file": "",
+      "source": "bug_p0_1",
+      "target": "bug_p2_7"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/02-core-agente-onboarding-rag/02-04-PLAN.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_02_core_agente_onboarding_rag_02_04_plan_calculos_nutricionais",
+      "target": "phases_02_core_agente_onboarding_rag_02_04_plan_calcular_creatina"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/02-core-agente-onboarding-rag/02-04-PLAN.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_02_core_agente_onboarding_rag_02_04_plan_calculos_nutricionais",
+      "target": "phases_02_core_agente_onboarding_rag_02_04_plan_calcular_hidratacao"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/02-core-agente-onboarding-rag/02-04-PLAN.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_02_core_agente_onboarding_rag_02_04_plan_calculos_nutricionais",
+      "target": "phases_02_core_agente_onboarding_rag_02_04_plan_mifflin_st_jeor"
+    },
+    {
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "phases/02-core-agente-onboarding-rag/02-04-SUMMARY.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_02_core_agente_onboarding_rag_02_04_summary",
+      "target": "phases_02_core_agente_onboarding_rag_02_04_plan_calculos_nutricionais"
+    },
+    {
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "phases/02-core-agente-onboarding-rag/02-VERIFICATION.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_02_core_agente_onboarding_rag_02_verification",
+      "target": "phases_02_core_agente_onboarding_rag_02_04_plan_calculos_nutricionais"
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/02-core-agente-onboarding-rag/02-04-PLAN.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_02_core_agente_onboarding_rag_02_04_plan_funcoes_puras_rationale",
+      "target": "phases_02_core_agente_onboarding_rag_02_04_plan_backend_calculos_ts"
+    },
+    {
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "phases/02-core-agente-onboarding-rag/02-HUMAN-UAT.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_02_core_agente_onboarding_rag_02_human_uat",
+      "target": "phases_02_core_agente_onboarding_rag_02_verification"
+    },
+    {
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "phases/02-core-agente-onboarding-rag/02-REVIEW-FIX.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_02_core_agente_onboarding_rag_02_review_fix",
+      "target": "phases_02_core_agente_onboarding_rag_02_review"
+    },
+    {
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "phases/03-registro-refeicoes-multimodal/03-01-PLAN.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_03_registro_refeicoes_multimodal_03_01_plan",
+      "target": "phases_03_registro_refeicoes_multimodal_03_context"
+    },
+    {
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "phases/03-registro-refeicoes-multimodal/03-01-SUMMARY.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_03_registro_refeicoes_multimodal_03_01_summary",
+      "target": "phases_03_registro_refeicoes_multimodal_03_01_plan"
+    },
+    {
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.75,
+      "source_file": "phases/03-registro-refeicoes-multimodal/03-02-PLAN.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_03_registro_refeicoes_multimodal_03_02_plan",
+      "target": "phases_03_registro_refeicoes_multimodal_03_03_plan"
+    },
+    {
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "phases/03-registro-refeicoes-multimodal/03-02-PLAN.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_03_registro_refeicoes_multimodal_03_02_plan",
+      "target": "phases_03_registro_refeicoes_multimodal_03_context"
+    },
+    {
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "phases/03-registro-refeicoes-multimodal/03-02-SUMMARY.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_03_registro_refeicoes_multimodal_03_02_summary",
+      "target": "phases_03_registro_refeicoes_multimodal_03_02_plan"
+    },
+    {
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.75,
+      "source_file": "phases/03-registro-refeicoes-multimodal/03-03-PLAN.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_03_registro_refeicoes_multimodal_03_03_plan",
+      "target": "phases_03_registro_refeicoes_multimodal_03_research"
+    },
+    {
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "phases/03-registro-refeicoes-multimodal/03-03-SUMMARY.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_03_registro_refeicoes_multimodal_03_03_summary",
+      "target": "phases_03_registro_refeicoes_multimodal_03_03_plan"
+    },
+    {
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.75,
+      "source_file": "phases/03-registro-refeicoes-multimodal/03-04-PLAN.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_03_registro_refeicoes_multimodal_03_04_plan",
+      "target": "phases_03_registro_refeicoes_multimodal_03_discussion_log"
+    },
+    {
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "phases/03-registro-refeicoes-multimodal/03-04-SUMMARY.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_03_registro_refeicoes_multimodal_03_04_summary",
+      "target": "phases_03_registro_refeicoes_multimodal_03_04_plan"
+    },
+    {
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "phases/04-alertas-expiracao-relatorio-semanal/04-01-SUMMARY.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_04_alertas_expiracao_relatorio_semanal_04_01_summary",
+      "target": "phases_04_alertas_expiracao_relatorio_semanal_04_01_plan"
+    },
+    {
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "phases/04-alertas-expiracao-relatorio-semanal/04-02-PLAN.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_04_alertas_expiracao_relatorio_semanal_04_02_plan",
+      "target": "phases_04_alertas_expiracao_relatorio_semanal_04_01_plan"
+    },
+    {
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "phases/04-alertas-expiracao-relatorio-semanal/04-02-SUMMARY.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_04_alertas_expiracao_relatorio_semanal_04_02_summary",
+      "target": "phases_04_alertas_expiracao_relatorio_semanal_04_02_plan"
+    },
+    {
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.75,
+      "source_file": "phases/04-alertas-expiracao-relatorio-semanal/04-03-PLAN.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_04_alertas_expiracao_relatorio_semanal_04_03_plan",
+      "target": "phases_04_alertas_expiracao_relatorio_semanal_04_02_plan"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/02-core-agente-onboarding-rag/02-04-PLAN.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_02_core_agente_onboarding_rag_02_04_plan_backend_agent_ts",
+      "target": "phases_02_core_agente_onboarding_rag_02_04_plan_backend_calculos_ts"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/04-alertas-expiracao-relatorio-semanal/04-03-SUMMARY.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_04_alertas_expiracao_relatorio_semanal_04_03_summary",
+      "target": "phases_04_alertas_expiracao_relatorio_semanal_04_03_summary_agua_re_detection"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/04-alertas-expiracao-relatorio-semanal/04-03-SUMMARY.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_04_alertas_expiracao_relatorio_semanal_04_03_summary",
+      "target": "phases_04_alertas_expiracao_relatorio_semanal_04_03_summary_cron_relatorio_semanal"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/04-alertas-expiracao-relatorio-semanal/04-03-SUMMARY.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_04_alertas_expiracao_relatorio_semanal_04_03_summary",
+      "target": "phases_04_alertas_expiracao_relatorio_semanal_04_03_summary_gerar_relatorio_semanal"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/04-alertas-expiracao-relatorio-semanal/04-03-SUMMARY.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_04_alertas_expiracao_relatorio_semanal_04_03_summary",
+      "target": "phases_04_alertas_expiracao_relatorio_semanal_04_03_summary_rpc_registrar_agua_diaria"
+    },
+    {
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "phases/04-alertas-expiracao-relatorio-semanal/04-03-SUMMARY.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_04_alertas_expiracao_relatorio_semanal_04_research_agent_20",
+      "target": "phases_04_alertas_expiracao_relatorio_semanal_04_03_summary_gerar_relatorio_semanal"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/04-alertas-expiracao-relatorio-semanal/04-RESEARCH.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_04_alertas_expiracao_relatorio_semanal_04_research",
+      "target": "phases_04_alertas_expiracao_relatorio_semanal_04_research_agent_17"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/04-alertas-expiracao-relatorio-semanal/04-RESEARCH.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_04_alertas_expiracao_relatorio_semanal_04_research",
+      "target": "phases_04_alertas_expiracao_relatorio_semanal_04_research_agent_18"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/04-alertas-expiracao-relatorio-semanal/04-RESEARCH.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_04_alertas_expiracao_relatorio_semanal_04_research",
+      "target": "phases_04_alertas_expiracao_relatorio_semanal_04_research_agent_19"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/04-alertas-expiracao-relatorio-semanal/04-RESEARCH.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_04_alertas_expiracao_relatorio_semanal_04_research",
+      "target": "phases_04_alertas_expiracao_relatorio_semanal_04_research_agent_20"
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/04-alertas-expiracao-relatorio-semanal/04-RESEARCH.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_04_alertas_expiracao_relatorio_semanal_04_research_internal_key_inconsistency",
+      "target": "phases_04_alertas_expiracao_relatorio_semanal_04_research"
+    },
+    {
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/05-painel-do-nutricionista/05-01-SUMMARY.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_05_painel_do_nutricionista_05_01_plan",
+      "target": "phases_05_painel_do_nutricionista_05_01_summary"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/05-painel-do-nutricionista/05-01-SUMMARY.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_05_painel_do_nutricionista_05_01_summary",
+      "target": "phases_shared_tailwind_v4"
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/05-painel-do-nutricionista/05-01-SUMMARY.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_05_painel_do_nutricionista_05_context_supabase_auth_client",
+      "target": "phases_05_painel_do_nutricionista_05_01_summary"
+    },
+    {
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/05-painel-do-nutricionista/05-02-SUMMARY.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_05_painel_do_nutricionista_05_02_plan",
+      "target": "phases_05_painel_do_nutricionista_05_02_summary"
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/05-painel-do-nutricionista/05-02-SUMMARY.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_05_painel_do_nutricionista_05_context_panel_api_key",
+      "target": "phases_05_painel_do_nutricionista_05_02_summary"
+    },
+    {
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/05-painel-do-nutricionista/05-03-SUMMARY.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_05_painel_do_nutricionista_05_03_plan",
+      "target": "phases_05_painel_do_nutricionista_05_03_summary"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/05-painel-do-nutricionista/05-03-SUMMARY.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_05_painel_do_nutricionista_05_03_summary",
+      "target": "phases_05_painel_do_nutricionista_05_context_dashboard_ui"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/05-painel-do-nutricionista/05-CONTEXT.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_05_painel_do_nutricionista_05_context",
+      "target": "phases_05_painel_do_nutricionista_05_context_multipart_backend_flow"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/05-painel-do-nutricionista/05-CONTEXT.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_05_painel_do_nutricionista_05_context",
+      "target": "phases_05_painel_do_nutricionista_05_context_panel_api_key"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/05-painel-do-nutricionista/05-CONTEXT.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_05_painel_do_nutricionista_05_context",
+      "target": "phases_05_painel_do_nutricionista_05_context_react_vite_separated"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/05-painel-do-nutricionista/05-CONTEXT.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_05_painel_do_nutricionista_05_context",
+      "target": "phases_05_painel_do_nutricionista_05_context_supabase_auth_client"
+    },
+    {
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/05-painel-do-nutricionista/05-DISCUSSION-LOG.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_05_painel_do_nutricionista_05_context",
+      "target": "phases_05_painel_do_nutricionista_05_discussion_log"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/05-painel-do-nutricionista/05-RESEARCH.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_05_painel_do_nutricionista_05_context",
+      "target": "phases_05_painel_do_nutricionista_05_research"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/05-painel-do-nutricionista/05-CONTEXT.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_05_painel_do_nutricionista_05_context",
+      "target": "phases_shared_paleta_nutrichat"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/05-painel-do-nutricionista/05-VALIDATION.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_05_painel_do_nutricionista_05_validation",
+      "target": "phases_05_painel_do_nutricionista_05_context"
+    },
+    {
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.75,
+      "source_file": "phases/06-landing-page/06-CONTEXT.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_06_landing_page_06_context_nextjs_vercel",
+      "target": "phases_05_painel_do_nutricionista_05_context_react_vite_separated"
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/05-painel-do-nutricionista/05-CONTEXT.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_05_painel_do_nutricionista_05_context_multipart_backend_flow",
+      "target": "phases_05_painel_do_nutricionista_05_context_pacientes_router"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/05-painel-do-nutricionista/05-PATTERNS.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_05_painel_do_nutricionista_05_patterns",
+      "target": "phases_05_painel_do_nutricionista_05_context_pacientes_router"
+    },
+    {
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/06-landing-page/06-01-SUMMARY.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_06_landing_page_06_01_plan",
+      "target": "phases_06_landing_page_06_01_summary"
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/06-landing-page/06-01-PLAN.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_06_landing_page_06_context_mobile_fallback",
+      "target": "phases_06_landing_page_06_01_plan"
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/06-landing-page/06-01-PLAN.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_06_landing_page_06_context_react_three_fiber",
+      "target": "phases_06_landing_page_06_01_plan"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/06-landing-page/06-CONTEXT.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_06_landing_page_06_context",
+      "target": "phases_06_landing_page_06_context_framer_motion"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/06-landing-page/06-CONTEXT.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_06_landing_page_06_context",
+      "target": "phases_06_landing_page_06_context_mobile_fallback"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/06-landing-page/06-CONTEXT.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_06_landing_page_06_context",
+      "target": "phases_06_landing_page_06_context_nextjs_vercel"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/06-landing-page/06-CONTEXT.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_06_landing_page_06_context",
+      "target": "phases_06_landing_page_06_context_planos_cta_whatsapp"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/06-landing-page/06-CONTEXT.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_06_landing_page_06_context",
+      "target": "phases_06_landing_page_06_context_react_three_fiber"
+    },
+    {
+      "relation": "conceptually_related_to",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/06-landing-page/06-DISCUSSION-LOG.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_06_landing_page_06_context",
+      "target": "phases_06_landing_page_06_discussion_log"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/06-landing-page/06-PATTERNS.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_06_landing_page_06_context",
+      "target": "phases_06_landing_page_06_patterns"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/06-landing-page/06-RESEARCH.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_06_landing_page_06_context",
+      "target": "phases_06_landing_page_06_research"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/06-landing-page/06-UI-SPEC.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_06_landing_page_06_ui_spec",
+      "target": "phases_06_landing_page_06_ui_spec_inter_font"
+    },
+    {
+      "relation": "references",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "phases/06-landing-page/06-UI-SPEC.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_06_landing_page_06_ui_spec",
+      "target": "phases_shared_paleta_nutrichat"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/06-landing-page/06-UI-SPEC.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "phases_06_landing_page_06_ui_spec",
+      "target": "phases_shared_tailwind_v4"
+    }
+  ],
+  "hyperedges": [
+    {
+      "nodes": [
+        "phases_01_01_plan",
+        "phases_01_02_plan",
+        "phases_01_03_plan",
+        "phases_01_context",
+        "phases_01_discussion_log"
+      ],
+      "shared_concept": "Phase 01 Infrastructure Bundle \u2014 all artifacts produced during Phase 01 execution covering schema, backend scaffold, Evolution and N8N provisioning."
+    },
+    {
+      "nodes": [
+        "phases_02_02_plan",
+        "concept_rag_pipeline",
+        "concept_pgvector",
+        "concept_openai_embeddings"
+      ],
+      "shared_concept": "RAG Pipeline Assembly \u2014 the plan, retrieval strategy, vector store and embedder that together let the agent answer diet questions grounded in the patient PDF."
+    },
+    {
+      "nodes": [
+        "bug_p0_1",
+        "bug_p2_7",
+        "bug_p2_8",
+        "concept_fire_forget_webhook"
+      ],
+      "shared_concept": "Concurrency Cluster \u2014 fire-and-forget webhook design surfaces idempotency (P2-7), double-count (P0-1) and race between welcome and diet processing (P2-8)."
+    },
+    {
+      "id": "phases_02_core_agente_onboarding_rag_02_04_calculos_group",
+      "label": "Trio de calculos nutricionais pos-entrevista",
+      "nodes": [
+        "phases_02_core_agente_onboarding_rag_02_04_plan_mifflin_st_jeor",
+        "phases_02_core_agente_onboarding_rag_02_04_plan_calcular_hidratacao",
+        "phases_02_core_agente_onboarding_rag_02_04_plan_calcular_creatina"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/02-core-agente-onboarding-rag/02-04-PLAN.md"
+    },
+    {
+      "id": "phases_03_registro_refeicoes_multimodal_03_multimodal_group",
+      "label": "Fase 03 multimodal: texto/audio/imagem/refinamentos",
+      "nodes": [
+        "phases_03_registro_refeicoes_multimodal_03_01_plan",
+        "phases_03_registro_refeicoes_multimodal_03_02_plan",
+        "phases_03_registro_refeicoes_multimodal_03_03_plan",
+        "phases_03_registro_refeicoes_multimodal_03_04_plan"
+      ],
+      "relation": "form",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "phases/03-registro-refeicoes-multimodal/03-CONTEXT.md"
+    },
+    {
+      "id": "phases_04_alertas_expiracao_relatorio_semanal_04_group",
+      "label": "Fase 04 alertas e relatorio semanal",
+      "nodes": [
+        "phases_04_alertas_expiracao_relatorio_semanal_04_01_plan",
+        "phases_04_alertas_expiracao_relatorio_semanal_04_02_plan",
+        "phases_04_alertas_expiracao_relatorio_semanal_04_03_plan"
+      ],
+      "relation": "form",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "phases/04-alertas-expiracao-relatorio-semanal/04-01-PLAN.md"
+    },
+    {
+      "id": "phase_4_wave3_relatorio_flow",
+      "label": "Wave 3 Relatorio Semanal flow (RPC + service + cron)",
+      "nodes": [
+        "phases_04_alertas_expiracao_relatorio_semanal_04_03_summary_rpc_registrar_agua_diaria",
+        "phases_04_alertas_expiracao_relatorio_semanal_04_03_summary_gerar_relatorio_semanal",
+        "phases_04_alertas_expiracao_relatorio_semanal_04_03_summary_cron_relatorio_semanal"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/04-alertas-expiracao-relatorio-semanal/04-03-SUMMARY.md"
+    },
+    {
+      "id": "phase_5_panel_stack_decisions",
+      "label": "Painel Stack (React+Vite / Auth Supabase / PANEL_API_KEY)",
+      "nodes": [
+        "phases_05_painel_do_nutricionista_05_context_react_vite_separated",
+        "phases_05_painel_do_nutricionista_05_context_supabase_auth_client",
+        "phases_05_painel_do_nutricionista_05_context_panel_api_key"
+      ],
+      "relation": "form",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/05-painel-do-nutricionista/05-CONTEXT.md"
+    },
+    {
+      "id": "phase_6_hero_3d_stack",
+      "label": "Landing Hero 3D + Motion + Mobile Fallback",
+      "nodes": [
+        "phases_06_landing_page_06_context_react_three_fiber",
+        "phases_06_landing_page_06_context_framer_motion",
+        "phases_06_landing_page_06_context_mobile_fallback"
+      ],
+      "relation": "implement",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "phases/06-landing-page/06-CONTEXT.md"
+    }
+  ],
+  "built_at_commit": "532dd7f9967442f95aa223ba83d75a50a042a4b2"
+}

@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Executando — 06-01 (scaffold landing) completo; 06-02 (seções de conteúdo) pendente
-stopped_at: context exhaustion at 95% (2026-07-08)
-last_updated: "2026-07-08T19:41:04.338Z"
-last_activity: "2026-04-29 — Fase 6 Plan 01 completo: scaffold nutrichat-landing + Tailwind v4 + PhoneCanvas 3D + Header + Hero"
+status: Fases 1-5 fechadas e arquivadas. Fase 6 em 1/3. Lembretes cron ativados 2026-07-09.
+stopped_at: auditoria + ativacao lembretes concluidas (2026-07-09)
+last_updated: "2026-07-09T22:05:00.000Z"
+last_activity: "2026-07-09 — Auditoria completa, arquivamento fases 1-5, workflow n8n cron-alertas importado e ativado"
 progress:
   total_phases: 7
   completed_phases: 5
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-22)
 
 **Core value:** O paciente abre o WhatsApp e o agente já sabe tudo sobre a dieta dele, sem precisar perguntar.
-**Current focus:** Phase 3 — Registro de Refeições Multimodal
+**Current focus:** Phase 6 — Landing Page (Plan 06-02: seções de conteúdo)
 
 ## Current Position
 
 Phase: 6 of 7 (Landing Page)
 Plan: 1 of 3 completo (06-01 scaffold + hero 3D)
-Status: Executando — 06-01 (scaffold landing) completo; 06-02 (seções de conteúdo) pendente
-Last activity: 2026-04-29 — Fase 6 Plan 01 completo: scaffold nutrichat-landing + Tailwind v4 + PhoneCanvas 3D + Header + Hero
+Status: Aguardando início do 06-02. Lembretes (Fase 4) ativados via cron n8n em 2026-07-09.
+Last activity: 2026-07-09 — Auditoria + arquivamento fases 1-5 + workflow n8n cron-alertas ativado
 
-Progress: [█░░░░░░░░░] 10%
+Progress: [█████████░] 90%
 
 ## Performance Metrics
 
@@ -97,6 +97,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-08T19:41:04.327Z
-Stopped at: context exhaustion at 95% (2026-07-08)
+Last session: 2026-07-09T03:52:37.798Z
+Stopped at: context exhaustion at 92% (2026-07-09)
 Resume file: None
