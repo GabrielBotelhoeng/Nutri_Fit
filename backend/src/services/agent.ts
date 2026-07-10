@@ -791,6 +791,16 @@ export async function processarMensagem(phone: string, texto: string): Promise<v
         `• _"qual e minha dieta?"_ — consulta ao PDF\n\n` +
         `Vamos la! 🚀`,
       );
+
+      // Nudge de ativação: um exemplo concreto pra reduzir tempo até o primeiro
+      // registro. Sem essa, é comum o paciente ficar sem saber o que digitar
+      // e cair em consulta ao PDF ("qual minha dieta?") no primeiro contato,
+      // atrasando a formação de hábito.
+      await sendText(
+        phone,
+        `👇 Bora testar agora?\n` +
+        `Manda algo simples, tipo: _"tomei 1 copo de café com leite e um pão com manteiga"_`,
+      );
     } else {
       // P1-6: quando avancamos para a etapa 14 e a dieta ja tem horarios
       // extraidos do PDF, mandamos confirmacao em vez da pergunta aberta.
@@ -834,6 +844,10 @@ export async function processarMensagem(phone: string, texto: string): Promise<v
   if (fotoAmbiguaPendente) {
     const expirada = Date.now() - new Date(fotoAmbiguaPendente.timestamp).getTime() > 10 * 60 * 1000;
     if (expirada) {
+      // Avisa o paciente antes de limpar — sem isso, resposta >10min depois
+      // (ex: "só eu" pra pergunta de pessoas) cai no fluxo normal e vira
+      // "não entendi", deixando o paciente confuso sobre o que aconteceu.
+      await sendText(phone, '⏰ Sua foto expirou da fila (>10min sem resposta). Manda de novo pra registrar.');
       await atualizarEstado(paciente.id, { dados: { foto_ambigua_pendente: null } as Parameters<typeof atualizarEstado>[1]['dados'] });
       // Nao retornar — cai no fluxo normal
     } else {
@@ -863,6 +877,9 @@ export async function processarMensagem(phone: string, texto: string): Promise<v
   if (confirmacaoPendente) {
     const confirmacaoExpirada = Date.now() - new Date(confirmacaoPendente.timestamp).getTime() > 10 * 60 * 1000;
     if (confirmacaoExpirada) {
+      // Mesmo motivo da foto_ambigua_pendente acima: sem aviso, "sim/pode
+      // registrar" >10min depois cai como registro novo, confundindo.
+      await sendText(phone, '⏰ A confirmação da foto expirou (>10min). Manda a foto de novo pra registrar.');
       await atualizarEstado(paciente.id, { dados: { confirmacao_pendente: null } as Parameters<typeof atualizarEstado>[1]['dados'] });
       // Não retornar — continuar para processar a mensagem normalmente
     } else {

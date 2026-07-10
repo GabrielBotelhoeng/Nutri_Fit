@@ -20,6 +20,74 @@ export const TTL_ULTIMA_REFEICAO_MIN = 60;
 // stack trace ("Error 429..."). Menciona o tempo pra sugerir retry consciente.
 const MSG_ERRO_HUMANA = '😅 Tá um pouco lento aqui do meu lado agora. Me manda de novo em uns 30s?';
 
+// Diferencia msg por causa. Se for overload/timeout (429/529/503/ETIMEDOUT/…),
+// pede espera maior — paciente que tenta em 5s so vai bater 429 de novo. Resto
+// (JSON invalido, parse falho) fica com msg curta (30s).
+export function mensagemErroHumana(err: unknown): string {
+  const e = err as { status?: number; response?: { status?: number }; code?: string };
+  const status = e?.status ?? e?.response?.status;
+  const code = e?.code;
+  const sobrecarga =
+    status === 429 ||
+    status === 529 ||
+    status === 503 ||
+    code === 'ETIMEDOUT' ||
+    code === 'ECONNRESET' ||
+    code === 'ECONNREFUSED';
+  if (sobrecarga) return '😅 Meu servidor tá cheio agora. Tenta em 1-2 minutos.';
+  return MSG_ERRO_HUMANA;
+}
+
+// Peso tipico de porcao individual (pt-BR) — usado como dica visual na
+// pergunta "quantas gramas de X?" (P0-2). NAO e tabela nutricional; e so
+// referencia rapida pro paciente sair de "nao faco ideia" pra "acho que
+// foi 1 unidade → ~120g". Keys sem acento pra casar com input normalizado.
+const PESOS_TIPICOS: Record<string, { media: number; exemplo: string }> = {
+  banana:    { media: 120, exemplo: '1 unidade' },
+  maca:      { media: 180, exemplo: '1 unidade' },
+  laranja:   { media: 130, exemplo: '1 unidade' },
+  mamao:     { media: 150, exemplo: '1 fatia' },
+  melancia:  { media: 150, exemplo: '1 fatia' },
+  abacaxi:   { media: 120, exemplo: '1 fatia' },
+  morango:   { media: 100, exemplo: '~6 unidades' },
+  arroz:     { media: 100, exemplo: '4 colheres de sopa' },
+  feijao:    { media: 60,  exemplo: '1 concha pequena' },
+  macarrao:  { media: 80,  exemplo: 'peso seco (1 pegador)' },
+  pao:       { media: 50,  exemplo: '1 pão francês' },
+  ovo:       { media: 50,  exemplo: '1 unidade' },
+  frango:    { media: 150, exemplo: '1 filé médio' },
+  carne:     { media: 150, exemplo: '1 bife médio' },
+  peixe:     { media: 150, exemplo: '1 filé médio' },
+  batata:    { media: 100, exemplo: '1 unidade média' },
+  queijo:    { media: 30,  exemplo: '1 fatia' },
+  iogurte:   { media: 170, exemplo: '1 pote' },
+  leite:     { media: 200, exemplo: '1 copo (200ml)' },
+  suco:      { media: 200, exemplo: '1 copo (200ml)' },
+  cafe:      { media: 100, exemplo: '1 xícara' },
+  aveia:     { media: 30,  exemplo: '2 colheres de sopa' },
+  granola:   { media: 30,  exemplo: '2 colheres de sopa' },
+  tomate:    { media: 100, exemplo: '1 unidade média' },
+  cenoura:   { media: 60,  exemplo: '1 pequena' },
+  brocolis:  { media: 80,  exemplo: '1 porção pequena' },
+};
+
+// Remove acentos pra comparar chave do PESOS_TIPICOS sem depender do
+// case exato que o Haiku devolveu ("Pão" vs "pao").
+function semAcento(s: string): string {
+  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+}
+
+// Se `nome` contem uma key do dict, devolve string pronta com a dica
+// entre parenteses (ex: "(ex: 1 pão francês ≈ 50g)"). Senao, "".
+// Usa contains (nao equal) — "Batata frita" bate com "batata".
+function dicaPesoTipico(nome: string): string {
+  const alvo = semAcento(nome);
+  for (const [key, info] of Object.entries(PESOS_TIPICOS)) {
+    if (alvo.includes(key)) return ` (ex: ${info.exemplo} ≈ ${info.media}g)`;
+  }
+  return '';
+}
+
 const claude = new Anthropic({ apiKey: env.CLAUDE_API_KEY });
 const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
 
@@ -888,7 +956,7 @@ export async function processarTextoRefeicao(
     analise = await analisarRefeicaoComClaude(texto);
   } catch (e) {
     console.error('[meal] Claude falhou apos backoff em processarTextoRefeicao:', e);
-    await sendText(phone, MSG_ERRO_HUMANA);
+    await sendText(phone, mensagemErroHumana(e));
     return;
   }
 
@@ -949,7 +1017,7 @@ export async function processarTextoRefeicao(
     });
     await sendText(
       phone,
-      `🤔 Quantas gramas de *${itemFaltando.nome}*, mais ou menos?\n\n` +
+      `🤔 Quantas gramas de *${itemFaltando.nome}*${dicaPesoTipico(itemFaltando.nome)}, mais ou menos?\n\n` +
       `_Se não souber, manda *"estima"* que eu uso uma porção média._`,
     );
     return;
@@ -999,7 +1067,7 @@ export async function processarRespostaQuantidade(
       }
     } catch (e) {
       console.error('[meal] Claude falhou apos backoff em processarRespostaQuantidade:', e);
-      await sendText(phone, MSG_ERRO_HUMANA);
+      await sendText(phone, mensagemErroHumana(e));
       return;
     }
   }
@@ -1117,7 +1185,7 @@ export async function processarRespostaPreparo(
       }
     } catch (e) {
       console.error('[meal] Claude falhou apos backoff em processarRespostaPreparo:', e);
-      await sendText(phone, MSG_ERRO_HUMANA);
+      await sendText(phone, mensagemErroHumana(e));
       return;
     }
   }
@@ -1144,7 +1212,7 @@ export async function processarRespostaPreparo(
     });
     await sendText(
       phone,
-      `🤔 Quantas gramas de *${itemFaltando.nome}*, mais ou menos?\n\n` +
+      `🤔 Quantas gramas de *${itemFaltando.nome}*${dicaPesoTipico(itemFaltando.nome)}, mais ou menos?\n\n` +
       `_Se não souber, manda *"estima"* que eu uso uma porção média._`,
     );
     return;
@@ -1175,7 +1243,7 @@ export async function processarTextoCorrecao(
     novosMacros = await calcularMacrosComClaude(texto);
   } catch (e) {
     console.error('[meal] Claude falhou apos backoff em processarTextoCorrecao:', e);
-    await sendText(phone, MSG_ERRO_HUMANA);
+    await sendText(phone, mensagemErroHumana(e));
     return;
   }
 
