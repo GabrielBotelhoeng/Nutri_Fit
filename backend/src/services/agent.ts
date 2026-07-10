@@ -81,14 +81,27 @@ const PERGUNTAS_ENTREVISTA: Record<number, string> = {
      '2️⃣ Ganhar massa\n' +
      '3️⃣ Manter o peso\n' +
      '4️⃣ Saude geral\n\n' +
-     'Responda com o numero ou descreva (ex: "perder peso").',
-  3: '👤 *Qual e o seu sexo?* (masculino/feminino)',
-  4: '⚖️ *Qual e o seu peso atual em kg?* (ex: 75 ou 70,5)',
-  5: '📏 *Qual e a sua altura?* (em cm como 175, ou em metros como 1,75)',
-  6: '🏃 *Que tipo de atividade fisica voce pratica?* (musculacao, corrida, caminhada, ou "sedentario")',
-  7: '📅 *Com que frequencia voce treina?* (ex: 3x por semana, ou "nao treino")',
-  8: '⏰ *Em que horario voce costuma treinar?* (ex: 18h, "de manha", ou "nao treino")',
-  9: '🌙 *Que horas voce costuma acordar e dormir?* (ex: 6h / 23h)',
+     '_Responda com o numero (1, 2, 3 ou 4)._',
+  3: '👤 *Qual e o seu sexo?*\n\n' +
+     '1️⃣ Masculino\n' +
+     '2️⃣ Feminino\n\n' +
+     '_Responda com o numero (1 ou 2)._',
+  4: '⚖️ *Qual e o seu peso atual em kg?*\n\n_Escreva o valor (ex: 75 ou 70,5)._',
+  5: '📏 *Qual e a sua altura?*\n\n_Escreva o valor em cm (ex: 175) ou em metros (ex: 1,75)._',
+  6: '🏃 *Que tipo de atividade fisica voce pratica?*\n\n' +
+     '1️⃣ Musculação\n' +
+     '2️⃣ Corrida\n' +
+     '3️⃣ Caminhada\n' +
+     '4️⃣ Sedentário (não pratico)\n\n' +
+     '_Responda com o numero ou escreva outra atividade (ex: "natação")._',
+  7: '📅 *Com que frequencia voce treina?*\n\n' +
+     '1️⃣ Não treino\n' +
+     '2️⃣ 1-2x por semana\n' +
+     '3️⃣ 3-4x por semana\n' +
+     '4️⃣ 5+ por semana\n\n' +
+     '_Responda com o numero._',
+  8: '⏰ *Em que horario voce costuma treinar?*\n\n_Escreva o horario (ex: 18h, "de manha" ou "nao treino")._',
+  9: '🌙 *Que horas voce costuma acordar e dormir?*\n\n_Escreva os dois horarios (ex: 6h e 23h)._',
   10: '⚠️ *Voce tem alergias, intolerancias ou condicoes de saude?* (ex: lactose, gluten, diabetes, hipertensao).\n\nSe nao tiver, responda "nenhuma".',
   11: '🚫 *Tem algum alimento que voce NAO come ou tem aversao?* (ex: peixe, quiabo, frutos do mar).\n\nSe nao tiver, responda "nenhuma".',
   12: '📖 *Voce ja fez dieta antes?* Conte rapidamente o que funcionou ou nao funcionou pra voce. Se for a primeira vez, responda "nunca".',
@@ -443,8 +456,9 @@ async function processarRespostaEntrevista(
       break;
     }
     case 3: {
-      if (textoLower.includes('masc') || textoLower === 'm') novoDado.sexo = 'masculino';
-      else if (textoLower.includes('fem') || textoLower === 'f') novoDado.sexo = 'feminino';
+      // Aceita numero (1/2) ou texto livre (masc/fem/m/f) — retrocompat com UAT antigo.
+      if (textoLower === '1' || textoLower.includes('masc') || textoLower === 'm') novoDado.sexo = 'masculino';
+      else if (textoLower === '2' || textoLower.includes('fem') || textoLower === 'f') novoDado.sexo = 'feminino';
       else return {};
       break;
     }
@@ -461,11 +475,22 @@ async function processarRespostaEntrevista(
       break;
     }
     case 6: {
-      novoDado.atividade_tipo = texto.trim();
+      // 1-4 mapeiam nas opcoes canonicas; qualquer outro texto (ex: "natacao") passa cru.
+      const mapaAtiv: Record<string, string> = {
+        '1': 'musculação', '2': 'corrida', '3': 'caminhada', '4': 'sedentário',
+      };
+      novoDado.atividade_tipo = mapaAtiv[textoLower] ?? texto.trim();
       break;
     }
     case 7: {
-      novoDado.atividade_frequencia = texto.trim();
+      // 1-4 mapeiam na faixa; qualquer outro texto (ex: "todo dia") passa cru.
+      const mapaFreq: Record<string, string> = {
+        '1': 'não treino',
+        '2': '1-2x por semana',
+        '3': '3-4x por semana',
+        '4': '5+ por semana',
+      };
+      novoDado.atividade_frequencia = mapaFreq[textoLower] ?? texto.trim();
       break;
     }
     case 8: {
