@@ -15,6 +15,27 @@ export const pacientesRouter = Router();
 
 const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
 
+const MESES_POR_PLANO = {
+  '1mes': 1,
+  '3meses': 3,
+  '6meses': 6,
+  '12meses': 12,
+} as const;
+
+type PlanoPreset = keyof typeof MESES_POR_PLANO;
+
+function planoValido(p: string): p is PlanoPreset {
+  return p in MESES_POR_PLANO;
+}
+
+// Fonte da verdade no cadastro: o plano. A data eh derivada. Depois o
+// nutricionista pode ajustar so a data via PATCH (extensao, prorrogacao).
+function calcularDataExpiracao(plano: PlanoPreset, hoje = new Date()): string {
+  const d = new Date(Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth(), hoje.getUTCDate()));
+  d.setUTCMonth(d.getUTCMonth() + MESES_POR_PLANO[plano]);
+  return d.toISOString().slice(0, 10);
+}
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 50 * 1024 * 1024 },
@@ -30,19 +51,22 @@ const upload = multer({
 pacientesRouter.use(requireAuth);
 
 pacientesRouter.post('/', upload.single('dieta'), async (req: Request, res: Response) => {
-  const { nome, whatsapp, plano, data_expiracao } = req.body as {
+  const { nome, whatsapp, plano } = req.body as {
     nome: string;
     whatsapp: string;
     plano: string;
-    data_expiracao: string;
   };
 
   if (!req.file) {
     res.status(400).json({ error: 'PDF da dieta obrigatorio' });
     return;
   }
-  if (!nome || !whatsapp || !plano || !data_expiracao) {
-    res.status(400).json({ error: 'Campos obrigatorios ausentes: nome, whatsapp, plano, data_expiracao' });
+  if (!nome || !whatsapp || !plano) {
+    res.status(400).json({ error: 'Campos obrigatorios ausentes: nome, whatsapp, plano' });
+    return;
+  }
+  if (!planoValido(plano)) {
+    res.status(400).json({ error: `Plano invalido. Use um destes: ${Object.keys(MESES_POR_PLANO).join(', ')}` });
     return;
   }
 
@@ -54,6 +78,10 @@ pacientesRouter.post('/', upload.single('dieta'), async (req: Request, res: Resp
     });
     return;
   }
+
+  // Fonte da verdade eh o plano. Calculamos a data no server para garantir
+  // consistencia mesmo que o cliente ignore o UI (ou mande valores errados).
+  const data_expiracao = calcularDataExpiracao(plano);
 
   const { data: paciente, error: pacienteErr } = await supabase
     .from('pacientes')

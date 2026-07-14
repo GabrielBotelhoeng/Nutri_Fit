@@ -1,10 +1,60 @@
 @import "tailwindcss";
 
 @theme {
+  /* Paleta base — herdada, mantida por consistencia visual. */
   --color-floresta: #2D5016;
-  --color-offwhite: #F0F7EC;
+  --color-floresta-dark: #234010;
+  --color-floresta-soft: #E9F0E2;
   --color-terra: #6B3D1E;
+  --color-terra-soft: #F2E7DC;
+  --color-offwhite: #F0F7EC;
+
+  /* Tokens semanticos — usar preferencialmente estes, nao a paleta bruta. */
+  --color-bg-app: #F5F8F2;
+  --color-bg-surface: #FFFFFF;
+  --color-bg-muted: #F7F7F5;
+  --color-border-subtle: #E5E7E1;
+  --color-text-primary: #1F2A17;
+  --color-text-secondary: #52604A;
+  --color-text-muted: #8A9282;
+
+  --color-success: #15803D;
+  --color-success-soft: #DCFCE7;
+  --color-warning: #B45309;
+  --color-warning-soft: #FEF3C7;
+  --color-danger: #B91C1C;
+  --color-danger-soft: #FEE2E2;
+  --color-info: #1D4ED8;
+  --color-info-soft: #DBEAFE;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  --shadow-card: 0 1px 2px rgba(31, 42, 23, 0.04), 0 1px 3px rgba(31, 42, 23, 0.06);
+  --shadow-modal: 0 10px 30px rgba(31, 42, 23, 0.15);
 }
 
 * { box-sizing: border-box; }
-body { margin: 0; font-family: sans-serif; }
+
+html, body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color: var(--color-text-primary);
+  background: var(--color-bg-app);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Reset visual leve pra formularios — foco visivel e consistente. */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--color-floresta);
+  outline-offset: 1px;
+}
+
+/* Scrollbar suave (Chrome/Edge). */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #d5dccd; border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: #b9c4ae; }

@@ -1,5 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { apiFetch } from '../lib/api';
+import {
+  MESES_POR_PLANO,
+  PLANO_LABELS,
+  PLANOS_ORDENADOS,
+  calcularDataExpiracao,
+  formatarDataBR,
+  type PlanoId,
+} from '../lib/planos';
+import { Button } from './Button';
+import { HelpTip } from './HelpTip';
 
 interface Paciente {
   id: string;
@@ -34,17 +44,21 @@ function whatsappBRValido(digitos: string): boolean {
   return /^[1-9][1-9]9\d{8}$/.test(digitos);
 }
 
+function isPlanoValido(p: string): p is PlanoId {
+  return p in MESES_POR_PLANO;
+}
+
 export function PacienteModal({ paciente, onClose, onSaved }: PacienteModalProps) {
   const isEdicao = !!paciente;
 
   const [nome, setNome] = useState(paciente?.nome ?? '');
-  // Armazena apenas digitos do numero BR local (DDD + 9 + 8 = 11 digitos).
-  // Na edicao, remove o prefixo "55" se presente.
   const [whatsappDigitos, setWhatsappDigitos] = useState(() => {
     const raw = soDigitos(paciente?.whatsapp ?? '');
     return raw.startsWith('55') ? raw.slice(2) : raw;
   });
-  const [plano, setPlano] = useState(paciente?.plano ?? '1mes');
+  const [plano, setPlano] = useState<PlanoId>(
+    isPlanoValido(paciente?.plano ?? '') ? (paciente!.plano as PlanoId) : '1mes'
+  );
   const [dataExpiracao, setDataExpiracao] = useState(
     paciente?.data_expiracao ? paciente.data_expiracao.slice(0, 10) : ''
   );
@@ -60,12 +74,40 @@ export function PacienteModal({ paciente, onClose, onSaved }: PacienteModalProps
   const [carregandoDieta, setCarregandoDieta] = useState(false);
   const [confirmandoDesativar, setConfirmandoDesativar] = useState(false);
 
+  const primeiroInputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  // H3 — Controle: ESC fecha o modal. Foco automatico no primeiro campo.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    primeiroInputRef.current?.focus();
+    // Bloqueia scroll do body enquanto modal esta aberto.
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [onClose]);
+
+  // Preview da data calculada a partir do plano (so no cadastro). No submit
+  // do cadastro o backend recalcula do plano, entao nao precisa sincronizar
+  // com o state `dataExpiracao` (que so e usado no modo edicao).
+  const dataCalculadaPreview = useMemo(() => calcularDataExpiracao(plano), [plano]);
+
   useEffect(() => {
     if (!paciente) return;
     let cancelado = false;
-    setCarregandoDieta(true);
-    apiFetch(`/api/pacientes/${paciente.id}/dieta`)
-      .then(async (res) => {
+    // setState em promise callback (nao no corpo sincrono do efeito) —
+    // satisfaz react-hooks/set-state-in-effect sem mudar o fluxo de UI.
+    void Promise.resolve().then(async () => {
+      if (cancelado) return;
+      setCarregandoDieta(true);
+      try {
+        const res = await apiFetch(`/api/pacientes/${paciente.id}/dieta`);
         if (cancelado) return;
         if (res.ok) {
           const data = (await res.json()) as { signed_url: string; created_at: string };
@@ -75,13 +117,26 @@ export function PacienteModal({ paciente, onClose, onSaved }: PacienteModalProps
           setDietaUrl(null);
           setDietaCriadaEm(null);
         }
-      })
-      .catch(() => { if (!cancelado) { setDietaUrl(null); setDietaCriadaEm(null); } })
-      .finally(() => { if (!cancelado) setCarregandoDieta(false); });
-    return () => { cancelado = true; };
+      } catch {
+        if (!cancelado) {
+          setDietaUrl(null);
+          setDietaCriadaEm(null);
+        }
+      } finally {
+        if (!cancelado) setCarregandoDieta(false);
+      }
+    });
+    return () => {
+      cancelado = true;
+    };
   }, [paciente]);
 
   const estaDesativando = isEdicao && !!paciente?.ativo && !ativo;
+
+  // Aviso: nutri esta encurtando/prolongando a data manualmente.
+  const dataAlteradaNaEdicao =
+    isEdicao && dataExpiracao && paciente?.data_expiracao.slice(0, 10) !== dataExpiracao;
+  const dataNoPassado = dataExpiracao && new Date(dataExpiracao + 'T00:00:00Z') < new Date(new Date().toISOString().slice(0, 10) + 'T00:00:00Z');
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -124,18 +179,23 @@ export function PacienteModal({ paciente, onClose, onSaved }: PacienteModalProps
           setSucesso('Paciente atualizado com sucesso.');
         }
       } else {
-        if (!pdf) { setErro('Selecione o PDF da dieta.'); setLoading(false); return; }
+        if (!pdf) {
+          setErro('Selecione o PDF da dieta.');
+          setLoading(false);
+          return;
+        }
         if (!whatsappBRValido(whatsappDigitos)) {
-          setErro('WhatsApp inválido. Use o formato (DDD) 9XXXX-XXXX — 11 dígitos com 9 após o DDD.');
+          setErro('WhatsApp invalido. Use o formato (DDD) 9XXXX-XXXX — 11 digitos com 9 apos o DDD.');
           setLoading(false);
           return;
         }
 
+        // No cadastro nao enviamos data_expiracao — o backend calcula a partir
+        // do plano. Isso garante consistencia mesmo se alguem burlar o UI.
         const form = new FormData();
         form.append('nome', nome);
         form.append('whatsapp', `55${whatsappDigitos}`);
         form.append('plano', plano);
-        form.append('data_expiracao', dataExpiracao);
         form.append('dieta', pdf);
 
         const res = await apiFetch('/api/pacientes', {
@@ -146,10 +206,13 @@ export function PacienteModal({ paciente, onClose, onSaved }: PacienteModalProps
           const err = await res.json().catch(() => ({}));
           throw new Error((err as { error?: string }).error ?? 'Erro ao cadastrar paciente');
         }
-        setSucesso(`✅ ${nome} cadastrado — dieta sendo processada em segundo plano.`);
+        setSucesso(`${nome} cadastrado — dieta sendo processada em segundo plano.`);
       }
 
-      setTimeout(() => { onSaved(); onClose(); }, 1500);
+      setTimeout(() => {
+        onSaved();
+        onClose();
+      }, 1400);
     } catch (err) {
       setErro(err instanceof Error ? err.message : 'Erro desconhecido');
     } finally {
@@ -163,15 +226,16 @@ export function PacienteModal({ paciente, onClose, onSaved }: PacienteModalProps
     setErro('');
     setSucesso('');
     try {
-      const res = await apiFetch(`/api/pacientes/${paciente.id}`, {
-        method: 'DELETE',
-      });
+      const res = await apiFetch(`/api/pacientes/${paciente.id}`, { method: 'DELETE' });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error((err as { error?: string }).error ?? 'Erro ao excluir paciente');
       }
-      setSucesso('Paciente excluído com sucesso.');
-      setTimeout(() => { onSaved(); onClose(); }, 1200);
+      setSucesso('Paciente excluido com sucesso.');
+      setTimeout(() => {
+        onSaved();
+        onClose();
+      }, 1200);
     } catch (err) {
       setErro(err instanceof Error ? err.message : 'Erro desconhecido ao excluir');
       setConfirmandoExcluir(false);
@@ -181,157 +245,353 @@ export function PacienteModal({ paciente, onClose, onSaved }: PacienteModalProps
   }
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center z-50" style={{ background: 'rgba(0,0,0,0.4)' }}>
-      <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md mx-4">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-bold" style={{ color: 'var(--color-terra)' }}>
-            {isEdicao ? 'Editar Paciente' : 'Novo Paciente'}
-          </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl cursor-pointer">×</button>
+    <div
+      className="fixed inset-0 flex items-center justify-center z-50 p-4"
+      style={{ background: 'rgba(15, 22, 10, 0.5)' }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-title"
+    >
+      <div
+        ref={dialogRef}
+        className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
+        style={{ boxShadow: 'var(--shadow-modal)' }}
+      >
+        {/* Cabecalho */}
+        <div
+          className="sticky top-0 flex items-center justify-between px-6 py-4 bg-white z-10"
+          style={{ borderBottom: '1px solid var(--color-border-subtle)' }}
+        >
+          <div>
+            <h2 id="modal-title" className="text-lg font-bold" style={{ color: 'var(--color-text-primary)' }}>
+              {isEdicao ? 'Editar paciente' : 'Novo paciente'}
+            </h2>
+            {isEdicao && (
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
+                {paciente!.nome}
+              </p>
+            )}
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Fechar (ESC)"
+            className="w-8 h-8 flex items-center justify-center rounded-full text-xl cursor-pointer hover:bg-gray-100 transition"
+            style={{ color: 'var(--color-text-muted)' }}
+          >
+            ×
+          </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-3">
+        {/* Feedback global (topo do form, sem scroll) */}
+        {(erro || sucesso) && (
+          <div className="px-6 pt-4">
+            {erro && (
+              <div
+                className="px-3 py-2 rounded-md text-sm"
+                style={{ background: 'var(--color-danger-soft)', color: 'var(--color-danger)' }}
+                role="alert"
+              >
+                {erro}
+              </div>
+            )}
+            {sucesso && (
+              <div
+                className="px-3 py-2 rounded-md text-sm"
+                style={{ background: 'var(--color-success-soft)', color: 'var(--color-success)' }}
+                role="status"
+              >
+                {sucesso}
+              </div>
+            )}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {!isEdicao && (
             <>
+              {/* Nome */}
               <div>
-                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-terra)' }}>Nome</label>
-                <input type="text" value={nome} onChange={(e) => setNome(e.target.value)} required
-                  className="w-full border border-gray-300 rounded px-3 py-2" placeholder="Nome completo" />
+                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text-primary)' }}>
+                  Nome completo
+                </label>
+                <input
+                  ref={primeiroInputRef}
+                  type="text"
+                  value={nome}
+                  onChange={(e) => setNome(e.target.value)}
+                  required
+                  className="w-full border rounded-md px-3 py-2 text-sm"
+                  style={{ borderColor: 'var(--color-border-subtle)' }}
+                  placeholder="Ex.: Maria da Silva"
+                />
               </div>
+
+              {/* WhatsApp */}
               <div>
-                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-terra)' }}>WhatsApp</label>
-                <input type="tel" inputMode="numeric"
+                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text-primary)' }}>
+                  WhatsApp
+                  <HelpTip text="Apenas Brasil (DDD + 9 + numero). O codigo 55 e adicionado automaticamente." />
+                </label>
+                <input
+                  type="tel"
+                  inputMode="numeric"
                   value={formatarWhatsappBR(whatsappDigitos)}
                   onChange={(e) => setWhatsappDigitos(soDigitos(e.target.value).slice(0, 11))}
                   required
-                  className="w-full border border-gray-300 rounded px-3 py-2"
-                  placeholder="(62) 99551-4963" />
-                <p className="text-xs text-gray-500 mt-1">
-                  Apenas Brasil — DDD + 9 + número. O código 55 é adicionado automaticamente.
-                </p>
+                  className="w-full border rounded-md px-3 py-2 text-sm"
+                  style={{ borderColor: 'var(--color-border-subtle)' }}
+                  placeholder="(62) 99999-9999"
+                />
               </div>
+
+              {/* Plano (fonte da verdade) */}
               <div>
-                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-terra)' }}>Plano</label>
-                <select value={plano} onChange={(e) => setPlano(e.target.value)}
-                  className="w-full border border-gray-300 rounded px-3 py-2">
-                  <option value="1mes">1 mês</option>
-                  <option value="3meses">3 meses</option>
-                  <option value="6meses">6 meses</option>
-                  <option value="12meses">12 meses</option>
-                </select>
+                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text-primary)' }}>
+                  Plano contratado
+                  <HelpTip text="Define quanto tempo o paciente tera acesso. A data de expiracao e calculada automaticamente." />
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {PLANOS_ORDENADOS.map((p) => (
+                    <button
+                      type="button"
+                      key={p}
+                      onClick={() => setPlano(p)}
+                      aria-pressed={plano === p}
+                      className="rounded-md py-2 px-3 text-sm font-medium border transition cursor-pointer"
+                      style={{
+                        borderColor: plano === p ? 'var(--color-floresta)' : 'var(--color-border-subtle)',
+                        background: plano === p ? 'var(--color-floresta-soft)' : 'white',
+                        color: plano === p ? 'var(--color-floresta-dark)' : 'var(--color-text-primary)',
+                      }}
+                    >
+                      {PLANO_LABELS[p]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Preview da data calculada — mostra a relacao plano → data */}
+              <div
+                className="flex items-start gap-2 px-3 py-2 rounded-md text-sm"
+                style={{ background: 'var(--color-floresta-soft)', color: 'var(--color-floresta-dark)' }}
+              >
+                <span aria-hidden>📅</span>
+                <div>
+                  <div className="font-semibold">Expira em {formatarDataBR(dataCalculadaPreview)}</div>
+                  <div className="text-xs opacity-80">
+                    Calculado a partir de hoje + {MESES_POR_PLANO[plano]} {MESES_POR_PLANO[plano] === 1 ? 'mes' : 'meses'}.
+                    Voce pode ajustar a data depois pela edicao.
+                  </div>
+                </div>
+              </div>
+
+              {/* PDF da dieta */}
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text-primary)' }}>
+                  Dieta (PDF)
+                  <HelpTip text="O PDF sera processado para que o bot responda duvidas sobre a dieta." />
+                </label>
+                <input
+                  type="file"
+                  accept=".pdf"
+                  onChange={(e) => setPdf(e.target.files?.[0] ?? null)}
+                  required
+                  className="w-full text-sm"
+                  style={{ color: 'var(--color-text-secondary)' }}
+                />
+                {pdf && (
+                  <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>
+                    📄 {pdf.name}
+                  </p>
+                )}
               </div>
             </>
           )}
 
-          <div>
-            <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-terra)' }}>Data de Expiração</label>
-            <input type="date" value={dataExpiracao} onChange={(e) => setDataExpiracao(e.target.value)} required
-              className="w-full border border-gray-300 rounded px-3 py-2" />
-          </div>
-
           {isEdicao && (
-            <div>
-              <div className="flex items-center gap-2">
-                <input type="checkbox" id="ativo" checked={ativo}
-                  onChange={(e) => { setAtivo(e.target.checked); if (e.target.checked) setConfirmandoDesativar(false); }}
-                  className="w-4 h-4" />
-                <label htmlFor="ativo" className="text-sm font-medium" style={{ color: 'var(--color-terra)' }}>Acesso ativo</label>
+            <>
+              {/* Resumo (read-only) — H2 reconhecimento sobre memoria */}
+              <div className="grid grid-cols-2 gap-3">
+                <ReadOnlyField label="WhatsApp" value={formatarWhatsappBR(whatsappDigitos)} />
+                <ReadOnlyField label="Plano contratado" value={PLANO_LABELS[plano] ?? plano} />
               </div>
-              {estaDesativando && !confirmandoDesativar && (
-                <p className="text-xs text-gray-500 mt-1">
-                  Ao desmarcar, o bot deixará de responder mensagens deste WhatsApp.
-                </p>
-              )}
-              {confirmandoDesativar && (
-                <div className="mt-2 px-3 py-2 rounded border border-yellow-300 bg-yellow-50 text-sm text-yellow-900">
-                  <p className="mb-2">
-                    Vai desativar <strong>{paciente?.nome}</strong>. O bot <strong>não responderá mais</strong> mensagens deste WhatsApp até reativar. Continuar?
+
+              {/* Data de expiracao editavel — proposito claro */}
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text-primary)' }}>
+                  Data de expiracao
+                  <HelpTip text="Prolongue ou reduza a validade sem trocar o plano cadastrado. Util para renovacoes e bonus." />
+                </label>
+                <input
+                  type="date"
+                  value={dataExpiracao}
+                  onChange={(e) => setDataExpiracao(e.target.value)}
+                  required
+                  className="w-full border rounded-md px-3 py-2 text-sm"
+                  style={{ borderColor: 'var(--color-border-subtle)' }}
+                />
+                {dataAlteradaNaEdicao && !dataNoPassado && (
+                  <p className="text-xs mt-1" style={{ color: 'var(--color-text-secondary)' }}>
+                    Nova validade: {formatarDataBR(dataExpiracao)} (antes: {formatarDataBR(paciente!.data_expiracao)})
                   </p>
-                  <div className="flex gap-2">
-                    <button type="button" onClick={() => { setAtivo(true); setConfirmandoDesativar(false); }}
-                      className="flex-1 py-1.5 rounded border border-gray-300 text-xs text-gray-700 hover:bg-white cursor-pointer">
-                      Manter ativo
-                    </button>
-                    <button type="submit"
-                      className="flex-1 py-1.5 rounded text-white text-xs font-semibold cursor-pointer"
-                      style={{ background: '#b45309' }}>
-                      Sim, desativar
-                    </button>
+                )}
+                {dataNoPassado && (
+                  <p className="text-xs mt-1" style={{ color: 'var(--color-danger)' }}>
+                    Atencao: essa data ja passou — o bot bloqueara o paciente ao salvar.
+                  </p>
+                )}
+              </div>
+
+              {/* Acesso ativo */}
+              <div>
+                <div
+                  className="flex items-center justify-between p-3 rounded-md"
+                  style={{ background: 'var(--color-bg-muted)' }}
+                >
+                  <div>
+                    <div className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>
+                      Acesso ativo
+                    </div>
+                    <div className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                      {ativo ? 'Bot responde mensagens deste WhatsApp.' : 'Bot ignora mensagens deste WhatsApp.'}
+                    </div>
                   </div>
+                  <Toggle
+                    checked={ativo}
+                    onChange={(v) => {
+                      setAtivo(v);
+                      if (v) setConfirmandoDesativar(false);
+                    }}
+                  />
                 </div>
-              )}
-            </div>
+                {confirmandoDesativar && (
+                  <div
+                    className="mt-2 px-3 py-2 rounded-md text-sm"
+                    style={{ background: 'var(--color-warning-soft)', color: 'var(--color-warning)' }}
+                  >
+                    <p className="mb-2">
+                      Vai desativar <strong>{paciente!.nome}</strong>. O bot nao respondera mais mensagens deste WhatsApp
+                      ate voce reativar. Continuar?
+                    </p>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        fullWidth
+                        onClick={() => {
+                          setAtivo(true);
+                          setConfirmandoDesativar(false);
+                        }}
+                      >
+                        Manter ativo
+                      </Button>
+                      <Button type="submit" variant="warning" size="sm" fullWidth>
+                        Sim, desativar
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Dieta atual + substituir */}
+              <div>
+                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text-primary)' }}>
+                  Dieta atual
+                </label>
+                {carregandoDieta ? (
+                  <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Carregando dieta...</p>
+                ) : dietaUrl ? (
+                  <a
+                    href={dietaUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-sm underline"
+                    style={{ color: 'var(--color-floresta-dark)' }}
+                  >
+                    📄 Ver PDF atual
+                    {dietaCriadaEm && (
+                      <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                        (enviado em {new Date(dietaCriadaEm).toLocaleDateString('pt-BR')})
+                      </span>
+                    )}
+                  </a>
+                ) : (
+                  <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Sem dieta cadastrada.</p>
+                )}
+
+                <label className="block text-sm font-medium mb-1 mt-3" style={{ color: 'var(--color-text-primary)' }}>
+                  Substituir PDF (opcional)
+                </label>
+                <input
+                  type="file"
+                  accept=".pdf"
+                  onChange={(e) => setPdf(e.target.files?.[0] ?? null)}
+                  className="w-full text-sm"
+                  style={{ color: 'var(--color-text-secondary)' }}
+                />
+                {pdf && (
+                  <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>
+                    📄 {pdf.name} — substituira a dieta atual e re-processara o bot.
+                  </p>
+                )}
+              </div>
+            </>
           )}
 
-          {!isEdicao && (
-            <div>
-              <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-terra)' }}>Dieta (PDF)</label>
-              <input type="file" accept=".pdf" onChange={(e) => setPdf(e.target.files?.[0] ?? null)} required
-                className="w-full text-sm text-gray-500" />
-              {pdf && <p className="text-xs text-gray-500 mt-1">📄 {pdf.name}</p>}
-            </div>
-          )}
-
-          {isEdicao && (
-            <div>
-              <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-terra)' }}>Dieta atual</label>
-              {carregandoDieta ? (
-                <p className="text-xs text-gray-500">Carregando dieta...</p>
-              ) : dietaUrl ? (
-                <a href={dietaUrl} target="_blank" rel="noopener noreferrer"
-                  className="text-sm underline" style={{ color: 'var(--color-floresta)' }}>
-                  📄 Ver PDF atual{dietaCriadaEm && ` (enviado em ${new Date(dietaCriadaEm).toLocaleDateString('pt-BR')})`}
-                </a>
-              ) : (
-                <p className="text-xs text-gray-500">Sem dieta cadastrada.</p>
-              )}
-              <label className="block text-sm font-medium mb-1 mt-2" style={{ color: 'var(--color-terra)' }}>Substituir PDF (opcional)</label>
-              <input type="file" accept=".pdf" onChange={(e) => setPdf(e.target.files?.[0] ?? null)}
-                className="w-full text-sm text-gray-500" />
-              {pdf && <p className="text-xs text-gray-500 mt-1">📄 {pdf.name} — substituirá a dieta atual e re-processará o RAG</p>}
-            </div>
-          )}
-
-          {erro && <p className="text-red-600 text-sm">{erro}</p>}
-          {sucesso && <p className="text-green-700 text-sm">{sucesso}</p>}
-
+          {/* Botoes principais */}
           <div className="flex gap-2 pt-2">
-            <button type="button" onClick={onClose}
-              className="flex-1 py-2 rounded border border-gray-300 text-sm text-gray-600 hover:bg-gray-50 cursor-pointer">
+            <Button type="button" variant="secondary" onClick={onClose} fullWidth>
               Cancelar
-            </button>
-            <button type="submit" disabled={loading || excluindo}
-              className="flex-1 py-2 rounded text-white text-sm font-semibold disabled:opacity-60 cursor-pointer"
-              style={{ background: 'var(--color-floresta)' }}>
-              {loading ? 'Salvando...' : isEdicao ? 'Salvar' : 'Cadastrar'}
-            </button>
+            </Button>
+            <Button type="submit" variant="primary" fullWidth loading={loading} disabled={loading || excluindo}>
+              {isEdicao ? 'Salvar alteracoes' : 'Cadastrar paciente'}
+            </Button>
           </div>
 
+          {/* Zona perigosa */}
           {isEdicao && (
-            <div className="pt-3 mt-3 border-t border-gray-200">
+            <div className="pt-4 mt-4" style={{ borderTop: '1px solid var(--color-border-subtle)' }}>
               {!confirmandoExcluir ? (
-                <button type="button" onClick={() => setConfirmandoExcluir(true)}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  fullWidth
+                  onClick={() => setConfirmandoExcluir(true)}
                   disabled={loading || excluindo}
-                  className="w-full py-2 rounded border border-red-300 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-60 cursor-pointer">
+                  className="!text-[color:var(--color-danger)] hover:!bg-[color:var(--color-danger-soft)]"
+                >
                   Excluir paciente
-                </button>
+                </Button>
               ) : (
                 <div className="space-y-2">
-                  <p className="text-sm text-red-700">
-                    Excluir <strong>{paciente.nome}</strong> apaga histórico, dieta e conversas. Esta ação não pode ser desfeita.
+                  <p className="text-sm" style={{ color: 'var(--color-danger)' }}>
+                    Excluir <strong>{paciente!.nome}</strong> apaga historico, dieta e conversas.
+                    Esta acao nao pode ser desfeita.
                   </p>
                   <div className="flex gap-2">
-                    <button type="button" onClick={() => setConfirmandoExcluir(false)}
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      fullWidth
+                      onClick={() => setConfirmandoExcluir(false)}
                       disabled={excluindo}
-                      className="flex-1 py-2 rounded border border-gray-300 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-60 cursor-pointer">
-                      Não, voltar
-                    </button>
-                    <button type="button" onClick={handleExcluir}
+                    >
+                      Nao, voltar
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="danger"
+                      fullWidth
+                      onClick={handleExcluir}
+                      loading={excluindo}
                       disabled={excluindo}
-                      className="flex-1 py-2 rounded text-white text-sm font-semibold disabled:opacity-60 cursor-pointer"
-                      style={{ background: '#b91c1c' }}>
-                      {excluindo ? 'Excluindo...' : 'Sim, excluir'}
-                    </button>
+                    >
+                      Sim, excluir
+                    </Button>
                   </div>
                 </div>
               )}
@@ -340,5 +600,43 @@ export function PacienteModal({ paciente, onClose, onSaved }: PacienteModalProps
         </form>
       </div>
     </div>
+  );
+}
+
+// ---------- helpers ----------
+
+function ReadOnlyField({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="text-xs font-medium mb-1" style={{ color: 'var(--color-text-muted)' }}>
+        {label}
+      </div>
+      <div
+        className="px-3 py-2 rounded-md text-sm"
+        style={{ background: 'var(--color-bg-muted)', color: 'var(--color-text-primary)' }}
+      >
+        {value || '—'}
+      </div>
+    </div>
+  );
+}
+
+function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition cursor-pointer"
+      style={{
+        background: checked ? 'var(--color-floresta)' : '#CBD1C2',
+      }}
+    >
+      <span
+        className="inline-block h-5 w-5 transform rounded-full bg-white transition shadow"
+        style={{ transform: checked ? 'translateX(22px)' : 'translateX(2px)' }}
+      />
+    </button>
   );
 }

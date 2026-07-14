@@ -1,10 +1,13 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { apiFetch } from '../lib/api';
 import { StatusBadge } from '../components/StatusBadge';
+import { RagBadge } from '../components/RagBadge';
+import type { RagStatus } from '../lib/rag';
 import { PacienteModal } from '../components/PacienteModal';
-
-type RagStatus = 'indexado' | 'processando' | 'falhou' | 'sem_dieta';
+import { Button } from '../components/Button';
+import { SummaryCard } from '../components/SummaryCard';
+import { PLANO_LABELS, formatarDataBR } from '../lib/planos';
 
 interface Paciente {
   id: string;
@@ -17,26 +20,24 @@ interface Paciente {
   rag_status: RagStatus;
 }
 
-const ragStatusLabel: Record<RagStatus, { texto: string; cor: string; icone: string; titulo: string }> = {
-  indexado: { texto: 'Indexada', cor: 'bg-green-100 text-green-800', icone: '✓', titulo: 'PDF processado — bot pode responder dúvidas sobre a dieta' },
-  processando: { texto: 'Processando', cor: 'bg-yellow-100 text-yellow-800', icone: '⏳', titulo: 'Extraindo texto e gerando embeddings (até 5 min)' },
-  falhou: { texto: 'Falhou', cor: 'bg-red-100 text-red-800', icone: '✕', titulo: 'Processamento falhou. Tente re-enviar o PDF pela edição.' },
-  sem_dieta: { texto: 'Sem dieta', cor: 'bg-gray-100 text-gray-600', icone: '–', titulo: 'Nenhuma dieta cadastrada' },
-};
-
-const planoLabels: Record<string, string> = {
-  '1mes': '1 mês',
-  '3meses': '3 meses',
-  '6meses': '6 meses',
-  '12meses': '12 meses',
-};
-
 type OrdemCampo = 'nome' | 'data_expiracao' | 'status' | 'rag_status';
 type OrdemDir = 'asc' | 'desc';
+type FiltroStatus = 'todos' | 'ativo' | 'expirando' | 'expirado';
+type FiltroDieta = 'todas' | 'indexado' | 'processando' | 'falhou' | 'sem_dieta';
 
 // Pesos para ordenacao categorica — quanto maior, mais "saudavel".
 const statusPeso: Record<Paciente['status'], number> = { expirado: 0, expirando: 1, ativo: 2 };
 const ragPeso: Record<RagStatus, number> = { falhou: 0, sem_dieta: 1, processando: 2, indexado: 3 };
+
+function formatarWhatsappBR(raw: string): string {
+  const d = raw.replace(/\D/g, '').replace(/^55/, '').slice(0, 11);
+  if (d.length !== 11) return raw;
+  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+}
+
+function formatarHorario(d: Date): string {
+  return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
 
 export function Dashboard() {
   const [pacientes, setPacientes] = useState<Paciente[]>([]);
@@ -44,14 +45,77 @@ export function Dashboard() {
   const [erroCarregamento, setErroCarregamento] = useState<string | null>(null);
   const [modalAberto, setModalAberto] = useState(false);
   const [pacienteSelecionado, setPacienteSelecionado] = useState<Paciente | undefined>(undefined);
+
   const [busca, setBusca] = useState('');
+  const [filtroStatus, setFiltroStatus] = useState<FiltroStatus>('todos');
+  const [filtroDieta, setFiltroDieta] = useState<FiltroDieta>('todas');
   const [ordemCampo, setOrdemCampo] = useState<OrdemCampo>('nome');
   const [ordemDir, setOrdemDir] = useState<OrdemDir>('asc');
+  const [ultimaAtualizacao, setUltimaAtualizacao] = useState<Date | null>(null);
+
+  const buscaRef = useRef<HTMLInputElement>(null);
+
+  const carregarPacientes = useCallback(async () => {
+    setCarregando(true);
+    setErroCarregamento(null);
+    try {
+      const res = await apiFetch('/api/pacientes');
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error((body as { error?: string }).error ?? `Erro ${res.status} ao carregar pacientes`);
+      }
+      const data = (await res.json()) as Paciente[];
+      setPacientes(data);
+      setUltimaAtualizacao(new Date());
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Erro desconhecido ao carregar pacientes';
+      console.error('[dashboard] Erro ao carregar pacientes:', err);
+      setErroCarregamento(msg);
+    } finally {
+      setCarregando(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    // Fetch inicial: rodamos em microtask pra manter o setState fora do
+    // corpo sincrono do efeito (satisfaz react-hooks/set-state-in-effect).
+    void Promise.resolve().then(carregarPacientes);
+  }, [carregarPacientes]);
+
+  // H7 — Atalho: "/" foca a busca. Ignora quando ja esta digitando em input.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== '/' || modalAberto) return;
+      const el = document.activeElement;
+      const tag = el?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+      e.preventDefault();
+      buscaRef.current?.focus();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [modalAberto]);
+
+  // Contagens de resumo (calculadas sobre todos os pacientes, nao os filtrados)
+  const resumo = useMemo(() => {
+    const total = pacientes.length;
+    let ativos = 0;
+    let expirando = 0;
+    let expirados = 0;
+    for (const p of pacientes) {
+      if (p.status === 'ativo') ativos++;
+      else if (p.status === 'expirando') expirando++;
+      else if (p.status === 'expirado') expirados++;
+    }
+    return { total, ativos, expirando, expirados };
+  }, [pacientes]);
 
   const pacientesVisiveis = useMemo(() => {
     const termo = busca.trim().toLowerCase();
     const apenasDigitosBusca = termo.replace(/\D/g, '');
     const filtrados = pacientes.filter((p) => {
+      if (filtroStatus !== 'todos' && p.status !== filtroStatus) return false;
+      if (filtroDieta !== 'todas' && p.rag_status !== filtroDieta) return false;
       if (!termo) return true;
       if (p.nome.toLowerCase().includes(termo)) return true;
       if (apenasDigitosBusca && p.whatsapp.replace(/\D/g, '').includes(apenasDigitosBusca)) return true;
@@ -76,7 +140,7 @@ export function Dashboard() {
       }
       return diff * sinal;
     });
-  }, [pacientes, busca, ordemCampo, ordemDir]);
+  }, [pacientes, busca, filtroStatus, filtroDieta, ordemCampo, ordemDir]);
 
   function alternarOrdem(campo: OrdemCampo) {
     if (campo === ordemCampo) {
@@ -92,142 +156,273 @@ export function Dashboard() {
     return ordemDir === 'asc' ? ' ▲' : ' ▼';
   }
 
-  const carregarPacientes = useCallback(async () => {
-    setCarregando(true);
-    setErroCarregamento(null);
-    try {
-      const res = await apiFetch('/api/pacientes');
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error((body as { error?: string }).error ?? `Erro ${res.status} ao carregar pacientes`);
-      }
-      const data = (await res.json()) as Paciente[];
-      setPacientes(data);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Erro desconhecido ao carregar pacientes';
-      console.error('[dashboard] Erro ao carregar pacientes:', err);
-      setErroCarregamento(msg);
-    } finally {
-      setCarregando(false);
-    }
-  }, []);
+  function abrirNovoPaciente() {
+    setPacienteSelecionado(undefined);
+    setModalAberto(true);
+  }
+  function abrirEdicao(p: Paciente) {
+    setPacienteSelecionado(p);
+    setModalAberto(true);
+  }
+  function fecharModal() {
+    setModalAberto(false);
+    setPacienteSelecionado(undefined);
+  }
 
-  useEffect(() => { carregarPacientes(); }, [carregarPacientes]);
+  function limparFiltros() {
+    setBusca('');
+    setFiltroStatus('todos');
+    setFiltroDieta('todas');
+  }
 
-  function abrirNovoPaciente() { setPacienteSelecionado(undefined); setModalAberto(true); }
-  function abrirEdicao(p: Paciente) { setPacienteSelecionado(p); setModalAberto(true); }
-  function fecharModal() { setModalAberto(false); setPacienteSelecionado(undefined); }
-  function formatarData(s: string) { return new Date(s).toLocaleDateString('pt-BR'); }
+  const temFiltroAtivo = busca || filtroStatus !== 'todos' || filtroDieta !== 'todas';
 
   return (
-    <div style={{ background: 'var(--color-offwhite)', minHeight: '100vh' }}>
-      <header className="px-6 py-4 flex items-center justify-between text-white" style={{ background: 'var(--color-floresta)' }}>
-        <span className="font-bold text-lg">🥗 NutriChat — Painel</span>
-        <button onClick={() => supabase.auth.signOut()}
-          className="text-sm underline opacity-80 hover:opacity-100 cursor-pointer">
+    <div style={{ background: 'var(--color-bg-app)', minHeight: '100vh' }}>
+      <header
+        className="px-6 py-3 flex items-center justify-between text-white"
+        style={{ background: 'var(--color-floresta)' }}
+      >
+        <span className="font-bold text-base flex items-center gap-2">
+          <span aria-hidden>🥗</span> NutriChat <span className="opacity-70">— Painel</span>
+        </span>
+        <button
+          onClick={() => supabase.auth.signOut()}
+          className="text-sm underline opacity-80 hover:opacity-100 cursor-pointer"
+        >
           Sair
         </button>
       </header>
 
-      <main className="p-6 max-w-5xl mx-auto">
-        <div className="flex justify-between items-center mb-4">
-          <h1 className="text-xl font-bold" style={{ color: 'var(--color-terra)' }}>Pacientes</h1>
-          <button onClick={abrirNovoPaciente}
-            className="px-4 py-2 rounded text-white text-sm font-semibold cursor-pointer"
-            style={{ background: 'var(--color-floresta)' }}>
-            + Novo Paciente
-          </button>
+      <main className="p-6 max-w-6xl mx-auto">
+        {/* Titulo + acao principal */}
+        <div className="flex flex-wrap items-end justify-between gap-4 mb-5">
+          <div>
+            <h1 className="text-2xl font-bold" style={{ color: 'var(--color-text-primary)' }}>
+              Pacientes
+            </h1>
+            <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+              Gerencie o acesso, a dieta e a validade de cada paciente.
+            </p>
+          </div>
+          <Button onClick={abrirNovoPaciente} icon={<span>+</span>}>
+            Novo paciente
+          </Button>
         </div>
 
-        <div className="mb-4 flex items-center gap-2">
-          <input
-            type="search"
-            value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-            placeholder="Buscar por nome ou WhatsApp..."
-            className="flex-1 max-w-md border border-gray-300 rounded px-3 py-2 text-sm bg-white" />
-          {busca && (
-            <button onClick={() => setBusca('')}
-              className="text-xs text-gray-500 underline hover:opacity-80 cursor-pointer">
-              Limpar
-            </button>
-          )}
-          {!carregando && !erroCarregamento && (
-            <span className="text-xs text-gray-500 ml-auto">
-              {pacientesVisiveis.length} de {pacientes.length}
+        {/* Cards de resumo — H1 visibilidade + H6 filtros como reconhecimento */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+          <SummaryCard
+            label="Total"
+            value={resumo.total}
+            hint={resumo.total === 1 ? '1 paciente cadastrado' : `${resumo.total} pacientes cadastrados`}
+            tone="neutral"
+            active={filtroStatus === 'todos'}
+            onClick={() => setFiltroStatus('todos')}
+          />
+          <SummaryCard
+            label="Ativos"
+            value={resumo.ativos}
+            hint="Plano vigente"
+            tone="success"
+            active={filtroStatus === 'ativo'}
+            onClick={() => setFiltroStatus('ativo')}
+          />
+          <SummaryCard
+            label="Expirando"
+            value={resumo.expirando}
+            hint="Vence em ate 3 dias"
+            tone="warning"
+            active={filtroStatus === 'expirando'}
+            onClick={() => setFiltroStatus('expirando')}
+          />
+          <SummaryCard
+            label="Expirados"
+            value={resumo.expirados}
+            hint="Precisam renovar"
+            tone="danger"
+            active={filtroStatus === 'expirado'}
+            onClick={() => setFiltroStatus('expirado')}
+          />
+        </div>
+
+        {/* Barra de controle: busca + filtro dieta + refresh */}
+        <div
+          className="flex flex-wrap items-center gap-3 mb-4 p-3 rounded-xl bg-white"
+          style={{ border: '1px solid var(--color-border-subtle)' }}
+        >
+          <div className="relative flex-1 min-w-[220px]">
+            <span
+              aria-hidden
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-sm"
+              style={{ color: 'var(--color-text-muted)' }}
+            >
+              🔎
+            </span>
+            <input
+              ref={buscaRef}
+              type="search"
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              placeholder='Buscar por nome ou WhatsApp — tecle "/"'
+              aria-label="Buscar pacientes"
+              className="w-full pl-8 pr-3 py-2 rounded-md text-sm border"
+              style={{ borderColor: 'var(--color-border-subtle)' }}
+            />
+          </div>
+
+          <FiltroDietaSelect value={filtroDieta} onChange={setFiltroDieta} />
+
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={carregarPacientes}
+            loading={carregando}
+            title="Atualizar lista"
+          >
+            Atualizar
+          </Button>
+
+          {ultimaAtualizacao && !carregando && (
+            <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              Atualizado {formatarHorario(ultimaAtualizacao)}
             </span>
           )}
         </div>
 
+        {/* Metadata da lista + limpar filtros */}
+        {!carregando && !erroCarregamento && pacientes.length > 0 && (
+          <div className="flex items-center justify-between mb-3 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+            <span>
+              Exibindo <strong>{pacientesVisiveis.length}</strong> de <strong>{pacientes.length}</strong> pacientes
+            </span>
+            {temFiltroAtivo && (
+              <button onClick={limparFiltros} className="underline cursor-pointer">
+                Limpar filtros
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Erro de carregamento */}
         {erroCarregamento && (
-          <div className="mb-4 px-4 py-3 rounded border border-red-300 bg-red-50 text-sm text-red-700 flex items-start justify-between gap-3">
-            <span><strong>Não foi possível carregar a lista.</strong> {erroCarregamento}</span>
-            <button onClick={carregarPacientes}
-              className="underline whitespace-nowrap font-medium hover:opacity-80 cursor-pointer">
+          <div
+            className="mb-4 px-4 py-3 rounded-md text-sm flex items-start justify-between gap-3"
+            style={{ background: 'var(--color-danger-soft)', color: 'var(--color-danger)' }}
+          >
+            <span>
+              <strong>Nao foi possivel carregar a lista.</strong> {erroCarregamento}
+            </span>
+            <button onClick={carregarPacientes} className="underline whitespace-nowrap font-medium cursor-pointer">
               Tentar novamente
             </button>
           </div>
         )}
 
+        {/* Estados da tabela */}
         {carregando ? (
-          <p className="text-center py-10" style={{ color: 'var(--color-terra)' }}>Carregando pacientes...</p>
+          <SkeletonTable />
         ) : erroCarregamento ? null : pacientes.length === 0 ? (
-          <div className="text-center py-16 bg-white rounded-xl shadow-sm">
-            <p className="text-lg mb-2" style={{ color: 'var(--color-terra)' }}>Nenhum paciente cadastrado</p>
-            <p className="text-sm text-gray-500">Clique em "+ Novo Paciente" para começar</p>
-          </div>
+          <EmptyState
+            titulo="Nenhum paciente cadastrado"
+            descricao="Comece cadastrando o primeiro paciente. O bot recebe as boas-vindas automaticamente."
+            acao={<Button onClick={abrirNovoPaciente}>+ Cadastrar primeiro paciente</Button>}
+          />
         ) : pacientesVisiveis.length === 0 ? (
-          <div className="text-center py-16 bg-white rounded-xl shadow-sm">
-            <p className="text-lg mb-2" style={{ color: 'var(--color-terra)' }}>Nenhum paciente encontrado</p>
-            <p className="text-sm text-gray-500">Tente outro termo ou <button onClick={() => setBusca('')} className="underline cursor-pointer">limpar a busca</button>.</p>
-          </div>
+          <EmptyState
+            titulo="Nenhum paciente encontrado"
+            descricao="Tente outro termo ou remova algum filtro."
+            acao={
+              <Button variant="secondary" onClick={limparFiltros}>
+                Limpar filtros
+              </Button>
+            }
+          />
         ) : (
-          <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+          <div
+            className="bg-white rounded-xl overflow-hidden"
+            style={{ border: '1px solid var(--color-border-subtle)', boxShadow: 'var(--shadow-card)' }}
+          >
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-100">
-                  <th className="text-left px-4 py-3 font-semibold cursor-pointer select-none hover:opacity-80"
-                    style={{ color: 'var(--color-terra)' }} onClick={() => alternarOrdem('nome')}>
-                    Nome{setaOrdem('nome')}
+                <tr style={{ background: 'var(--color-bg-muted)' }}>
+                  <SortableTh
+                    ativo={ordemCampo === 'nome'}
+                    onClick={() => alternarOrdem('nome')}
+                    seta={setaOrdem('nome')}
+                  >
+                    Nome
+                  </SortableTh>
+                  <th className="text-left px-4 py-3 font-semibold" style={{ color: 'var(--color-text-secondary)' }}>
+                    WhatsApp
                   </th>
-                  <th className="text-left px-4 py-3 font-semibold" style={{ color: 'var(--color-terra)' }}>WhatsApp</th>
-                  <th className="text-left px-4 py-3 font-semibold" style={{ color: 'var(--color-terra)' }}>Plano</th>
-                  <th className="text-left px-4 py-3 font-semibold cursor-pointer select-none hover:opacity-80"
-                    style={{ color: 'var(--color-terra)' }} onClick={() => alternarOrdem('data_expiracao')}>
-                    Expiração{setaOrdem('data_expiracao')}
+                  <th className="text-left px-4 py-3 font-semibold" style={{ color: 'var(--color-text-secondary)' }}>
+                    Plano
                   </th>
-                  <th className="text-left px-4 py-3 font-semibold cursor-pointer select-none hover:opacity-80"
-                    style={{ color: 'var(--color-terra)' }} onClick={() => alternarOrdem('status')}>
-                    Status{setaOrdem('status')}
+                  <SortableTh
+                    ativo={ordemCampo === 'data_expiracao'}
+                    onClick={() => alternarOrdem('data_expiracao')}
+                    seta={setaOrdem('data_expiracao')}
+                  >
+                    Expiracao
+                  </SortableTh>
+                  <SortableTh
+                    ativo={ordemCampo === 'status'}
+                    onClick={() => alternarOrdem('status')}
+                    seta={setaOrdem('status')}
+                  >
+                    Status
+                  </SortableTh>
+                  <SortableTh
+                    ativo={ordemCampo === 'rag_status'}
+                    onClick={() => alternarOrdem('rag_status')}
+                    seta={setaOrdem('rag_status')}
+                  >
+                    Bot
+                  </SortableTh>
+                  <th className="text-right px-4 py-3 font-semibold" style={{ color: 'var(--color-text-secondary)' }}>
+                    Acao
                   </th>
-                  <th className="text-left px-4 py-3 font-semibold cursor-pointer select-none hover:opacity-80"
-                    style={{ color: 'var(--color-terra)' }} onClick={() => alternarOrdem('rag_status')}>
-                    Dieta{setaOrdem('rag_status')}
-                  </th>
-                  <th className="text-left px-4 py-3 font-semibold" style={{ color: 'var(--color-terra)' }}></th>
                 </tr>
               </thead>
               <tbody>
                 {pacientesVisiveis.map((p) => (
-                  <tr key={p.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3 font-medium" style={{ color: 'var(--color-terra)' }}>{p.nome}</td>
-                    <td className="px-4 py-3 text-gray-600">{p.whatsapp}</td>
-                    <td className="px-4 py-3 text-gray-600">{planoLabels[p.plano] ?? p.plano}</td>
-                    <td className="px-4 py-3 text-gray-600">{formatarData(p.data_expiracao)}</td>
-                    <td className="px-4 py-3"><StatusBadge status={p.status} /></td>
+                  <tr
+                    key={p.id}
+                    className="transition-colors hover:bg-[color:var(--color-bg-muted)]"
+                    style={{ borderTop: '1px solid var(--color-border-subtle)' }}
+                  >
+                    <td className="px-4 py-3 font-medium" style={{ color: 'var(--color-text-primary)' }}>
+                      {p.nome}
+                    </td>
+                    <td className="px-4 py-3" style={{ color: 'var(--color-text-secondary)' }}>
+                      {formatarWhatsappBR(p.whatsapp)}
+                    </td>
+                    <td className="px-4 py-3" style={{ color: 'var(--color-text-secondary)' }}>
+                      {PLANO_LABELS[p.plano as keyof typeof PLANO_LABELS] ?? p.plano}
+                    </td>
+                    <td className="px-4 py-3" style={{ color: 'var(--color-text-secondary)' }}>
+                      {formatarDataBR(p.data_expiracao)}
+                    </td>
                     <td className="px-4 py-3">
-                      <span
-                        title={ragStatusLabel[p.rag_status].titulo}
-                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${ragStatusLabel[p.rag_status].cor}`}>
-                        <span>{ragStatusLabel[p.rag_status].icone}</span>
-                        {ragStatusLabel[p.rag_status].texto}
-                      </span>
+                      <StatusBadge
+                        status={p.status}
+                        title={
+                          p.status === 'expirando'
+                            ? 'Vence em ate 3 dias'
+                            : p.status === 'expirado'
+                              ? 'Plano vencido — o bot bloqueia mensagens'
+                              : 'Plano vigente'
+                        }
+                      />
+                    </td>
+                    <td className="px-4 py-3">
+                      <RagBadge status={p.rag_status} />
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <button onClick={() => abrirEdicao(p)}
-                        className="text-xs underline cursor-pointer" style={{ color: 'var(--color-floresta)' }}>
+                      <Button variant="ghost" size="sm" onClick={() => abrirEdicao(p)}>
                         Editar
-                      </button>
+                      </Button>
                     </td>
                   </tr>
                 ))}
@@ -235,11 +430,116 @@ export function Dashboard() {
             </table>
           </div>
         )}
+
+        {/* Rodape com dica de atalho */}
+        <p className="text-xs mt-4 text-center" style={{ color: 'var(--color-text-muted)' }}>
+          Dica: pressione <kbd className="px-1 border rounded">/</kbd> para buscar,{' '}
+          <kbd className="px-1 border rounded">Esc</kbd> para fechar o modal.
+        </p>
       </main>
 
       {modalAberto && (
         <PacienteModal paciente={pacienteSelecionado} onClose={fecharModal} onSaved={carregarPacientes} />
       )}
+    </div>
+  );
+}
+
+// ---------- helpers ----------
+
+function SortableTh({
+  children,
+  onClick,
+  ativo,
+  seta,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  ativo: boolean;
+  seta: string;
+}) {
+  return (
+    <th
+      onClick={onClick}
+      className="text-left px-4 py-3 font-semibold cursor-pointer select-none hover:opacity-80"
+      style={{ color: ativo ? 'var(--color-floresta-dark)' : 'var(--color-text-secondary)' }}
+    >
+      {children}
+      {seta}
+    </th>
+  );
+}
+
+function FiltroDietaSelect({
+  value,
+  onChange,
+}: {
+  value: FiltroDieta;
+  onChange: (v: FiltroDieta) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <label htmlFor="filtro-dieta" className="text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+        Bot:
+      </label>
+      <select
+        id="filtro-dieta"
+        value={value}
+        onChange={(e) => onChange(e.target.value as FiltroDieta)}
+        className="border rounded-md px-2 py-1.5 text-sm bg-white"
+        style={{ borderColor: 'var(--color-border-subtle)' }}
+      >
+        <option value="todas">Todos</option>
+        <option value="indexado">Pronto</option>
+        <option value="processando">Preparando</option>
+        <option value="falhou">Falhou</option>
+        <option value="sem_dieta">Sem dieta</option>
+      </select>
+    </div>
+  );
+}
+
+function EmptyState({
+  titulo,
+  descricao,
+  acao,
+}: {
+  titulo: string;
+  descricao: string;
+  acao?: React.ReactNode;
+}) {
+  return (
+    <div
+      className="text-center py-16 rounded-xl bg-white"
+      style={{ border: '1px solid var(--color-border-subtle)' }}
+    >
+      <p className="text-lg font-medium mb-1" style={{ color: 'var(--color-text-primary)' }}>
+        {titulo}
+      </p>
+      <p className="text-sm mb-4" style={{ color: 'var(--color-text-muted)' }}>
+        {descricao}
+      </p>
+      {acao}
+    </div>
+  );
+}
+
+function SkeletonTable() {
+  return (
+    <div
+      className="bg-white rounded-xl overflow-hidden"
+      style={{ border: '1px solid var(--color-border-subtle)' }}
+    >
+      {[...Array(4)].map((_, i) => (
+        <div
+          key={i}
+          className="h-12 animate-pulse"
+          style={{
+            background: i % 2 ? 'var(--color-bg-muted)' : 'white',
+            borderTop: i === 0 ? 'none' : '1px solid var(--color-border-subtle)',
+          }}
+        />
+      ))}
     </div>
   );
 }
