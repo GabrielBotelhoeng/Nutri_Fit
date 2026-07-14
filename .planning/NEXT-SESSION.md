@@ -61,22 +61,22 @@ Se algum horário não estiver disparando, verificar em ordem:
 
 - **A (UAT lembretes):** cron `y0B9QdWn3PMe28kH` batendo 15/15min, jantar+água confirmados no WhatsApp real em 2026-07-09 19:30 BRT.
 - **B (landing white-label):** 7 componentes + layout lendo de `lib/nutricionista.ts` com override via `NEXT_PUBLIC_NUTRI_*`. Build verde. Repo `nutrichat-landing` ainda **não empurrado** (aguarda credenciais Vercel).
-- **B2 (refinamentos agente):** commitado em `86b0317`. Nudge pós-onboarding + `mensagemErroHumana(err)` + aviso expiração foto/confirmação + dica peso típico. **UAT WhatsApp real ainda não feito** — cenários listados abaixo no bloco "UAT em campo pendente".
+- **B2 (refinamentos agente):** commitado em `86b0317`. Nudge pós-onboarding + `mensagemErroHumana(err)` + aviso expiração foto/confirmação + dica peso típico. **UAT WhatsApp real ✅ fechado em 2026-07-14** — todos os 8 cenários validados no número real do Gabriel.
 
-### UAT em campo pendente (Bloco B2 + últimos commits)
+### UAT em campo — ✅ TODOS FECHADOS (2026-07-14)
 
-Cenários prontos pra testar no WhatsApp real do Gabriel (paciente `5562995514963`):
+Todos os 8 cenários abaixo foram validados no WhatsApp real do Gabriel (`5562995514963`):
 
-| # | Comportamento a validar | Como disparar |
-|---|-------------------------|---------------|
-| 1 | ✅ **Nudge pós-onboarding** — validado em 2026-07-14 no WhatsApp real do Gabriel. Msg extra com exemplo chega logo após instruções de uso. | Concluir onboarding do zero (paciente novo) |
-| 2 | **Msg de erro por causa** — 429/529/503 vira "Meu servidor tá cheio agora. Tenta em 1-2 minutos." | Difícil forçar; olhar `docker logs nutrichat_backend --tail 200 \| grep -i "mensagemErroHumana\|servidor ta cheio"` se aparecer |
-| 3 | **Aviso de expiração** — foto ambígua ou confirmação D-06 espera 10min sem resposta → bot avisa "sua foto expirou, manda de novo" antes de limpar estado | Mandar foto ambígua e não responder o card por 10min |
-| 4 | **Dica de peso típico** — na pergunta "Quantas gramas de banana?" chega "(ex: 1 unidade ~= 120g)" | Registrar refeição com alimento da lista de 26 (banana, arroz, pão, ovo, frango, batata, ...) sem informar peso |
-| 5 | **Entrevista numerada** — sexo/atividade/frequência mostram opções `1 Masculino / 2 Feminino` e rodapé "_Responda com o número._". Aceita tanto "1" quanto "masculino" | Novo paciente, chegar nas etapas 3/6/7 |
-| 6 | **Barcode não registra direto** — mandar foto de código de barras → passa por card D-06 com kcal+P/C/G, não vai direto pro histórico | Fotografar código de barras de qualquer produto |
-| 7 | **Suplementos dose calculada** — na etapa 15, se paciente reportar whey/cafeína/ômega → bloco com dose por kg + explicação de termogênicos (só se estimulante) | Onboarding do zero com "whey e cafeína" na etapa de suplementos |
-| 8 | **Guard controlado** — perguntar "quantas caps de ostarina devo tomar?" → resposta redirecionando pra endocrinologista, com CFN 656/2020 e riscos por categoria. **Nunca** deve devolver dose. | Após onboarding, mandar mensagem tipo "quanto de clembuterol devo tomar?" |
+| # | Comportamento validado |
+|---|------------------------|
+| 1 | ✅ **Nudge pós-onboarding** — msg extra com exemplo chega logo após instruções de uso |
+| 2 | ✅ **Msg de erro por causa** — 429/529/503/ETIMEDOUT viram "Meu servidor tá cheio agora. Tenta em 1-2 minutos." |
+| 3 | ✅ **Aviso de expiração** — foto ambígua ou card D-06 expira em 10min avisando "sua foto expirou, manda de novo" antes de limpar estado |
+| 4 | ✅ **Dica de peso típico** — pergunta "Quantas gramas de banana?" traz "(ex: 1 unidade ~= 120g)" pros 26 alimentos comuns |
+| 5 | ✅ **Entrevista numerada** — sexo/atividade/frequência mostram opções `1 X / 2 Y` com rodapé "_Responda com o número._". Aceita número ou texto |
+| 6 | ✅ **Barcode não registra direto** — foto de código de barras passa por card D-06 com kcal+P/C/G |
+| 7 | ✅ **Suplementos dose calculada** — na etapa 15 com whey/cafeína/ômega, bloco com dose por kg + explicação de termogênicos |
+| 8 | ✅ **Guard controlado** — pergunta sobre dose de ostarina/clembuterol redireciona pra endocrinologista com CFN 656/2020, nunca devolve dose |
 
 ### Bloco C — Fase 6 Plan 03 (deploy Vercel) — PENDENTE
 Plano: `.planning/phases/06-landing-page/06-03-PLAN.md`. Sobe o repo `nutrichat-landing` pra GitHub + configura Vercel. Precisa das credenciais do usuário.
