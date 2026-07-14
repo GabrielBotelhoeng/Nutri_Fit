@@ -78,6 +78,16 @@ Todos os 8 cenários abaixo foram validados no WhatsApp real do Gabriel (`556299
 | 7 | ✅ **Suplementos dose calculada** — na etapa 15 com whey/cafeína/ômega, bloco com dose por kg + explicação de termogênicos |
 | 8 | ✅ **Guard controlado** — pergunta sobre dose de ostarina/clembuterol redireciona pra endocrinologista com CFN 656/2020, nunca devolve dose |
 
+### Suplementos dose dinâmica via LLM — PARCIAL (2026-07-14, commit `52bbf68`)
+
+Novo módulo `backend/src/services/suplementos-llm.ts` chama Claude Sonnet pra dosear qualquer suplemento alimentar (BCAA/glutamina/colágeno/adaptógeno/manipulado por composição), não só os 3 hardcoded. Guard-rails: `analisarSuplementos()` filtra controlados antes, prompt firme, whitelist de categorias + termos suspeitos (ciclo/PCT/ml/semana) + cross-check com `CONTROLADOS`. Fallback pro formatter antigo se LLM falhar.
+
+Nudge pós-onboarding agora é neutro (agent.ts:847) — sem exemplo copiável.
+
+**Pendente na próxima sessão:**
+1. Escrever `backend/tests/suplementos-llm.test.ts` com Claude mockado. Cenários: BCAA vira dose; manipulado por nome comercial pede composição; peptídeo (BPC-157/TB-500) vira precisa_nutri; termo suspeito na resposta descarta dose; LLM falha → `falhou=true` (agent cai no fallback).
+2. UAT em campo — reset paciente (`docker exec nutrichat_backend npx tsx src/scripts/reset-gabriel.ts`), refazer onboarding listando `["whey", "creatina", "BCAA", "glutamina", "colageno", "ashwagandha"]`. Verificar que TODOS aparecem com dose apropriada.
+
 ### Bloco C — Fase 6 Plan 03 (deploy Vercel) — PENDENTE
 Plano: `.planning/phases/06-landing-page/06-03-PLAN.md`. Sobe o repo `nutrichat-landing` pra GitHub + configura Vercel. Precisa das credenciais do usuário.
 
