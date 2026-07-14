@@ -28,12 +28,17 @@ import { classificarIntencao, mencionaAguaCombinada, removerMencaoAgua } from '.
 import {
   analisarSuplementos,
   calcularDoseSuplementos,
+  CONTROLADOS,
   detectarPerguntaDoseControlada,
   formatarAvisoControlados,
   formatarExplicacaoTermogenicos,
   formatarMensagemSuplementos,
   formatarRespostaDoseControlada,
 } from './suplementos';
+import {
+  formatarMensagemSuplementosLLM,
+  sugerirDoseSuplementosLLM,
+} from './suplementos-llm';
 import {
   registrarMensagem,
   obterUltimasMensagens,
@@ -770,18 +775,47 @@ export async function processarMensagem(phone: string, texto: string): Promise<v
       try {
         const analise = analisarSuplementos(dadosCompletos.suplementos);
 
-        // Dose sugerida pros seguros (whey/cafeina/omega-3) + explicacao de
-        // termogenicos legitimos quando cabivel. Envia SEMPRE que ha seguros.
-        if (analise.seguros.length > 0) {
-          const { comCalculo, outrosInformados } = calcularDoseSuplementos(
-            dadosCompletos.peso_kg,
+        // Dose dinamica via Claude Sonnet. Cobre BCAA/glutamina/colageno/adaptogenos/
+        // manipulados por composicao + varia fraseamento (temperatura 0.5). Guard-rails
+        // triplo: (1) analisarSuplementos ja tirou controlados; (2) LLM instruido a nao
+        // dosear peptideo/hormonio/SARM/esteroide; (3) filtro pos-LLM cross-checka com
+        // CONTROLADOS e descarta termos suspeitos ("ciclo", "PCT", "ml/semana").
+        // Se LLM falhar (timeout/parse), cai no formatter hardcoded antigo como fallback.
+        if (analise.seguros.length > 0 || analise.desconhecidos.length > 0) {
+          const controladosSet = new Set(Object.keys(CONTROLADOS));
+          const resultadoLLM = await sugerirDoseSuplementosLLM(
+            {
+              peso_kg: dadosCompletos.peso_kg,
+              sexo: dadosCompletos.sexo ?? '',
+              objetivo: dadosCompletos.objetivo ?? '',
+            },
             analise.seguros,
+            analise.desconhecidos,
+            controladosSet,
           );
-          const msgDoses = formatarMensagemSuplementos(comCalculo, outrosInformados);
-          if (msgDoses) await sendText(phone, msgDoses);
 
-          const msgTermo = formatarExplicacaoTermogenicos(comCalculo);
-          if (msgTermo) await sendText(phone, msgTermo);
+          if (!resultadoLLM.falhou && resultadoLLM.blocos.length > 0) {
+            const msgDoses = formatarMensagemSuplementosLLM(resultadoLLM.blocos);
+            if (msgDoses) await sendText(phone, msgDoses);
+          } else if (analise.seguros.length > 0) {
+            // Fallback defensivo: LLM falhou (429/timeout/JSON invalido) — usa o
+            // formatter hardcoded pros 3 tipos conhecidos pra nao deixar o paciente
+            // sem resposta nenhuma.
+            const { comCalculo, outrosInformados } = calcularDoseSuplementos(
+              dadosCompletos.peso_kg,
+              analise.seguros,
+            );
+            const msgDoses = formatarMensagemSuplementos(comCalculo, outrosInformados);
+            if (msgDoses) await sendText(phone, msgDoses);
+          }
+
+          // Explicacao de termogenicos (hardcoded) continua igual — so aparece se ha
+          // estimulante e o texto e educacional (nao muda por paciente).
+          if (analise.seguros.length > 0) {
+            const { comCalculo } = calcularDoseSuplementos(dadosCompletos.peso_kg, analise.seguros);
+            const msgTermo = formatarExplicacaoTermogenicos(comCalculo);
+            if (msgTermo) await sendText(phone, msgTermo);
+          }
         }
 
         if (analise.controlados.length > 0) {
@@ -840,14 +874,19 @@ export async function processarMensagem(phone: string, texto: string): Promise<v
         `Vamos la! 🚀`,
       );
 
-      // Nudge de ativação: um exemplo concreto pra reduzir tempo até o primeiro
-      // registro. Sem essa, é comum o paciente ficar sem saber o que digitar
-      // e cair em consulta ao PDF ("qual minha dieta?") no primeiro contato,
-      // atrasando a formação de hábito.
+      // Nudge de ativação neutro. Evita exemplo literal ("tomei 1 copo de café...")
+      // porque o paciente que copiar acaba registrando algo que não comeu — o
+      // parser trata como mensagem real de refeição. Menciona os lembretes
+      // automáticos pra alinhar expectativa (paciente sabe que o bot vai puxar
+      // hidratação/alimentação nos horários combinados).
       await sendText(
         phone,
-        `👇 Bora testar agora?\n` +
-        `Manda algo simples, tipo: _"tomei 1 copo de café com leite e um pão com manteiga"_`,
+        `👇 *Tô pronto pra te ajudar!*\n\n` +
+        `Você pode:\n` +
+        `• Registrar refeições por texto, áudio ou foto\n` +
+        `• Perguntar sobre sua dieta a qualquer hora\n\n` +
+        `Também vou te lembrar de hidratação e alimentação nos horários que combinamos. 💧🍽️\n\n` +
+        `Qualquer coisa, é só me chamar. 💪`,
       );
     } else {
       // P1-6: quando avancamos para a etapa 14 e a dieta ja tem horarios

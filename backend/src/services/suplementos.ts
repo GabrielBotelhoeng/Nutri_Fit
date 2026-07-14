@@ -120,7 +120,7 @@ interface DadosControlado {
   categoria: CategoriaControlado;
 }
 
-const CONTROLADOS: Record<string, DadosControlado> = {
+export const CONTROLADOS: Record<string, DadosControlado> = {
   // beta-agonistas
   'clembuterol': { motivo: 'beta-agonista, banido pela WADA, uso veterinario', categoria: 'beta_agonista' },
   'clenbuterol': { motivo: 'beta-agonista, banido pela WADA, uso veterinario', categoria: 'beta_agonista' },
