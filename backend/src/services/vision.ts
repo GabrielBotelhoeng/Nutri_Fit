@@ -5,7 +5,7 @@ import { sendText } from './evolution';
 import { buscarPacientePorWhatsapp, getEstado, atualizarEstado } from './conversation';
 import type { PacienteInfo } from './conversation';
 import { processarCodigoBarras } from './barcode';
-import { registrarRefeicao, obterSaldoDia, formatarSaldoDia, formatarBlocoProgressoDia, dispararAlertaOvershoot, calcularStreak, MacrosRefeicao } from './meal';
+import { registrarRefeicao, obterSaldoDia, formatarBlocoProgressoDia, dispararAlertaOvershoot, calcularStreak, MacrosRefeicao } from './meal';
 import { obterMetas, MacrosDiarios } from './calculos';
 
 const claude = new Anthropic({ apiKey: env.CLAUDE_API_KEY });
@@ -31,7 +31,7 @@ async function detectarTipoImagem(
       role: 'user',
       content: [
         { type: 'image', source: { type: 'base64', media_type: mimeClean, data: base64 } },
-        { type: 'text', text: `Analise esta imagem e responda APENAS com uma das três opções:\n- "prato" — se for uma foto de comida, prato ou refeição\n- "barcode" — se for uma foto de código de barras (código de barras EAN/QR)\n- "rotulo" — se for uma foto de tabela nutricional ou rótulo de embalagem de alimento\n\nResponda com APENAS uma palavra. Não explique.` },
+        { type: 'text', text: `Classifique a imagem em UMA categoria. Ordem de prioridade IMPORTA — aplique de cima pra baixo:\n\n1. "barcode" — TEM CÓDIGO DE BARRAS EAN/QR VISÍVEL (linhas verticais paralelas com números), independente de a embalagem estar fechada, aberta ou faltar tabela nutricional. Se o código de barras é o elemento MAIS legível da foto, é "barcode".\n2. "rotulo" — NÃO tem código de barras claro MAS tem TABELA NUTRICIONAL legível (linhas de "Valor energético", "Carboidratos", "Proteínas" com números). Rótulo de ingredientes SEM tabela não conta — cai em "barcode" se houver código, ou "prato" se for embalagem sem info nutricional.\n3. "prato" — comida servida (pratos, tigelas, marmitas, bebida em copo), OU qualquer outra coisa que não seja código de barras nem tabela nutricional.\n\nResponda com UMA palavra: barcode, rotulo ou prato. Sem explicação.` },
       ],
     }],
   });
@@ -288,12 +288,30 @@ export async function interpretarRespostaConfirmacao(texto: string): Promise<'si
 
 // Bug D-06 fix (2026-07-08): monta o texto do card D-06. Extraido de
 // handleConfirmacaoPrato pra reusar na re-emissao pos-correcao (Opcao C1).
-export function montarTextoCard(analise: AnalisePrato, avisoExtra?: string, cabecalho?: string): string {
+export interface OpcoesCard {
+  avisoExtra?: string;
+  cabecalho?: string;
+  // Quando true, expande o bloco de kcal em kcal+P/C/G (rico em detalhes).
+  // Usado pra barcode/rotulo — a foto tem 1 produto com macros conhecidas
+  // do OpenFoodFacts, então vale mostrar tudo pro paciente conferir.
+  detalhesMacros?: boolean;
+  // Exemplo customizado pra linha "ou me manda a refeição corrigida".
+  // Default é neutro-pra-prato ("70g de abobrinha e 70g de ovo"); barcode
+  // passa algo relevante ao produto ("50g" ou "meia embalagem").
+  exemploCorrecao?: string;
+}
+
+export function montarTextoCard(analise: AnalisePrato, avisoExtra?: string, cabecalho?: string, opts?: Pick<OpcoesCard, 'detalhesMacros' | 'exemploCorrecao'>): string {
   const lista = analise.alimentos.map((a, i) => `${i + 1}. ${a}`).join('\n');
   const avisoConfianca = analise.confianca === 'baixa' ? '\n⚠️ Baixa confiança na identificação.' : '';
   const avisoLimitacao = avisoExtra ? `\n${avisoExtra}` : '';
   const header = cabecalho ?? '📸 Identifiquei na foto:';
-  return `${header}\n${lista}\n\nEst. ${Math.round(analise.macros.kcal)} kcal${avisoConfianca}${avisoLimitacao}\n\nEstá correto?\n• *sim* para registrar\n• *não* para cancelar\n• ou me manda a refeição corrigida por texto (ex: "70g de abobrinha e 70g de ovo")`;
+  const m = analise.macros;
+  const blocoMacros = opts?.detalhesMacros
+    ? `Est. *${Math.round(m.kcal)} kcal*\n• Proteína: ${Math.round(m.proteina_g)}g\n• Carbo: ${Math.round(m.carbo_g)}g\n• Gordura: ${Math.round(m.gordura_g)}g`
+    : `Est. ${Math.round(m.kcal)} kcal`;
+  const exemplo = opts?.exemploCorrecao ?? '70g de abobrinha e 70g de ovo';
+  return `${header}\n${lista}\n\n${blocoMacros}${avisoConfianca}${avisoLimitacao}\n\nEstá correto?\n• *sim* para registrar\n• *não* para cancelar\n• ou me manda a refeição corrigida por texto (ex: "${exemplo}")`;
 }
 
 // Bug D-06 fix (2026-07-08): salva confirmacao_pendente + envia card.
@@ -303,7 +321,7 @@ export async function enviarCardConfirmacao(
   phone: string,
   paciente: PacienteInfo,
   analise: AnalisePrato,
-  opcoes?: { avisoExtra?: string; cabecalho?: string },
+  opcoes?: OpcoesCard,
 ): Promise<void> {
   if (analise.macros.kcal === 0 || analise.alimentos.length === 0) {
     await sendText(phone, '❌ Não consegui identificar os alimentos. Tente uma foto com mais luz ou descreva por texto.');
@@ -317,7 +335,10 @@ export async function enviarCardConfirmacao(
       },
     },
   });
-  await sendText(phone, montarTextoCard(analise, opcoes?.avisoExtra, opcoes?.cabecalho));
+  await sendText(phone, montarTextoCard(analise, opcoes?.avisoExtra, opcoes?.cabecalho, {
+    detalhesMacros: opcoes?.detalhesMacros,
+    exemploCorrecao: opcoes?.exemploCorrecao,
+  }));
 }
 
 // Envia lista de alimentos identificados ao paciente e aguarda confirmação "sim"/"não" (D-06).
@@ -488,41 +509,90 @@ export async function processarImagem(
     const tipo = await detectarTipoImagem(base64, mimetype);
     console.log(`[vision] Tipo detectado: ${tipo} para ${phone}`);
 
+    // Bug fix (2026-07-13): barcode e rótulo NÃO registram direto — foto de
+    // embalagem fechada (ex: código de barras de Todynho intacto) era registrada
+    // como consumida com 100g default. Agora ambos passam pelo card D-06 pro
+    // paciente confirmar antes.
     if (tipo === 'barcode') {
       const produto = await processarCodigoBarras(base64, mimetype);
       if (produto) {
-        const descricao = `${produto.nome} (~100g)`;
-        await registrarRefeicao(paciente.id, descricao, produto.macrosPor100g, 'codigo_barras');
-        const saldo = await obterSaldoDia(paciente.id);
-        const streak = await calcularStreak(paciente.id, metas);
-        await sendText(phone, formatarSaldoDia(descricao, produto.macrosPor100g.kcal, saldo, metas, streak));
-        await dispararAlertaOvershoot(phone, saldo, metas);
-      } else {
-        const rotulo = await lerRotulo(base64, mimetype);
-        if (rotulo) {
-          await registrarRefeicao(paciente.id, rotulo.produto, rotulo.macros, 'rotulo');
-          const saldo = await obterSaldoDia(paciente.id);
-          const streak = await calcularStreak(paciente.id, metas);
-          await sendText(phone, formatarSaldoDia(rotulo.produto, rotulo.macros.kcal, saldo, metas, streak));
-          await dispararAlertaOvershoot(phone, saldo, metas);
-        } else {
-          await sendText(phone, '❌ Não consegui ler o código de barras ou rótulo. Tente uma foto mais nítida ou descreva a refeição por texto.');
-        }
+        const analiseBarcode: AnalisePrato = {
+          alimentos: [`${produto.nome} (~100g)`],
+          confianca: 'media',
+          macros: produto.macrosPor100g,
+          aviso: null,
+          ambiguidade: 'nenhuma',
+        };
+        await enviarCardConfirmacao(phone, paciente, analiseBarcode, {
+          cabecalho: '📦 Identifiquei o produto pelo código de barras:',
+          avisoExtra: 'ℹ️ Assumindo ~100g. Se foi só a foto da embalagem fechada e você não consumiu, mande *não*.',
+          detalhesMacros: true,
+          exemploCorrecao: '50g' + (produto.nome ? ` de ${produto.nome.toLowerCase()}` : ''),
+        });
+        return;
       }
+      const rotulo = await lerRotulo(base64, mimetype);
+      if (rotulo) {
+        const analiseRotulo: AnalisePrato = {
+          alimentos: [`${rotulo.produto} (${rotulo.porcao_g}g)`],
+          confianca: 'media',
+          macros: rotulo.macros,
+          aviso: null,
+          ambiguidade: 'nenhuma',
+        };
+        await enviarCardConfirmacao(phone, paciente, analiseRotulo, {
+          cabecalho: '🏷️ Li o rótulo do produto:',
+          avisoExtra: `ℹ️ Considerando 1 porção (${rotulo.porcao_g}g). Se comeu diferente, mande a correção.`,
+          detalhesMacros: true,
+          exemploCorrecao: `${rotulo.porcao_g}g`,
+        });
+        return;
+      }
+      await sendText(phone, '❌ Não consegui ler o código de barras ou rótulo. Tente uma foto mais nítida ou descreva a refeição por texto.');
       return;
     }
 
     if (tipo === 'rotulo') {
       const rotulo = await lerRotulo(base64, mimetype);
-      if (!rotulo) {
-        await sendText(phone, '❌ Não consegui ler os valores do rótulo. Tente uma foto mais nítida.');
+      // Fallback (2026-07-13): Haiku pode classificar foto de código de barras
+      // como "rotulo" quando a embalagem está visível. Se lerRotulo devolve
+      // macros zeradas ou produto desconhecido, tenta OpenFoodFacts pelo EAN
+      // antes de desistir.
+      const rotuloVazio = !rotulo || rotulo.macros.kcal === 0 || rotulo.produto === 'Produto desconhecido';
+      if (rotuloVazio) {
+        const produto = await processarCodigoBarras(base64, mimetype);
+        if (produto) {
+          const analiseBarcode: AnalisePrato = {
+            alimentos: [`${produto.nome} (~100g)`],
+            confianca: 'media',
+            macros: produto.macrosPor100g,
+            aviso: null,
+            ambiguidade: 'nenhuma',
+          };
+          await enviarCardConfirmacao(phone, paciente, analiseBarcode, {
+            cabecalho: '📦 Identifiquei o produto pelo código de barras:',
+            avisoExtra: 'ℹ️ Assumindo ~100g. Se foi só a foto da embalagem fechada e você não consumiu, mande *não*.',
+            detalhesMacros: true,
+            exemploCorrecao: '50g' + (produto.nome ? ` de ${produto.nome.toLowerCase()}` : ''),
+          });
+          return;
+        }
+        await sendText(phone, '❌ Não consegui ler o rótulo nem identificar o código de barras. Tente uma foto mais nítida com a tabela nutricional ou o código EAN em foco, ou descreva a refeição por texto.');
         return;
       }
-      await registrarRefeicao(paciente.id, rotulo.produto, rotulo.macros, 'rotulo');
-      const saldo = await obterSaldoDia(paciente.id);
-      const streak = await calcularStreak(paciente.id, metas);
-      await sendText(phone, formatarSaldoDia(rotulo.produto, rotulo.macros.kcal, saldo, metas, streak));
-      await dispararAlertaOvershoot(phone, saldo, metas);
+      const analiseRotulo: AnalisePrato = {
+        alimentos: [`${rotulo.produto} (${rotulo.porcao_g}g)`],
+        confianca: 'media',
+        macros: rotulo.macros,
+        aviso: null,
+        ambiguidade: 'nenhuma',
+      };
+      await enviarCardConfirmacao(phone, paciente, analiseRotulo, {
+        cabecalho: '🏷️ Li o rótulo do produto:',
+        avisoExtra: `ℹ️ Considerando 1 porção (${rotulo.porcao_g}g). Se comeu diferente, mande a correção.`,
+        detalhesMacros: true,
+        exemploCorrecao: `${rotulo.porcao_g}g`,
+      });
       return;
     }
 
