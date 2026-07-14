@@ -1,93 +1,200 @@
-// P0-3 — Flag de suplementos controlados.
-// Paciente lista o que toma em texto livre (etapa 13 da entrevista). Antes,
-// o NutriChat tratava tudo como string e so olhava "creatina" pra calcular
-// dose. Agora classifica em 3 baldes:
+// P0-3 — Classificacao + dose + explicacao de suplementos.
+// Paciente lista o que toma em texto livre (etapa 13 da entrevista). O bot:
 //
-//   seguros       — itens reconhecidos como suplementos alimentares comuns.
-//   desconhecidos — itens fora das listas (pode ser marca, abreviacao, typo,
-//                   ou suplemento legitimo que ainda nao mapeamos).
-//   controlados   — substancias proibidas/controladas que NAO sao suplemento
-//                   alimentar (anabolizantes, hormonios, doping). Disparam
-//                   aviso para o paciente e flag pro nutricionista.
+//   1. Classifica cada item em 3 baldes: seguros / desconhecidos / controlados.
+//   2. Para seguros com dose padrao (whey, cafeina, omega-3), sugere posologia
+//      baseada no peso. Marca como "sugestao inicial, valide com nutri".
+//   3. Se ha estimulantes/termogenicos legitimos (cafeina, cha verde, sinefrina),
+//      explica efeitos e cautelas (nao empilhar, evitar apos 16h).
+//   4. Para controlados (clembuterol, stanozolol, sarms, sibutramina), envia
+//      aviso explicando o *porque* (arritmia, hepatotoxicidade, etc.) e
+//      redirecionamento pra cardiologista/endocrinologista. NUNCA passa dose.
+//   5. Se paciente perguntar dose de controlado fora da entrevista, o handler
+//      dedicado (`detectarPerguntaDoseControlada` / `formatarRespostaDoseControlada`)
+//      responde com o redirect e sinaliza pro nutri.
 //
-// O matching e case-insensitive, ignora acentos e tolera variacoes de palavra
-// composta ("clenbuterol" / "clembuterol"). Conservador: prefere classificar
-// como "desconhecido" do que como "seguro" sem certeza. NUNCA classifica como
-// "controlado" sem match exato — risco de falso positivo derruba a confianca
-// no aviso.
+// Matching e case-insensitive, ignora acentos, tolera variacoes. Conservador:
+// prefere "desconhecido" a "seguro" sem certeza. NUNCA classifica como
+// "controlado" sem match de palavra inteira — falso positivo derruba confianca.
 
-const SUPLEMENTOS_SEGUROS: string[] = [
+type CategoriaSeguro = 'proteina' | 'estimulante' | 'omega' | 'outro';
+
+// Mapa de suplementos seguros para categoria. Substrings sao testadas em ordem
+// de especificidade (mais longo primeiro) para "whey protein" nao cair em "whey"
+// generico antes de ser reconhecido como o mesmo item.
+const SEGUROS_POR_CATEGORIA: Array<{ padrao: string; categoria: CategoriaSeguro }> = [
   // proteinas
-  'whey', 'whey protein', 'whey isolado', 'whey concentrado', 'caseina', 'caseína',
-  'albumina', 'proteina vegetal', 'proteína vegetal', 'proteina de ervilha', 'proteína de soja',
-  // aminoacidos
-  'bcaa', 'glutamina', 'arginina', 'beta-alanina', 'beta alanina', 'citrulina', 'taurina',
-  'creatina', 'leucina', 'lisina', 'triptofano',
-  // energia/treino
-  'cafeina', 'cafeína', 'pre-treino', 'pré-treino', 'pre treino', 'pre-workout',
-  'maltodextrina', 'dextrose', 'waxy maize', 'hipercalorico', 'hipercalórico',
-  'palatinose', 'carbo gel',
-  // vitaminas/minerais
-  'multivitaminico', 'multivitamínico', 'polivitaminico',
-  'vitamina a', 'vitamina b', 'vitamina b12', 'vitamina b6', 'vitamina c', 'vitamina d',
-  'vitamina d3', 'vitamina e', 'vitamina k', 'complexo b',
-  'magnesio', 'magnésio', 'zinco', 'ferro', 'calcio', 'cálcio', 'potassio', 'potássio',
-  'selenio', 'selênio', 'cromo', 'iodo',
-  // omega/oleos
-  'omega 3', 'omega-3', 'ômega 3', 'ômega-3', 'oleo de peixe', 'óleo de peixe', 'oleo de coco',
-  'oleo de linhaca', 'tcm', 'mct',
-  // saude geral
-  'colageno', 'colágeno', 'colageno hidrolisado', 'glucosamina', 'condroitina',
-  'probiotico', 'probiótico', 'prebiotico', 'prebiótico', 'fibra', 'psyllium',
-  // fitoterapicos comuns
-  'cha verde', 'chá verde', 'cha-verde', 'curcuma', 'cúrcuma', 'gengibre', 'ginkgo', 'ginseng',
-  'maca peruana', 'spirulina', 'chlorella',
-  // melatonina/sono — controlada no BR ate 2021, hoje liberada como suplemento
-  'melatonina',
+  { padrao: 'whey protein', categoria: 'proteina' },
+  { padrao: 'whey isolado', categoria: 'proteina' },
+  { padrao: 'whey concentrado', categoria: 'proteina' },
+  { padrao: 'whey', categoria: 'proteina' },
+  { padrao: 'caseina', categoria: 'proteina' },
+  { padrao: 'albumina', categoria: 'proteina' },
+  { padrao: 'proteina vegetal', categoria: 'proteina' },
+  { padrao: 'proteina de ervilha', categoria: 'proteina' },
+  { padrao: 'proteina de soja', categoria: 'proteina' },
+  // estimulantes / termogenicos legitimos
+  { padrao: 'pre-treino', categoria: 'estimulante' },
+  { padrao: 'pre treino', categoria: 'estimulante' },
+  { padrao: 'pre-workout', categoria: 'estimulante' },
+  { padrao: 'cafeina', categoria: 'estimulante' },
+  { padrao: 'cha verde', categoria: 'estimulante' },
+  { padrao: 'cha-verde', categoria: 'estimulante' },
+  { padrao: 'sinefrina', categoria: 'estimulante' },
+  { padrao: 'guarana', categoria: 'estimulante' },
+  { padrao: 'termogenico', categoria: 'estimulante' },
+  // omega / oleos
+  { padrao: 'omega 3', categoria: 'omega' },
+  { padrao: 'omega-3', categoria: 'omega' },
+  { padrao: 'oleo de peixe', categoria: 'omega' },
+  { padrao: 'oleo de linhaca', categoria: 'omega' },
+  // aminoacidos / secundarios
+  { padrao: 'bcaa', categoria: 'outro' },
+  { padrao: 'glutamina', categoria: 'outro' },
+  { padrao: 'arginina', categoria: 'outro' },
+  { padrao: 'beta-alanina', categoria: 'outro' },
+  { padrao: 'beta alanina', categoria: 'outro' },
+  { padrao: 'citrulina', categoria: 'outro' },
+  { padrao: 'taurina', categoria: 'outro' },
+  { padrao: 'creatina', categoria: 'outro' }, // dose ja calculada em calculos.ts
+  { padrao: 'leucina', categoria: 'outro' },
+  { padrao: 'maltodextrina', categoria: 'outro' },
+  { padrao: 'dextrose', categoria: 'outro' },
+  { padrao: 'waxy maize', categoria: 'outro' },
+  { padrao: 'palatinose', categoria: 'outro' },
+  { padrao: 'hipercalorico', categoria: 'outro' },
+  // vitaminas / minerais
+  { padrao: 'multivitaminico', categoria: 'outro' },
+  { padrao: 'polivitaminico', categoria: 'outro' },
+  { padrao: 'complexo b', categoria: 'outro' },
+  { padrao: 'vitamina a', categoria: 'outro' },
+  { padrao: 'vitamina b12', categoria: 'outro' },
+  { padrao: 'vitamina b6', categoria: 'outro' },
+  { padrao: 'vitamina b', categoria: 'outro' },
+  { padrao: 'vitamina c', categoria: 'outro' },
+  { padrao: 'vitamina d3', categoria: 'outro' },
+  { padrao: 'vitamina d', categoria: 'outro' },
+  { padrao: 'vitamina e', categoria: 'outro' },
+  { padrao: 'vitamina k', categoria: 'outro' },
+  { padrao: 'magnesio', categoria: 'outro' },
+  { padrao: 'zinco', categoria: 'outro' },
+  { padrao: 'ferro', categoria: 'outro' },
+  { padrao: 'calcio', categoria: 'outro' },
+  { padrao: 'potassio', categoria: 'outro' },
+  { padrao: 'selenio', categoria: 'outro' },
+  { padrao: 'cromo', categoria: 'outro' },
+  { padrao: 'iodo', categoria: 'outro' },
+  // saude geral / fitoterapicos
+  { padrao: 'colageno hidrolisado', categoria: 'outro' },
+  { padrao: 'colageno', categoria: 'outro' },
+  { padrao: 'glucosamina', categoria: 'outro' },
+  { padrao: 'condroitina', categoria: 'outro' },
+  { padrao: 'probiotico', categoria: 'outro' },
+  { padrao: 'prebiotico', categoria: 'outro' },
+  { padrao: 'psyllium', categoria: 'outro' },
+  { padrao: 'fibra', categoria: 'outro' },
+  { padrao: 'curcuma', categoria: 'outro' },
+  { padrao: 'gengibre', categoria: 'outro' },
+  { padrao: 'ginkgo', categoria: 'outro' },
+  { padrao: 'ginseng', categoria: 'outro' },
+  { padrao: 'maca peruana', categoria: 'outro' },
+  { padrao: 'spirulina', categoria: 'outro' },
+  { padrao: 'chlorella', categoria: 'outro' },
+  { padrao: 'melatonina', categoria: 'outro' },
+  { padrao: 'mct', categoria: 'outro' },
+  { padrao: 'tcm', categoria: 'outro' },
+  { padrao: 'oleo de coco', categoria: 'outro' },
 ];
 
-// Substancias controladas/proibidas. Maioria sao anabolizantes androgenicos,
-// hormonios de crescimento ou beta-agonistas. Lista nao exaustiva — foca nos
-// nomes mais comuns que aparecem em fala leiga.
-const SUPLEMENTOS_CONTROLADOS: Record<string, string> = {
-  // beta-agonistas (doping, broncodilatador veterinario)
-  'clembuterol': 'beta-agonista, banido pela WADA, uso veterinario',
-  'clenbuterol': 'beta-agonista, banido pela WADA, uso veterinario',
-  'salbutamol': 'beta-agonista, controlado',
+// Substancias controladas/proibidas. Estruturado por categoria pro aviso ao
+// paciente explicar o *porque* (nao so "beta-agonista", mas os riscos concretos).
+type CategoriaControlado =
+  | 'beta_agonista'
+  | 'anabolizante'
+  | 'hormonio'
+  | 'sarm'
+  | 'emagrecedor';
+
+interface DadosControlado {
+  motivo: string;
+  categoria: CategoriaControlado;
+}
+
+const CONTROLADOS: Record<string, DadosControlado> = {
+  // beta-agonistas
+  'clembuterol': { motivo: 'beta-agonista, banido pela WADA, uso veterinario', categoria: 'beta_agonista' },
+  'clenbuterol': { motivo: 'beta-agonista, banido pela WADA, uso veterinario', categoria: 'beta_agonista' },
+  'salbutamol': { motivo: 'beta-agonista, uso off-label controlado', categoria: 'beta_agonista' },
   // anabolizantes androgenicos
-  'stanozolol': 'anabolizante androgenico',
-  'winstrol': 'anabolizante androgenico (stanozolol)',
-  'oxandrolona': 'anabolizante androgenico',
-  'anavar': 'anabolizante androgenico (oxandrolona)',
-  'testosterona': 'hormonio masculino, uso so com prescricao endocrino',
-  'durateston': 'esteres de testosterona',
-  'deca-durabolin': 'nandrolona, anabolizante',
-  'deca durabolin': 'nandrolona, anabolizante',
-  'nandrolona': 'anabolizante androgenico',
-  'dianabol': 'metandrostenolona, anabolizante',
-  'metandrostenolona': 'anabolizante androgenico',
-  'trembolona': 'anabolizante veterinario',
-  'tren': 'anabolizante veterinario (trembolona)',
-  'hemogenin': 'oximetolona, anabolizante',
-  'oximetolona': 'anabolizante androgenico',
-  'masteron': 'drostanolona, anabolizante',
+  'stanozolol': { motivo: 'anabolizante androgenico', categoria: 'anabolizante' },
+  'winstrol': { motivo: 'anabolizante androgenico (stanozolol)', categoria: 'anabolizante' },
+  'oxandrolona': { motivo: 'anabolizante androgenico', categoria: 'anabolizante' },
+  'anavar': { motivo: 'anabolizante androgenico (oxandrolona)', categoria: 'anabolizante' },
+  'testosterona': { motivo: 'hormonio masculino, uso so com prescricao endocrino', categoria: 'anabolizante' },
+  'durateston': { motivo: 'esteres de testosterona', categoria: 'anabolizante' },
+  'deca-durabolin': { motivo: 'nandrolona, anabolizante', categoria: 'anabolizante' },
+  'deca durabolin': { motivo: 'nandrolona, anabolizante', categoria: 'anabolizante' },
+  'nandrolona': { motivo: 'anabolizante androgenico', categoria: 'anabolizante' },
+  'dianabol': { motivo: 'metandrostenolona, anabolizante', categoria: 'anabolizante' },
+  'metandrostenolona': { motivo: 'anabolizante androgenico', categoria: 'anabolizante' },
+  'trembolona': { motivo: 'anabolizante veterinario', categoria: 'anabolizante' },
+  'tren': { motivo: 'anabolizante veterinario (trembolona)', categoria: 'anabolizante' },
+  'hemogenin': { motivo: 'oximetolona, anabolizante', categoria: 'anabolizante' },
+  'oximetolona': { motivo: 'anabolizante androgenico', categoria: 'anabolizante' },
+  'masteron': { motivo: 'drostanolona, anabolizante', categoria: 'anabolizante' },
   // hormonios
-  'gh': 'hormonio do crescimento, prescricao endocrino',
-  'hgh': 'hormonio do crescimento humano',
-  'somatropina': 'hormonio do crescimento sintetico',
-  'igf-1': 'fator de crescimento, controlado',
-  'epo': 'eritropoietina, banida em esporte',
-  'eritropoietina': 'banida pela WADA',
+  'gh': { motivo: 'hormonio do crescimento, prescricao endocrino', categoria: 'hormonio' },
+  'hgh': { motivo: 'hormonio do crescimento humano', categoria: 'hormonio' },
+  'somatropina': { motivo: 'hormonio do crescimento sintetico', categoria: 'hormonio' },
+  'igf-1': { motivo: 'fator de crescimento, controlado', categoria: 'hormonio' },
+  'epo': { motivo: 'eritropoietina, banida em esporte', categoria: 'hormonio' },
+  'eritropoietina': { motivo: 'banida pela WADA', categoria: 'hormonio' },
   // sarms
-  'ostarine': 'SARM, sem aprovacao da ANVISA',
-  'ligandrol': 'SARM, sem aprovacao da ANVISA',
-  'lgd-4033': 'SARM, sem aprovacao da ANVISA',
-  'mk-677': 'secretagogo de GH, sem aprovacao',
-  'rad-140': 'SARM, sem aprovacao da ANVISA',
+  'ostarine': { motivo: 'SARM, sem aprovacao da ANVISA', categoria: 'sarm' },
+  'ligandrol': { motivo: 'SARM, sem aprovacao da ANVISA', categoria: 'sarm' },
+  'lgd-4033': { motivo: 'SARM, sem aprovacao da ANVISA', categoria: 'sarm' },
+  'mk-677': { motivo: 'secretagogo de GH, sem aprovacao', categoria: 'sarm' },
+  'rad-140': { motivo: 'SARM, sem aprovacao da ANVISA', categoria: 'sarm' },
   // emagrecedores controlados
-  'sibutramina': 'controlado, prescricao especial',
-  'anfepramona': 'anorexigeno, controlado',
-  'efedrina': 'simpaticomimetico, controlado',
+  'sibutramina': { motivo: 'controlado, prescricao especial', categoria: 'emagrecedor' },
+  'anfepramona': { motivo: 'anorexigeno, controlado', categoria: 'emagrecedor' },
+  'efedrina': { motivo: 'simpaticomimetico, controlado', categoria: 'emagrecedor' },
+};
+
+// Riscos concretos por categoria — explicados no aviso ao paciente pra ele
+// entender o *porque* (nao um "porque eu falei"). Baseado em bulas ANVISA e
+// literatura de eventos adversos documentados.
+const RISCOS_POR_CATEGORIA: Record<CategoriaControlado, string[]> = {
+  beta_agonista: [
+    'taquicardia sustentada e arritmia',
+    'tremor, sudorese e hipocalemia (potassio baixo)',
+    'em uso prolongado: hipertrofia do ventriculo esquerdo, risco de infarto',
+    'ha obitos documentados em uso off-label pra emagrecimento',
+  ],
+  anabolizante: [
+    'hepatotoxicidade (dano ao figado, comum em ciclos orais)',
+    'piora do perfil lipidico (LDL sobe, HDL desce) e risco cardiovascular',
+    'supressao do eixo hormonal proprio, requer PCT medica',
+    'ginecomastia, acne, alopecia androgenetica',
+  ],
+  hormonio: [
+    'alteracao do eixo endocrino natural',
+    'resistencia insulinica e alteracao glicemica',
+    'em uso nao supervisionado: acromegalia, cardiomegalia',
+    'risco tumoral (potencial estimulo de tumores existentes)',
+  ],
+  sarm: [
+    'sem estudos de seguranca de longo prazo em humanos',
+    'hepatotoxicidade e alteracao lipidica documentadas',
+    'supressao hormonal (menor que anabolizante, mas existe)',
+    'contaminacao frequente: analises independentes acham anabolizante em muitos frascos',
+  ],
+  emagrecedor: [
+    'taquicardia, hipertensao e risco cardiovascular',
+    'insonia, ansiedade, alteracao de humor',
+    'dependencia psicologica e efeito rebote ao interromper',
+    'requer prescricao medica e acompanhamento (RDC ANVISA)',
+  ],
 };
 
 function normalizar(s: string): string {
@@ -95,16 +202,16 @@ function normalizar(s: string): string {
     .toLowerCase()
     .trim()
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '') // remove acentos
-    .replace(/[^\w\s-]/g, ' ')        // pontuacao -> espaco
+    .replace(/[̀-ͯ]/g, '') // remove acentos combinantes
+    .replace(/[^\w\s-]/g, ' ') // pontuacao vira espaco
     .replace(/\s+/g, ' ')
     .trim();
 }
 
-// Match exato apos normalizacao. Para controlados usamos chaves do dicionario;
-// para seguros usamos lista achatada. Substring match e usado SOMENTE para
-// seguros (ex.: "whey protein iso" bate em "whey"). Para controlados o match
-// e por palavra inteira pra reduzir falso positivo.
+// ============================================================================
+// CLASSIFICACAO (API compativel com uso existente em agent.ts)
+// ============================================================================
+
 export interface AnaliseSuplementos {
   seguros: string[];
   desconhecidos: string[];
@@ -115,9 +222,8 @@ export function analisarSuplementos(itens: string[] | undefined): AnaliseSupleme
   const resultado: AnaliseSuplementos = { seguros: [], desconhecidos: [], controlados: [] };
   if (!itens || itens.length === 0) return resultado;
 
-  const segurosNorm = SUPLEMENTOS_SEGUROS.map(normalizar);
   const controladosNorm = Object.fromEntries(
-    Object.entries(SUPLEMENTOS_CONTROLADOS).map(([k, v]) => [normalizar(k), v]),
+    Object.entries(CONTROLADOS).map(([k, v]) => [normalizar(k), v]),
   );
 
   for (const item of itens) {
@@ -126,10 +232,10 @@ export function analisarSuplementos(itens: string[] | undefined): AnaliseSupleme
 
     // 1. Controlado — match por palavra inteira em qualquer chave.
     let controlado: { nome: string; motivo: string } | null = null;
-    for (const [chave, motivo] of Object.entries(controladosNorm)) {
+    for (const [chave, dados] of Object.entries(controladosNorm)) {
       const re = new RegExp(`(?:^|\\W)${chave.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}(?=\\W|$)`);
       if (re.test(` ${norm} `)) {
-        controlado = { nome: item.trim(), motivo };
+        controlado = { nome: item.trim(), motivo: dados.motivo };
         break;
       }
     }
@@ -138,8 +244,8 @@ export function analisarSuplementos(itens: string[] | undefined): AnaliseSupleme
       continue;
     }
 
-    // 2. Seguro — substring tolerante.
-    const seguro = segurosNorm.some((s) => norm.includes(s));
+    // 2. Seguro — substring tolerante (padroes ja ordenados por especificidade).
+    const seguro = SEGUROS_POR_CATEGORIA.some((s) => norm.includes(normalizar(s.padrao)));
     if (seguro) {
       resultado.seguros.push(item.trim());
       continue;
@@ -152,24 +258,292 @@ export function analisarSuplementos(itens: string[] | undefined): AnaliseSupleme
   return resultado;
 }
 
-// Mensagem de aviso enviada ao paciente quando ha pelo menos um suplemento
-// controlado. Lista os itens com motivo; tom firme mas nao alarmista; deixa
-// claro que o nutricionista sera notificado. NAO recomenda parar nem trocar
-// dose — isso e responsabilidade do nutricionista/medico.
+// Retorna a categoria de um item seguro (primeiro match). null se nao for seguro.
+export function categorizarSeguro(item: string): CategoriaSeguro | null {
+  const norm = normalizar(item);
+  for (const entrada of SEGUROS_POR_CATEGORIA) {
+    if (norm.includes(normalizar(entrada.padrao))) return entrada.categoria;
+  }
+  return null;
+}
+
+// ============================================================================
+// CALCULO DE DOSE (whey / cafeina / omega-3)
+// ============================================================================
+
+export interface SugestaoDose {
+  suplemento: string;
+  categoria: CategoriaSeguro;
+  dose: string;
+  timing?: string;
+  cautela?: string;
+}
+
+// Whey: 0.3 g/kg de peso corporal como sugestao pos-treino, ou 0.4 g/kg quando
+// meta proteica ainda ta longe do aporte alimentar tipico. 1 scoop convencional
+// = 25-30g de po, ~22-24g de proteina. Arredondamos pra multiplos de 5g de po.
+export function calcularDoseWhey(peso_kg: number): SugestaoDose {
+  const proteinaG = Math.round(peso_kg * 0.3);
+  const scoopEquivalente = Math.max(1, Math.round(proteinaG / 24));
+  return {
+    suplemento: 'Whey Protein',
+    categoria: 'proteina',
+    dose: `~${proteinaG}g de proteina/dia (${scoopEquivalente} scoop${scoopEquivalente > 1 ? 's' : ''})`,
+    timing: 'pos-treino ou entre refeicoes, se a proteina do dia ficar abaixo da meta',
+    cautela: 'nao substitui alimento — e complemento; hidrata bem porque proteina exige mais agua',
+  };
+}
+
+// Cafeina: 3 mg/kg como sugestao de dose ergogenica, teto 400 mg/dia (ANVISA).
+// Pre-treino comercial ja tem 200-300mg por dose — se paciente toma pre-treino,
+// contar como cafeina.
+export function calcularDoseCafeina(peso_kg: number): SugestaoDose {
+  const doseMg = Math.min(400, Math.round(peso_kg * 3));
+  return {
+    suplemento: 'Cafeina / Pre-treino',
+    categoria: 'estimulante',
+    dose: `${doseMg} mg/dia (limite ANVISA: 400 mg)`,
+    timing: '30-45 min antes do treino',
+    cautela: 'evitar apos 16h (atrapalha o sono); nao empilhar com cha verde, cafe e pre-treino no mesmo dia',
+  };
+}
+
+// Omega-3: dose padrao 1-2g de EPA+DHA/dia (recomendacao American Heart
+// Association pra saude cardiovascular). Nao depende de peso.
+export function calcularDoseOmega(): SugestaoDose {
+  return {
+    suplemento: 'Omega-3',
+    categoria: 'omega',
+    dose: '1-2g de EPA+DHA/dia (leia o rotulo — nem toda capsula de 1g tem 1g de EPA+DHA)',
+    timing: 'junto a uma refeicao com gordura pra melhor absorcao',
+  };
+}
+
+// A partir dos suplementos seguros que o paciente reportou, gera sugestoes de
+// dose so pras categorias que temos calculo pra: proteina, estimulante, omega.
+// "outro" fica listado no bloco "outros informados" sem calculo — a validacao
+// fica com o nutricionista.
+export function calcularDoseSuplementos(
+  peso_kg: number,
+  segurosReportados: string[],
+): {
+  comCalculo: SugestaoDose[];
+  outrosInformados: string[];
+} {
+  const comCalculo: SugestaoDose[] = [];
+  const outrosInformados: string[] = [];
+  const jaIncluido = new Set<CategoriaSeguro>();
+
+  for (const item of segurosReportados) {
+    const cat = categorizarSeguro(item);
+    if (!cat) continue;
+
+    // Uma sugestao por categoria (evita duplicar quando paciente lista "whey"
+    // e "whey isolado" separados — a dose e a mesma).
+    if (cat === 'proteina' && !jaIncluido.has('proteina')) {
+      comCalculo.push(calcularDoseWhey(peso_kg));
+      jaIncluido.add('proteina');
+    } else if (cat === 'estimulante' && !jaIncluido.has('estimulante')) {
+      comCalculo.push(calcularDoseCafeina(peso_kg));
+      jaIncluido.add('estimulante');
+    } else if (cat === 'omega' && !jaIncluido.has('omega')) {
+      comCalculo.push(calcularDoseOmega());
+      jaIncluido.add('omega');
+    } else if (cat === 'outro') {
+      outrosInformados.push(item.trim());
+    }
+  }
+
+  return { comCalculo, outrosInformados };
+}
+
+// ============================================================================
+// FORMATACAO DE MENSAGEM
+// ============================================================================
+
+export function formatarMensagemSuplementos(
+  sugestoes: SugestaoDose[],
+  outrosInformados: string[],
+): string {
+  if (sugestoes.length === 0 && outrosInformados.length === 0) return '';
+
+  const linhas: string[] = ['💊 *Sobre seus suplementos*\n'];
+
+  for (const s of sugestoes) {
+    linhas.push(`*${s.suplemento}*`);
+    linhas.push(`• Dose sugerida: ${s.dose}`);
+    if (s.timing) linhas.push(`• Quando: ${s.timing}`);
+    if (s.cautela) linhas.push(`• Cuidado: ${s.cautela}`);
+    linhas.push('');
+  }
+
+  if (outrosInformados.length > 0) {
+    linhas.push(`*Tambem anotei:* ${outrosInformados.join(', ')}`);
+    linhas.push('_Confirme a dose com seu(sua) nutri — nao vou sugerir sem prescricao dele(a)._');
+    linhas.push('');
+  }
+
+  linhas.push(
+    '_Essas sao sugestoes iniciais baseadas em referencia (SBP, ISSN, AHA). Seu(sua) nutricionista pode ajustar._',
+  );
+
+  return linhas.join('\n');
+}
+
+// Explicacao de termogenicos legitimos (cafeina, cha verde, sinefrina, pre-treino).
+// So aparece quando o paciente reportou algum estimulante — nao spamma quem so
+// toma whey e vitamina D.
+export function formatarExplicacaoTermogenicos(sugestoes: SugestaoDose[]): string {
+  const temEstimulante = sugestoes.some((s) => s.categoria === 'estimulante');
+  if (!temEstimulante) return '';
+
+  return (
+    '🔥 *Termogenicos e estimulantes — como usar sem passar do ponto*\n\n' +
+    'Cafeina, cha verde, sinefrina e pre-treino sao *estimulantes suaves*. Funcionam ' +
+    'aumentando um pouco o gasto calorico e a disposicao pro treino, mas nao emagrecem ' +
+    'sozinhos — o deficit calorico continua sendo o motor.\n\n' +
+    '*Efeitos comuns em dose normal:*\n' +
+    '• Mais atencao e menos cansaco no treino\n' +
+    '• Leve aceleracao do batimento cardiaco\n' +
+    '• Boca seca, mais sede\n\n' +
+    '*Quando parar ou reduzir:*\n' +
+    '• Palpitacao forte, tremor, tontura → reduz a dose ou suspende\n' +
+    '• Dificuldade pra dormir → nao usa apos 16h\n' +
+    '• Ansiedade ou irritacao → mesmo esquema, reduzir\n\n' +
+    '*Nao empilhar:* cafe + pre-treino + termogenico no mesmo dia estoura o teto de ' +
+    '400 mg de cafeina (ANVISA) e pode dar taquicardia. Escolha um.\n\n' +
+    'Se voce tem *hipertensao, arritmia, ansiedade ou gestacao*, converse com seu(sua) ' +
+    'nutri antes de continuar — pode ser contraindicado.'
+  );
+}
+
+// Aviso ao paciente quando ha suplemento controlado. Explica o *porque* pra
+// nao soar como "porque eu falei" — lista riscos concretos por categoria.
+// NAO recomenda parar nem trocar dose — isso e responsabilidade do medico/nutri.
+// Redireciona pra cardiologista + endocrinologista quando cabe.
 export function formatarAvisoControlados(
   controlados: Array<{ nome: string; motivo: string }>,
   nomePaciente: string,
 ): string {
   if (controlados.length === 0) return '';
-  const lista = controlados
-    .map((c) => `• *${c.nome}* — ${c.motivo}`)
-    .join('\n');
-  const plural = controlados.length > 1 ? 's' : '';
+
+  // Pega categorias dos itens reportados pra listar os riscos relevantes.
+  const controladosNorm = Object.fromEntries(
+    Object.entries(CONTROLADOS).map(([k, v]) => [normalizar(k), v]),
+  );
+  const categoriasEncontradas = new Set<CategoriaControlado>();
+  for (const c of controlados) {
+    const norm = normalizar(c.nome);
+    for (const [chave, dados] of Object.entries(controladosNorm)) {
+      const re = new RegExp(`(?:^|\\W)${chave.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}(?=\\W|$)`);
+      if (re.test(` ${norm} `)) {
+        categoriasEncontradas.add(dados.categoria);
+        break;
+      }
+    }
+  }
+
+  const lista = controlados.map((c) => `• *${c.nome}* — ${c.motivo}`).join('\n');
+  const plural = controlados.length > 1;
+
+  const riscos: string[] = [];
+  for (const cat of categoriasEncontradas) {
+    for (const r of RISCOS_POR_CATEGORIA[cat]) riscos.push(`• ${r}`);
+  }
+  const blocoRiscos = riscos.length > 0
+    ? `\n\n*Por que essa preocupacao?* Riscos documentados:\n${riscos.join('\n')}`
+    : '';
+
+  const precisaCardio = categoriasEncontradas.has('beta_agonista') ||
+    categoriasEncontradas.has('emagrecedor');
+  const precisaEndo = categoriasEncontradas.has('anabolizante') ||
+    categoriasEncontradas.has('hormonio') ||
+    categoriasEncontradas.has('sarm');
+
+  const redirects: string[] = [];
+  if (precisaCardio) redirects.push('*cardiologista* (avaliar coracao antes de continuar)');
+  if (precisaEndo) redirects.push('*endocrinologista* (avaliar eixo hormonal e prescricao formal)');
+  const blocoRedirect = redirects.length > 0
+    ? `\n\nAntes de continuar, procure: ${redirects.join(' e ')}.`
+    : '';
+
   return (
     `⚠️ *Atencao, ${nomePaciente}.*\n\n` +
-    `Voce mencionou a${plural === 's' ? 's' : ''} seguinte${plural} substancia${plural} controlada${plural}:\n\n` +
+    `Voce mencionou ${plural ? 'as seguintes substancias controladas' : 'a seguinte substancia controlada'}:\n\n` +
     `${lista}\n\n` +
-    `_Essas substancias nao sao suplemento alimentar comum._ Nao posso recomendar dosagem nem orientar uso — isso e atribuicao exclusiva de medico/nutricionista com prescricao formal.\n\n` +
-    `Vou registrar essa informacao pra que seu nutricionista veja e oriente voce com seguranca. Se nao houver prescricao formal, *converse com ele(a) antes de continuar usando.*`
+    `_Essas substancias nao sao suplemento alimentar._ Nao posso recomendar dosagem — ` +
+    `nutricionista nao prescreve medicamento (CFN 656/2020), e essas nao tem aprovacao ` +
+    `ANVISA pra uso humano corriqueiro.` +
+    blocoRiscos +
+    blocoRedirect +
+    `\n\nVou registrar isso pra seu(sua) nutri saber e conversar contigo com seguranca.`
+  );
+}
+
+// ============================================================================
+// HANDLER: paciente pergunta dose de controlado fora da entrevista
+// ============================================================================
+
+// Detecta se o texto e uma pergunta sobre *como usar* uma substancia controlada.
+// Casos alvo: "quanto de clembuterol devo tomar?", "como faco ciclo de ostarine?",
+// "posso tomar 2ml de clembuterol?", "que dose de winstrol?". Retorna a substancia
+// encontrada (nome normalizado) ou null.
+const PALAVRAS_DOSE = [
+  'quanto', 'quantos', 'quantas', 'como tomar', 'como usar', 'como faco',
+  'como comeco', 'como iniciar', 'dose', 'dosagem', 'ciclo', 'protocolo',
+  'posso tomar', 'posso usar', 'devo tomar', 'devo usar', 'quero tomar',
+  'quero usar', 'quero comecar', 'estou tomando', 'to tomando', 'tomo',
+  'ml', 'mg de', 'mg por', 'caps de',
+];
+
+export function detectarPerguntaDoseControlada(texto: string): string | null {
+  const norm = normalizar(texto);
+  if (!norm) return null;
+
+  const temPalavraDose = PALAVRAS_DOSE.some((p) => norm.includes(normalizar(p)));
+  if (!temPalavraDose) return null;
+
+  for (const chave of Object.keys(CONTROLADOS)) {
+    const chaveNorm = normalizar(chave);
+    const re = new RegExp(`(?:^|\\W)${chaveNorm.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}(?=\\W|$)`);
+    if (re.test(` ${norm} `)) return chave;
+  }
+  return null;
+}
+
+export function formatarRespostaDoseControlada(
+  nomePaciente: string,
+  substancia: string,
+): string {
+  const dados = CONTROLADOS[substancia];
+  if (!dados) {
+    return (
+      `${nomePaciente}, nao posso te orientar dose dessa substancia. Ela nao e suplemento ` +
+      `alimentar comum e requer prescricao medica. Procure um medico especializado antes ` +
+      `de continuar. Vou avisar seu(sua) nutri pra conversar contigo.`
+    );
+  }
+
+  const riscos = RISCOS_POR_CATEGORIA[dados.categoria].map((r) => `• ${r}`).join('\n');
+  const precisaCardio = dados.categoria === 'beta_agonista' || dados.categoria === 'emagrecedor';
+  const precisaEndo = dados.categoria === 'anabolizante' ||
+    dados.categoria === 'hormonio' ||
+    dados.categoria === 'sarm';
+
+  const redirects: string[] = [];
+  if (precisaCardio) redirects.push('*cardiologista*');
+  if (precisaEndo) redirects.push('*endocrinologista*');
+  const blocoRedirect = redirects.length > 0
+    ? `Procure ${redirects.join(' + ')} antes de continuar.`
+    : 'Procure um medico especializado antes de continuar.';
+
+  return (
+    `${nomePaciente}, *nao posso te passar dose de ${substancia}*.\n\n` +
+    `Nao e suplemento alimentar — e ${dados.motivo}. Nutricionista nao prescreve ` +
+    `medicamento (CFN Resolucao 656/2020), e essa substancia nao tem aprovacao ANVISA ` +
+    `pra uso humano corriqueiro.\n\n` +
+    `*Riscos documentados:*\n${riscos}\n\n` +
+    `${blocoRedirect}\n\n` +
+    `Vou sinalizar essa conversa pro seu(sua) nutri saber e orientar voce com seguranca.`
   );
 }

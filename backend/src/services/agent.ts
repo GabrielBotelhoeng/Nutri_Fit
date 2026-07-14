@@ -25,7 +25,15 @@ import {
 } from './calculos';
 import { sincronizarAlertasDaEntrevista } from './alertas';
 import { classificarIntencao, mencionaAguaCombinada, removerMencaoAgua } from './intent';
-import { analisarSuplementos, formatarAvisoControlados } from './suplementos';
+import {
+  analisarSuplementos,
+  calcularDoseSuplementos,
+  detectarPerguntaDoseControlada,
+  formatarAvisoControlados,
+  formatarExplicacaoTermogenicos,
+  formatarMensagemSuplementos,
+  formatarRespostaDoseControlada,
+} from './suplementos';
 import {
   registrarMensagem,
   obterUltimasMensagens,
@@ -761,6 +769,21 @@ export async function processarMensagem(phone: string, texto: string): Promise<v
       // nutricionista ver no painel. Try/catch isolado — nao bloqueia a entrevista.
       try {
         const analise = analisarSuplementos(dadosCompletos.suplementos);
+
+        // Dose sugerida pros seguros (whey/cafeina/omega-3) + explicacao de
+        // termogenicos legitimos quando cabivel. Envia SEMPRE que ha seguros.
+        if (analise.seguros.length > 0) {
+          const { comCalculo, outrosInformados } = calcularDoseSuplementos(
+            dadosCompletos.peso_kg,
+            analise.seguros,
+          );
+          const msgDoses = formatarMensagemSuplementos(comCalculo, outrosInformados);
+          if (msgDoses) await sendText(phone, msgDoses);
+
+          const msgTermo = formatarExplicacaoTermogenicos(comCalculo);
+          if (msgTermo) await sendText(phone, msgTermo);
+        }
+
         if (analise.controlados.length > 0) {
           await sendText(phone, formatarAvisoControlados(analise.controlados, paciente.nome));
           await atualizarEstado(paciente.id, {
@@ -971,6 +994,18 @@ export async function processarMensagem(phone: string, texto: string): Promise<v
   // que falhava em "bebi 300ml de suco" (caia em agua) e "comi bem hoje, qual
   // minha dieta?" (caia em registro). O fast-path resolve casos obvios sem
   // latencia; o Haiku trata o resto; fallback seguro = 'consulta'.
+  // Guarda de seguranca: se o paciente pergunta dose/ciclo de substancia
+  // controlada (clembuterol, stanozolol, sarms, sibutramina...), responde com
+  // redirect medico ANTES de qualquer intent handler. Nunca passa dose.
+  const substanciaControlada = detectarPerguntaDoseControlada(texto);
+  if (substanciaControlada) {
+    console.warn(
+      `[agent] Paciente ${paciente.nome} perguntou sobre dose de controlada: ${substanciaControlada}`,
+    );
+    await sendText(phone, formatarRespostaDoseControlada(paciente.nome, substanciaControlada));
+    return;
+  }
+
   const { intent, fonte } = await classificarIntencao(texto);
   console.log(`[agent] intent=${intent} fonte=${fonte} texto="${texto.slice(0, 80)}"`);
 
