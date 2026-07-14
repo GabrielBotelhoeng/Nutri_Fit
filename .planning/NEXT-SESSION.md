@@ -1,30 +1,39 @@
 # Handoff — Próxima sessão
 
-**Última atualização:** 2026-07-09 (Bloco A + Bloco B fechados — landing white-label pronta pra deploy)
+**Última atualização:** 2026-07-13 (housekeeping — memórias de suplementos + entrevista numerada salvas)
 
 > ⚠️ Regra pra próximo Claude: **NÃO releia arquivos em `.planning/archive/`.** Fases 1–5 estão fechadas, todo o refinamento do agente (P0/P1/P2/SEC) está em `main`. Se precisar entender comportamento antigo, `git log` é a fonte da verdade — não os planos antigos.
 
-## Estado real (2026-07-09, verificado por Grep + git log + SUMMARYs)
+## Estado real (2026-07-13, verificado por git log + grep + npm test)
 
 | Fase | Status | Notas |
 |------|--------|-------|
 | 1. Infraestrutura | ✅ Fechada | Arquivada |
 | 2. Core agente + RAG | ✅ Fechada | Arquivada |
 | 3. Registro multimodal | ✅ Fechada | Arquivada |
-| 4. Alertas + expiração + relatório | ✅ Fechada | Arquivada. **Cron alertas ativado em 2026-07-09** (workflow n8n `y0B9QdWn3PMe28kH`) |
+| 4. Alertas + expiração + relatório | ✅ Fechada | Arquivada. Cron alertas ativo (n8n `y0B9QdWn3PMe28kH`). Relatório semanal enriquecido em 2026-07-10 (`b222102`) |
 | 5. Painel nutricionista | ✅ Fechada | Arquivada |
 | 6. Landing page | 🟡 2/3 planos feitos | 06-01 (scaffold) + 06-02 (white-label parametrizado) completos. Resta 06-03 (deploy Vercel) |
 | 7. Portfólio + deploy | ❌ Não iniciada | Depende de credenciais Railway/Vercel |
 
-**PR #1 já mergeou** (commit `807dce4`). Streaks, P0-2b, timezone, roteamento, memória multi-turn, dedup webhook, todas as correções SEC — tudo em `main`.
+**Working tree limpo, `main` sincronizado com `origin/main`.** Baseline atual: **428/428 testes verdes (25 arquivos), typecheck limpo.**
 
-**Bugs pós-merge fechados em `main`** (2026-07-08 → 07-09):
-- Fase B: registrar múltiplas refeições em uma mensagem (`e9f3cd3`)
-- Fase C: ambiguidade de foto — pratos parecidos vs refeições distintas (`46734cf`)
-- D-06 Opção C1: Haiku faz merge de correção parcial no card (`130a543`, `532dd7f`)
-- Bug 2 Vision: mesa familiar → múltiplos_pratos_parecidos (`dccbf61`)
-- Polish descrição pós-divisão por N pessoas (`182cf7e`, `fde93d4`)
-- Typo confirmação via Haiku fallback — bug "Aim" (`e37bd75`)
+**Commits pós-arquivamento das fases 1-5, todos em `main`** (2026-07-08 → 07-13):
+
+| Commit | Data | O quê |
+|--------|------|-------|
+| `e9f3cd3` | 07-07 | Fase B — múltiplas refeições em uma mensagem |
+| `46734cf` | 07-08 | Fase C — ambiguidade de foto (pratos parecidos vs distintos) |
+| `130a543`, `532dd7f` | 07-08 | D-06 Opção C1 — Haiku faz merge de correção parcial |
+| `dccbf61` | 07-09 | Bug 2 Vision — mesa familiar → múltiplos_pratos_parecidos |
+| `182cf7e`, `fde93d4` | 07-09 | Polish descrição pós-divisão por N pessoas |
+| `e37bd75` | 07-09 | Typo confirmação via Haiku fallback (bug "Aim") |
+| `a6a995b` | 07-09 | Arquiva planos fases 1-5 + ativa cron alertas |
+| `86b0317` | 07-10 | **Bloco B2** — refina UX erro/expiração/dica peso típico |
+| `a0c6e95` | 07-10 | Entrevista — opções numeradas (sexo/atividade/frequência) |
+| `7724906` | 07-13 | Fix Vision — foto de código de barras não registra direto |
+| `b222102` | 07-13 | Relatório semanal — gráfico ASCII + alerta de excesso |
+| `b0611aa` | 07-13 | **Suplementos** — dose calculada + termogênicos + guard controlados |
 
 ## Lembretes de alimentação/água/suplementos — ATIVOS + UAT ✅
 
@@ -48,33 +57,31 @@ Se algum horário não estiver disparando, verificar em ordem:
 
 **Ordem recomendada, cada bloco é atômico:**
 
-### Bloco A — UAT dos lembretes ✅ FECHADO (2026-07-09 19:30 BRT)
-Gabriel recebeu no WhatsApp real o jantar + água do tick 19:30. Cron n8n confirmado batendo a cada 15min (tick 19:15 no-op + tick 19:30 disparou). Ver seção "Lembretes de alimentação/água/suplementos" acima pra detalhes.
+### Blocos A / B / B2 — todos FECHADOS + commitados em `main`
 
-### Bloco B — Landing: parametrizar dados do nutricionista ✅ FECHADO (2026-07-09)
+- **A (UAT lembretes):** cron `y0B9QdWn3PMe28kH` batendo 15/15min, jantar+água confirmados no WhatsApp real em 2026-07-09 19:30 BRT.
+- **B (landing white-label):** 7 componentes + layout lendo de `lib/nutricionista.ts` com override via `NEXT_PUBLIC_NUTRI_*`. Build verde. Repo `nutrichat-landing` ainda **não empurrado** (aguarda credenciais Vercel).
+- **B2 (refinamentos agente):** commitado em `86b0317`. Nudge pós-onboarding + `mensagemErroHumana(err)` + aviso expiração foto/confirmação + dica peso típico. **UAT WhatsApp real ainda não feito** — cenários listados abaixo no bloco "UAT em campo pendente".
 
-Refactor tipo A completo. Todos os 7 arquivos com hardcode "Camila Rocha / CRN-3 12.345 / Nutri Camila" agora leem de `lib/nutricionista.ts`, que expõe 11 campos com override via `NEXT_PUBLIC_NUTRI_*` (incluindo concordância de gênero: `artigo`, `pronome`, `registrado`). `.env.example` documenta as vars. `npm run build` verde (compile 7.5s, TS 10.1s, 4 páginas prerender). Grep de `Camila|CRN-3 12.345|Nutri Camila` só sobra dentro do próprio `lib/nutricionista.ts` (fallbacks — esperado).
+### UAT em campo pendente (Bloco B2 + últimos commits)
 
-Detalhes completos: `.planning/phases/06-landing-page/06-02-SUMMARY.md` (inclui rationale da mudança de escopo pra single-tenant white-label).
+Cenários prontos pra testar no WhatsApp real do Gabriel (paciente `5562995514963`):
 
-**Estado do repo `nutrichat-landing`:** ainda com commits não empurrados. `git status` mostra `.env.example`, `lib/nutricionista.ts`, `06-02-SUMMARY.md`, `Hero.tsx`, `Header.tsx`, `Footer.tsx`, `StatsSection.tsx`, `Testimonials.tsx`, `PhoneCanvas.tsx`, `app/layout.tsx` — 10 arquivos alterados/criados. Ainda não commitado (@devops decide o momento).
+| # | Comportamento a validar | Como disparar |
+|---|-------------------------|---------------|
+| 1 | **Nudge pós-onboarding** — após terminar a etapa 15 da entrevista, chega uma msg extra com exemplo "tomei 1 copo de café com leite..." | Concluir onboarding do zero (paciente novo) |
+| 2 | **Msg de erro por causa** — 429/529/503 vira "Meu servidor tá cheio agora. Tenta em 1-2 minutos." | Difícil forçar; olhar `docker logs nutrichat_backend --tail 200 \| grep -i "mensagemErroHumana\|servidor ta cheio"` se aparecer |
+| 3 | **Aviso de expiração** — foto ambígua ou confirmação D-06 espera 10min sem resposta → bot avisa "sua foto expirou, manda de novo" antes de limpar estado | Mandar foto ambígua e não responder o card por 10min |
+| 4 | **Dica de peso típico** — na pergunta "Quantas gramas de banana?" chega "(ex: 1 unidade ~= 120g)" | Registrar refeição com alimento da lista de 26 (banana, arroz, pão, ovo, frango, batata, ...) sem informar peso |
+| 5 | **Entrevista numerada** — sexo/atividade/frequência mostram opções `1 Masculino / 2 Feminino` e rodapé "_Responda com o número._". Aceita tanto "1" quanto "masculino" | Novo paciente, chegar nas etapas 3/6/7 |
+| 6 | **Barcode não registra direto** — mandar foto de código de barras → passa por card D-06 com kcal+P/C/G, não vai direto pro histórico | Fotografar código de barras de qualquer produto |
+| 7 | **Suplementos dose calculada** — na etapa 15, se paciente reportar whey/cafeína/ômega → bloco com dose por kg + explicação de termogênicos (só se estimulante) | Onboarding do zero com "whey e cafeína" na etapa de suplementos |
+| 8 | **Guard controlado** — perguntar "quantas caps de ostarina devo tomar?" → resposta redirecionando pra endocrinologista, com CFN 656/2020 e riscos por categoria. **Nunca** deve devolver dose. | Após onboarding, mandar mensagem tipo "quanto de clembuterol devo tomar?" |
 
-### Bloco B2 — Refinamentos do agente ✅ FECHADO (2026-07-09)
-
-Auditoria + 3/4 refinamentos aplicados (#4 descartado por análise). Suite 364/364 verdes, typecheck limpo, backend restarted. Diff: `agent.ts` +17, `meal.ts` +80/-6. **Ainda não commitado — @devops decide o momento.**
-
-- **✅ #1 Nudge de ativação pós-onboarding** — `agent.ts:794-803`. sendText extra com exemplo "tomei 1 copo de café com leite e um pão com manteiga" após instrucoes_de_uso.
-- **✅ #3 `mensagemErroHumana(err)`** — `meal.ts:29-42` (novo helper) + 4 call sites (`processarTextoRefeicao`, `processarRespostaQuantidade`, `processarRespostaPreparo`, `processarTextoCorrecao`). Sobrecarga (429/529/503/ETIMEDOUT/…) → "Meu servidor tá cheio agora. Tenta em 1-2 minutos." Resto mantém MSG_ERRO_HUMANA original (30s).
-- **✅ #5 Aviso ao expirar foto/confirmacao pendente** — `agent.ts` blocos `fotoAmbiguaPendente` e `confirmacaoPendente`. sendText de expiração antes de `atualizarEstado`; `// Nao retornar` preservado.
-- **✅ #2 Dica de peso típico** — `meal.ts:44-88` (novo dict `PESOS_TIPICOS` + helpers `semAcento` + `dicaPesoTipico`). 26 alimentos comuns (banana, arroz, pão, ovo, frango, batata, …). Injetado nas 2 perguntas "Quantas gramas de *X*". `contains` sem acento → "Batata frita" bate com "batata". Teste `preparo.test.ts:331` (`toContain`) preservado.
-- **❌ #4 Validação stricta de macros** — descartado (racional no handoff antigo).
-
-**Verificação pós-fix:** `npm run test:run` 364/364, `npm run typecheck` limpo, `docker restart nutrichat_backend` OK. UAT WhatsApp real ainda não feito — próximo Claude pode validar em campo se convier ou seguir pro Bloco C direto.
-
-### Bloco C — Fase 6 Plan 03 (deploy Vercel)
+### Bloco C — Fase 6 Plan 03 (deploy Vercel) — PENDENTE
 Plano: `.planning/phases/06-landing-page/06-03-PLAN.md`. Sobe o repo `nutrichat-landing` pra GitHub + configura Vercel. Precisa das credenciais do usuário.
 
-### Bloco D — Fase 7 (portfólio final)
+### Bloco D — Fase 7 (portfólio final) — DEPENDE DE C
 READMEs dos 3 repos + deploy Railway do backend/painel + post LinkedIn. Depende de Vercel do bloco C.
 
 ## Bugs abertos (repro pendente)

@@ -17,3 +17,9 @@ npm-debug.log*
 # OS files
 .DS_Store
 Thumbs.db
+
+# graphify output (regenerado com `graphify update .`)
+graphify-out/
+
+# Claude Code harness state
+.claude/scheduled_tasks.lock
