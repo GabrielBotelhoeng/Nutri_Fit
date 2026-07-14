@@ -1,6 +1,6 @@
 # Handoff — Próxima sessão
 
-**Última atualização:** 2026-07-13 (housekeeping — memórias de suplementos + entrevista numerada salvas)
+**Última atualização:** 2026-07-14 (testes de `suplementos-llm.ts` — 22 cenários verdes com Claude mockado)
 
 > ⚠️ Regra pra próximo Claude: **NÃO releia arquivos em `.planning/archive/`.** Fases 1–5 estão fechadas, todo o refinamento do agente (P0/P1/P2/SEC) está em `main`. Se precisar entender comportamento antigo, `git log` é a fonte da verdade — não os planos antigos.
 
@@ -16,7 +16,7 @@
 | 6. Landing page | 🟡 2/3 planos feitos | 06-01 (scaffold) + 06-02 (white-label parametrizado) completos. Resta 06-03 (deploy Vercel) |
 | 7. Portfólio + deploy | ❌ Não iniciada | Depende de credenciais Railway/Vercel |
 
-**Working tree limpo, `main` sincronizado com `origin/main`.** Baseline atual: **428/428 testes verdes (25 arquivos), typecheck limpo.**
+**Working tree limpo, `main` sincronizado com `origin/main`.** Baseline atual: **465/465 testes verdes (27 arquivos), typecheck limpo.**
 
 **Commits pós-arquivamento das fases 1-5, todos em `main`** (2026-07-08 → 07-13):
 
@@ -34,6 +34,9 @@
 | `7724906` | 07-13 | Fix Vision — foto de código de barras não registra direto |
 | `b222102` | 07-13 | Relatório semanal — gráfico ASCII + alerta de excesso |
 | `b0611aa` | 07-13 | **Suplementos** — dose calculada + termogênicos + guard controlados |
+| `52bbf68` | 07-14 | **Suplementos LLM** — dose dinâmica via Claude Sonnet + nudge neutro |
+| `0252a41` | 07-14 | Handoff — registra suplementos-llm parcial |
+| _pendente_ | 07-14 | **suplementos-llm.test.ts** — 22 cenários verdes com Claude mockado |
 
 ## Lembretes de alimentação/água/suplementos — ATIVOS + UAT ✅
 
@@ -78,15 +81,18 @@ Todos os 8 cenários abaixo foram validados no WhatsApp real do Gabriel (`556299
 | 7 | ✅ **Suplementos dose calculada** — na etapa 15 com whey/cafeína/ômega, bloco com dose por kg + explicação de termogênicos |
 | 8 | ✅ **Guard controlado** — pergunta sobre dose de ostarina/clembuterol redireciona pra endocrinologista com CFN 656/2020, nunca devolve dose |
 
-### Suplementos dose dinâmica via LLM — PARCIAL (2026-07-14, commit `52bbf68`)
+### Suplementos dose dinâmica via LLM — CÓDIGO + TESTES FECHADOS (UAT pendente)
 
 Novo módulo `backend/src/services/suplementos-llm.ts` chama Claude Sonnet pra dosear qualquer suplemento alimentar (BCAA/glutamina/colágeno/adaptógeno/manipulado por composição), não só os 3 hardcoded. Guard-rails: `analisarSuplementos()` filtra controlados antes, prompt firme, whitelist de categorias + termos suspeitos (ciclo/PCT/ml/semana) + cross-check com `CONTROLADOS`. Fallback pro formatter antigo se LLM falhar.
 
 Nudge pós-onboarding agora é neutro (agent.ts:847) — sem exemplo copiável.
 
+- **Commit inicial** `52bbf68` (2026-07-14) — módulo + wiring no agent.
+- **Testes unitários** — `backend/tests/suplementos-llm.test.ts` com Claude mockado via `vi.hoisted`. **22 cenários verdes**, cobrem: lista vazia (short-circuit sem chamar Claude), whitelist com dose (BCAA/adaptogeno), categoria fora da whitelist força precisa_nutri, blacklist (peptideo/hormonio/desconhecido) força sem dose, cross-check de nome controlado (clembuterol/stanozolol) mesmo com categoria "outro_suplemento_alimentar", termos suspeitos (ciclo de / ml/semana / PCT) descartam dose, LLM falha (throw ou JSON inválido) → `falhou: true`, resposta com markdown fence parseia corretamente, sanitização (item sem nome descartado, categoria ausente vira desconhecido), formatter (inclui dose/timing/cautela; linha "Não vou sugerir dose" só quando precisa_nutri).
+- **Baseline atual: 465/465 verdes, typecheck limpo.**
+
 **Pendente na próxima sessão:**
-1. Escrever `backend/tests/suplementos-llm.test.ts` com Claude mockado. Cenários: BCAA vira dose; manipulado por nome comercial pede composição; peptídeo (BPC-157/TB-500) vira precisa_nutri; termo suspeito na resposta descarta dose; LLM falha → `falhou=true` (agent cai no fallback).
-2. UAT em campo — reset paciente (`docker exec nutrichat_backend npx tsx src/scripts/reset-gabriel.ts`), refazer onboarding listando `["whey", "creatina", "BCAA", "glutamina", "colageno", "ashwagandha"]`. Verificar que TODOS aparecem com dose apropriada.
+1. UAT em campo — reset paciente (`docker exec nutrichat_backend npx tsx src/scripts/reset-gabriel.ts`), refazer onboarding listando `["whey", "creatina", "BCAA", "glutamina", "colageno", "ashwagandha"]`. Verificar que TODOS aparecem com dose apropriada (não só os 3 hardcoded antigos).
 
 ### Bloco C — Fase 6 Plan 03 (deploy Vercel) — PENDENTE
 Plano: `.planning/phases/06-landing-page/06-03-PLAN.md`. Sobe o repo `nutrichat-landing` pra GitHub + configura Vercel. Precisa das credenciais do usuário.
