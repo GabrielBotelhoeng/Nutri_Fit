@@ -1,6 +1,6 @@
 # Handoff — Próxima sessão
 
-**Última atualização:** 2026-07-14 (testes de `suplementos-llm.ts` — 22 cenários verdes com Claude mockado)
+**Última atualização:** 2026-07-14 (UAT em campo do `suplementos-llm.ts` fechado — 6 suplementos validados no WhatsApp real)
 
 > ⚠️ Regra pra próximo Claude: **NÃO releia arquivos em `.planning/archive/`.** Fases 1–5 estão fechadas, todo o refinamento do agente (P0/P1/P2/SEC) está em `main`. Se precisar entender comportamento antigo, `git log` é a fonte da verdade — não os planos antigos.
 
@@ -81,18 +81,16 @@ Todos os 8 cenários abaixo foram validados no WhatsApp real do Gabriel (`556299
 | 7 | ✅ **Suplementos dose calculada** — na etapa 15 com whey/cafeína/ômega, bloco com dose por kg + explicação de termogênicos |
 | 8 | ✅ **Guard controlado** — pergunta sobre dose de ostarina/clembuterol redireciona pra endocrinologista com CFN 656/2020, nunca devolve dose |
 
-### Suplementos dose dinâmica via LLM — CÓDIGO + TESTES FECHADOS (UAT pendente)
+### Suplementos dose dinâmica via LLM — ✅ 100% FECHADO (código + testes + UAT em campo)
 
 Novo módulo `backend/src/services/suplementos-llm.ts` chama Claude Sonnet pra dosear qualquer suplemento alimentar (BCAA/glutamina/colágeno/adaptógeno/manipulado por composição), não só os 3 hardcoded. Guard-rails: `analisarSuplementos()` filtra controlados antes, prompt firme, whitelist de categorias + termos suspeitos (ciclo/PCT/ml/semana) + cross-check com `CONTROLADOS`. Fallback pro formatter antigo se LLM falhar.
 
 Nudge pós-onboarding agora é neutro (agent.ts:847) — sem exemplo copiável.
 
-- **Commit inicial** `52bbf68` (2026-07-14) — módulo + wiring no agent.
-- **Testes unitários** — `backend/tests/suplementos-llm.test.ts` com Claude mockado via `vi.hoisted`. **22 cenários verdes**, cobrem: lista vazia (short-circuit sem chamar Claude), whitelist com dose (BCAA/adaptogeno), categoria fora da whitelist força precisa_nutri, blacklist (peptideo/hormonio/desconhecido) força sem dose, cross-check de nome controlado (clembuterol/stanozolol) mesmo com categoria "outro_suplemento_alimentar", termos suspeitos (ciclo de / ml/semana / PCT) descartam dose, LLM falha (throw ou JSON inválido) → `falhou: true`, resposta com markdown fence parseia corretamente, sanitização (item sem nome descartado, categoria ausente vira desconhecido), formatter (inclui dose/timing/cautela; linha "Não vou sugerir dose" só quando precisa_nutri).
+- **Commit** `52bbf68` (2026-07-14) — módulo + wiring no agent.
+- **Testes unitários** `45a8e31` — `backend/tests/suplementos-llm.test.ts` com Claude mockado via `vi.hoisted`. **22 cenários verdes**, cobrem: lista vazia (short-circuit sem chamar Claude), whitelist com dose (BCAA/adaptogeno), categoria fora da whitelist força precisa_nutri, blacklist (peptideo/hormonio/desconhecido) força sem dose, cross-check de nome controlado (clembuterol/stanozolol) mesmo com categoria "outro_suplemento_alimentar", termos suspeitos (ciclo de / ml/semana / PCT) descartam dose, LLM falha (throw ou JSON inválido) → `falhou: true`, resposta com markdown fence parseia corretamente, sanitização (item sem nome descartado, categoria ausente vira desconhecido), formatter (inclui dose/timing/cautela; linha "Não vou sugerir dose" só quando precisa_nutri).
+- **UAT em campo (2026-07-14)** — Gabriel resetado, refez as 14 etapas no WhatsApp real, listou `whey, creatina, BCAA, glutamina, colageno, ashwagandha` na etapa 13. Todos os 6 apareceram no card `💊 Sobre seus suplementos` com dose apropriada. Escopo antes: 3 hardcoded (whey/cafeína/ômega). Escopo agora: qualquer suplemento alimentar (proteína/aminoácido/vitamina/mineral/adaptógeno/fitoterápico/…).
 - **Baseline atual: 465/465 verdes, typecheck limpo.**
-
-**Pendente na próxima sessão:**
-1. UAT em campo — reset paciente (`docker exec nutrichat_backend npx tsx src/scripts/reset-gabriel.ts`), refazer onboarding listando `["whey", "creatina", "BCAA", "glutamina", "colageno", "ashwagandha"]`. Verificar que TODOS aparecem com dose apropriada (não só os 3 hardcoded antigos).
 
 ### Bloco C — Fase 6 Plan 03 (deploy Vercel) — PENDENTE
 Plano: `.planning/phases/06-landing-page/06-03-PLAN.md`. Sobe o repo `nutrichat-landing` pra GitHub + configura Vercel. Precisa das credenciais do usuário.
