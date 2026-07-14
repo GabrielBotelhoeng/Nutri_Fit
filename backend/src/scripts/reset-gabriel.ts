@@ -1,9 +1,9 @@
 // One-shot script pra resetar o paciente de teste (Gabriel) pro comeco da
-// entrevista. Uso: `docker exec nutrichat_backend npx tsx scripts/reset-gabriel.ts`
-// Nao commitar como parte do fluxo normal — usar so pra UAT de nudge pos-onboarding.
+// entrevista. Uso: `docker exec nutrichat_backend npx tsx src/scripts/reset-gabriel.ts`
+// Fica em src/ pra rodar dentro do container (só src/ é montado como volume).
 
 import { createClient } from '@supabase/supabase-js';
-import { env } from '../src/config/env';
+import { env } from '../config/env';
 
 const WHATSAPP_ALVOS = ['5562995514963', '556295514963'];
 
