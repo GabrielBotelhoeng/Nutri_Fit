@@ -69,7 +69,7 @@ Cenários prontos pra testar no WhatsApp real do Gabriel (paciente `556299551496
 
 | # | Comportamento a validar | Como disparar |
 |---|-------------------------|---------------|
-| 1 | **Nudge pós-onboarding** — após terminar a etapa 15 da entrevista, chega uma msg extra com exemplo "tomei 1 copo de café com leite..." | Concluir onboarding do zero (paciente novo) |
+| 1 | ✅ **Nudge pós-onboarding** — validado em 2026-07-14 no WhatsApp real do Gabriel. Msg extra com exemplo chega logo após instruções de uso. | Concluir onboarding do zero (paciente novo) |
 | 2 | **Msg de erro por causa** — 429/529/503 vira "Meu servidor tá cheio agora. Tenta em 1-2 minutos." | Difícil forçar; olhar `docker logs nutrichat_backend --tail 200 \| grep -i "mensagemErroHumana\|servidor ta cheio"` se aparecer |
 | 3 | **Aviso de expiração** — foto ambígua ou confirmação D-06 espera 10min sem resposta → bot avisa "sua foto expirou, manda de novo" antes de limpar estado | Mandar foto ambígua e não responder o card por 10min |
 | 4 | **Dica de peso típico** — na pergunta "Quantas gramas de banana?" chega "(ex: 1 unidade ~= 120g)" | Registrar refeição com alimento da lista de 26 (banana, arroz, pão, ovo, frango, batata, ...) sem informar peso |
