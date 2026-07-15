@@ -42,9 +42,7 @@ async function detectarTipoImagem(
 
 export type AmbiguidadeFoto = 'nenhuma' | 'multiplos_pratos_parecidos' | 'refeicoes_distintas';
 
-// Uma refeicao dentro do split quando ambiguidade === 'refeicoes_distintas'.
-// Estrutura simples (sem itens estruturados como em meal.ts) — foto nao tem
-// gramas confiaveis por item, so agregado por refeicao.
+// Split agregado→por-refeição sem gramas por item (foto não tem precisão pra isso).
 export interface RefeicaoPratoDetectada {
   alimentos: string[];
   macros: MacrosRefeicao;
@@ -55,13 +53,7 @@ export interface AnalisePrato {
   confianca: 'alta' | 'media' | 'baixa';
   macros: MacrosRefeicao;
   aviso: string | null;
-  // `ambiguidade` marca cenarios em que a foto tem mais de 1 "unidade" e a
-  // interpretacao muda o total (mesa da familia = dividir; almoco+janta na
-  // mesma foto = 2 registros). Default 'nenhuma' pra compat com prompts
-  // antigos e casos claros (1 prato = 1 refeicao).
   ambiguidade: AmbiguidadeFoto;
-  // Preenchido pelo Claude Vision so quando ambiguidade === 'refeicoes_distintas'.
-  // Se o paciente responder "separadas", cada uma vira 1 registro.
   refeicoes?: RefeicaoPratoDetectada[];
 }
 
@@ -147,17 +139,11 @@ Regras:
   }
 }
 
-// Normaliza o campo `ambiguidade` do JSON do Claude. Prompts antigos, respostas
-// sem o campo, ou valores desconhecidos caem em 'nenhuma' — mantem
-// compatibilidade e defaulta pro fluxo atual (sem regressao).
 function normalizarAmbiguidade(raw: unknown): AmbiguidadeFoto {
   if (raw === 'multiplos_pratos_parecidos' || raw === 'refeicoes_distintas') return raw;
   return 'nenhuma';
 }
 
-// Normaliza o array `refeicoes` retornado quando ambiguidade='refeicoes_distintas'.
-// Retorna undefined pra shapes invalidos ou vazios — o handler decide se cai no
-// fluxo agregado.
 function normalizarRefeicoesPrato(raw: unknown): RefeicaoPratoDetectada[] | undefined {
   if (!Array.isArray(raw) || raw.length === 0) return undefined;
   const arr = raw.map((r) => {
@@ -218,29 +204,15 @@ Se algum campo não estiver visível, use null. Responda APENAS com JSON válido
   }
 }
 
-// Bug D-06 fix (2026-07-08): interpreta resposta do card D-06.
-// Aceita variacoes comuns de sim/nao. Qualquer outra coisa e tratada em
-// agent.ts como "cancela o card e trata como refeicao nova por texto".
-//
-// 2026-07-09: paciente digitou "Aim" no UAT real e caiu em 'outro' →
-// cancelou card. Fast-path regex nao pega typos. Nova arquitetura em 2 fases,
-// espelhando o padrao de intent.ts (classificarIntencaoRapida + Haiku):
-//   1. Fast-path (gratis, instantaneo) — casos exatos e casos claros de 'outro'
-//      (frase longa, com quantidade, com pontuacao). Cobre 99% do trafego.
-//   2. Fallback Haiku — so palavras curtas ambiguas ("aim", "aham", "beleza",
-//      "nap"). Custo por chamada ~$0.0003.
+// Fast-path grátis pra 99% do tráfego; typos curtos como "aim"/"nap" caem no Haiku.
 export function interpretarConfirmacaoRapida(texto: string): 'sim' | 'nao' | 'outro' | null {
   const t = texto.toLowerCase().trim();
   if (t.length === 0) return 'outro';
   if (t === 'sim' || t === 's' || t === 'yes' || t === 'ok' || t === '👍') return 'sim';
   if (t === 'não' || t === 'nao' || t === 'n' || t === 'no') return 'nao';
-  // Contem quantidade explicita → correcao parcial ou refeicao nova, jamais confirmacao
   if (/\d/.test(t)) return 'outro';
-  // Frase estruturada (virgula, ponto, ponto-de-exclamacao, interrogacao) → nao e confirmacao curta
   if (/[,.!?;]/.test(t)) return 'outro';
-  // Frase longa (> 15 chars sem pontuacao) → provavel descricao de refeicao
   if (t.length > 15) return 'outro';
-  // Curto e desconhecido → ambiguo, deixa Haiku decidir ("aim", "aham", "beleza", "nap")
   return null;
 }
 
@@ -286,18 +258,10 @@ export async function interpretarRespostaConfirmacao(texto: string): Promise<'si
   return interpretarConfirmacaoComHaiku(texto);
 }
 
-// Bug D-06 fix (2026-07-08): monta o texto do card D-06. Extraido de
-// handleConfirmacaoPrato pra reusar na re-emissao pos-correcao (Opcao C1).
 export interface OpcoesCard {
   avisoExtra?: string;
   cabecalho?: string;
-  // Quando true, expande o bloco de kcal em kcal+P/C/G (rico em detalhes).
-  // Usado pra barcode/rotulo — a foto tem 1 produto com macros conhecidas
-  // do OpenFoodFacts, então vale mostrar tudo pro paciente conferir.
   detalhesMacros?: boolean;
-  // Exemplo customizado pra linha "ou me manda a refeição corrigida".
-  // Default é neutro-pra-prato ("70g de abobrinha e 70g de ovo"); barcode
-  // passa algo relevante ao produto ("50g" ou "meia embalagem").
   exemploCorrecao?: string;
 }
 
@@ -314,9 +278,6 @@ export function montarTextoCard(analise: AnalisePrato, avisoExtra?: string, cabe
   return `${header}\n${lista}\n\n${blocoMacros}${avisoConfianca}${avisoLimitacao}\n\nEstá correto?\n• *sim* para registrar\n• *não* para cancelar\n• ou me manda a refeição corrigida por texto (ex: "${exemplo}")`;
 }
 
-// Bug D-06 fix (2026-07-08): salva confirmacao_pendente + envia card.
-// Reutilizado pela emissao inicial (foto nova) e pela re-emissao pos-merge
-// de correcao parcial via Haiku (Opcao C1).
 export async function enviarCardConfirmacao(
   phone: string,
   paciente: PacienteInfo,
@@ -341,8 +302,6 @@ export async function enviarCardConfirmacao(
   }));
 }
 
-// Envia lista de alimentos identificados ao paciente e aguarda confirmação "sim"/"não" (D-06).
-// A interceptação da resposta é feita em agent.ts no bloco confirmacao_pendente.
 async function handleConfirmacaoPrato(
   phone: string,
   paciente: PacienteInfo,
@@ -354,15 +313,7 @@ async function handleConfirmacaoPrato(
   await enviarCardConfirmacao(phone, paciente, analise, { avisoExtra });
 }
 
-// Bug D-06 fix (2026-07-08) — Opcao C1.
-// Recebe a analise atual do card + texto livre do paciente ("bife 200g, feijao 100g").
-// Chama Haiku pra aplicar correcao PARCIAL: mantem itens nao mencionados, substitui
-// quantidades dos mencionados, recalcula macros totais. Retorna null quando:
-//   - Haiku retorna JSON invalido
-//   - Haiku sinaliza "invalido: true" (paciente nao queria corrigir de fato)
-//   - Analise resultante ficou vazia
-// Nesses casos, agent.ts cai no fallback (Opcao B — cancela card + trata como
-// refeicao nova via classificador de intent).
+// Retorna null quando Haiku marca inválido ou devolve análise vazia — agent.ts cai no fallback.
 export async function aplicarCorrecaoParcial(
   analiseOriginal: AnalisePrato,
   textoCorrecao: string,
@@ -430,8 +381,6 @@ Sem markdown, sem texto fora do JSON.`,
         gordura_g: Number(raw['gordura_g']) || 0,
       },
       aviso: (raw['aviso'] as string | null) || null,
-      // Correcao parcial nao muda ambiguidade — se paciente ja passou pela fase
-      // C, chegou aqui com ambiguidade='nenhuma' (foto simples ou ja resolvida).
       ambiguidade: 'nenhuma',
     };
   } catch (e) {
@@ -440,13 +389,12 @@ Sem markdown, sem texto fora do JSON.`,
   }
 }
 
-// Ponto de entrada principal chamado pelo webhook.ts para mensagens de imagem.
 export async function processarImagem(
   phone: string,
   messageId: string,
   caption?: string,
 ): Promise<void> {
-  void caption; // caption disponível para uso futuro
+  void caption;
 
   const paciente = await buscarPacientePorWhatsapp(phone);
   if (!paciente) return;
@@ -466,7 +414,6 @@ export async function processarImagem(
 
     if (aguardando) {
       if (estaNoTimeout(aguardando.timestamp)) {
-        // 2ª foto dentro do prazo — processar com ambas (D-04)
         await atualizarEstado(paciente.id, { dados: { aguardando_foto_2: null } });
         const analise = await analisarPrato([aguardando.foto1_base64, base64], mimetype);
         if (analise.ambiguidade !== 'nenhuma') {
@@ -476,7 +423,6 @@ export async function processarImagem(
         await handleConfirmacaoPrato(phone, paciente, analise, metas);
         return;
       } else {
-        // Timeout expirado — D-04: processar 1ª foto com aviso, tratar nova como nova 1ª foto
         console.log(`[vision] Timeout foto2 expirou para ${phone} — processando foto1 com aviso`);
         await atualizarEstado(paciente.id, { dados: { aguardando_foto_2: null } });
         const analiseFoto1 = await analisarPrato([aguardando.foto1_base64], mimetype);
@@ -505,14 +451,10 @@ export async function processarImagem(
       }
     }
 
-    // 1ª foto — detectar tipo automaticamente (D-03)
     const tipo = await detectarTipoImagem(base64, mimetype);
     console.log(`[vision] Tipo detectado: ${tipo} para ${phone}`);
 
-    // Bug fix (2026-07-13): barcode e rótulo NÃO registram direto — foto de
-    // embalagem fechada (ex: código de barras de Todynho intacto) era registrada
-    // como consumida com 100g default. Agora ambos passam pelo card D-06 pro
-    // paciente confirmar antes.
+    // Barcode/rótulo passam pelo card D-06 (evita registrar embalagem fechada como consumida).
     if (tipo === 'barcode') {
       const produto = await processarCodigoBarras(base64, mimetype);
       if (produto) {
@@ -554,10 +496,7 @@ export async function processarImagem(
 
     if (tipo === 'rotulo') {
       const rotulo = await lerRotulo(base64, mimetype);
-      // Fallback (2026-07-13): Haiku pode classificar foto de código de barras
-      // como "rotulo" quando a embalagem está visível. Se lerRotulo devolve
-      // macros zeradas ou produto desconhecido, tenta OpenFoodFacts pelo EAN
-      // antes de desistir.
+      // Rótulo vazio pode ser barcode mal-classificado — tenta OpenFoodFacts antes de desistir.
       const rotuloVazio = !rotulo || rotulo.macros.kcal === 0 || rotulo.produto === 'Produto desconhecido';
       if (rotuloVazio) {
         const produto = await processarCodigoBarras(base64, mimetype);
@@ -596,7 +535,6 @@ export async function processarImagem(
       return;
     }
 
-    // tipo === 'prato' — solicitar 2ª foto (D-04)
     await atualizarEstado(paciente.id, {
       dados: {
         aguardando_foto_2: {
@@ -614,9 +552,6 @@ export async function processarImagem(
   }
 }
 
-// Salva a analise em foto_ambigua_pendente e pergunta ao paciente como interpretar.
-// A resposta eh interceptada em agent.ts (antes de confirmacao_pendente) e enviada
-// pra resolverAmbiguidadeFoto. Mesmo padrao D-06 usado por handleConfirmacaoPrato.
 export async function handleAmbiguidade(
   phone: string,
   paciente: PacienteInfo,
@@ -640,27 +575,13 @@ export async function handleAmbiguidade(
   await sendText(phone, pergunta);
 }
 
-// Reescreve descricoes de alimentos que vieram do Claude no formato AGREGADO
-// (ex: "Arroz (~200g x2 pratos)") pra porcao individual depois da divisao por
-// N pessoas em resolverAmbiguidadeFoto. Estrategia heuristica local (sem API).
-//
-// Padroes que os prompts do Sonnet 4.6 costumam gerar (UAT 2026-07-09):
-//  - "Arroz branco (~200g x2 pratos)"                                → "Arroz branco (~200g)"
-//  - "Arroz ~200g por prato, 2 pratos = ~400g total"                 → "Arroz ~200g"
-//  - "Carne 300g no total"        (com n=3)                          → "Carne 100g"
-//  - "Salada 80g cada"                                               → "Salada 80g"
-//  - "Feijão 200ml em cada prato"                                    → "Feijão 200ml"
-//  - "Macarrão (~150g + tigela extra ~200g)"                         → "Macarrão (~150g)"
-//  - "Farofa (~80g tigela extra)"                                    → "Farofa (~80g)"
-//
-// Se n <= 1, retorna intacto.
+// Converte descrição agregada ("Arroz ~200g x2 pratos") em porção individual pós-divisão.
 export function normalizarDescricoesIndividuais(alimentos: string[], n: number): string[] {
   if (n <= 1) return alimentos;
   return alimentos.map((a) => normalizarUmAlimento(a, n));
 }
 
-// Sufixos por-unidade: quando presentes, a quantidade JA e individual — so cortar
-// o sufixo. Cobre "por prato", "x2 pratos", "cada", "+ tigela extra", "tigela extra".
+// Sufixos onde a quantidade já é individual — só cortar o sufixo, não dividir.
 const SUFIXOS_POR_UNIDADE: RegExp[] = [
   /\s*[,;]?\s+por\s+(?:prato|pessoa|porç[aã]o|porcao|unidade)s?\b[\s\S]*$/i,
   /\s*[,;]?\s+x\s*\d+\s+(?:pratos?|pessoas?|porç[aã]o|porcao|unidades?)\b[\s\S]*$/i,
@@ -670,18 +591,15 @@ const SUFIXOS_POR_UNIDADE: RegExp[] = [
   /\s*[,;]?\s+(?:tigela|prato|bandeja)\s+extra\b[\s\S]*$/i,
 ];
 
-// "Xg total" / "Xg no total" imediatamente antes do fim: quantidade e agregada,
-// deve ser dividida. Ancorado em \s+ para nao confundir com "total" em substring.
+// "Xg total" indica quantidade agregada — divide pelo n. \s+ ancorado evita "total" em substring.
 const REGEX_TOTAL_NUM = /^(.+?)([~≈]?\s*)([\d]+(?:[.,][\d]+)?)\s*(g|ml|kcal)\s*(?:no\s+)?total\b\.?\s*$/i;
 
-// Sufixo "total" isolado (quando nao ha numero pra dividir): so trunca.
 const SUFIXO_TOTAL_ISOLADO = /[,;]?\s*(?:no\s+)?total\b\.?\s*$/i;
 
 function normalizarUmAlimento(desc: string, n: number): string {
   const original = desc.trim();
 
-  // Padrao "Nome (conteudo)": processa dentro dos parenteses para preservar
-  // o wrapper visual do card D-06.
+  // Processa dentro dos parênteses pra preservar o wrapper visual do card.
   const parenteses = original.match(/^(.+?)\s*\(([^()]+)\)\s*$/);
   if (parenteses) {
     const nome = parenteses[1].trim();
@@ -693,8 +611,7 @@ function normalizarUmAlimento(desc: string, n: number): string {
   return processarConteudo(original, n);
 }
 
-// Ordem: (1) sufixos por-unidade truncados; (2) "Xg total" dividido; (3) "total"
-// isolado truncado. Nunca combina os dois — o primeiro que casar decide.
+// Primeiro casamento decide — nunca combina os três caminhos.
 function processarConteudo(str: string, n: number): string {
   for (const r of SUFIXOS_POR_UNIDADE) {
     const novo = str.replace(r, '').trim();
@@ -718,8 +635,7 @@ function dividirTotal(m: RegExpMatchArray, n: number): string | null {
   return `${prefixo} ${tilde}${dividido}${unidade}`.trim();
 }
 
-// Chamado por agent.ts quando o paciente responde a pergunta de ambiguidade.
-// Retorna true se resolveu, false se resposta invalida (agent.ts re-pergunta).
+// Retorna false quando a resposta é inválida — agent.ts re-pergunta.
 export async function resolverAmbiguidadeFoto(
   phone: string,
   paciente: PacienteInfo,
@@ -732,8 +648,7 @@ export async function resolverAmbiguidadeFoto(
 
   if (pendente.tipo === 'pessoas') {
     let n = 0;
-    // Lookaround (?<!\w)/(?!\w) em vez de \b porque \b em JS eh ASCII-only —
-    // depois de `só` (o char `ó` nao eh word char ASCII) o boundary falha.
+    // Lookaround em vez de \b porque `ó` não é word-char ASCII e derruba o boundary.
     if (/(?<!\w)(s[óo]\s*eu|somente\s*eu|s[óo]\s*(pra|para)\s*mim)(?!\w)/.test(texto)) {
       n = 1;
     } else {
@@ -763,7 +678,6 @@ export async function resolverAmbiguidadeFoto(
     return true;
   }
 
-  // tipo === 'refeicoes' — lookaround em vez de \b por causa do `ó` unicode.
   if (/(?<!\w)(uma\s*s[óo]|junto|junta|1|s[óo]\s*uma)(?!\w)/.test(texto)) {
     await atualizarEstado(paciente.id, {
       dados: { foto_ambigua_pendente: null } as Parameters<typeof atualizarEstado>[1]['dados'],
@@ -775,7 +689,6 @@ export async function resolverAmbiguidadeFoto(
     await atualizarEstado(paciente.id, {
       dados: { foto_ambigua_pendente: null } as Parameters<typeof atualizarEstado>[1]['dados'],
     });
-    // Fallback: Claude nao devolveu split — cai no agregado
     if (!pendente.analise.refeicoes || pendente.analise.refeicoes.length < 2) {
       await handleConfirmacaoPrato(phone, paciente, pendente.analise, metas);
       return true;

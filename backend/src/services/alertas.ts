@@ -4,8 +4,7 @@ import { sendText } from './evolution';
 
 const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
 
-// Mensagens estaticas por tipo. 'agua' e funcao porque a porcao varia
-// por paciente (hidratacao_ml / N_horarios). Os demais sao strings fixas.
+// 'agua' e funcao porque a porcao varia por paciente (hidratacao_ml / N_horarios).
 const MENSAGENS_REFEICAO: Record<string, string> = {
   cafe:         '☀️ Hora do café! Lembre-se de registrar sua refeição da manhã no NutriChat. 🥗',
   lanche_manha: '🥪 Hora do lanche da manhã! Registre no NutriChat o que você comer. 🥗',
@@ -22,12 +21,10 @@ function mensagemAgua(porcaoMl: number | null): string {
   return '💧 Hora de hidratar! Beba um copo d\'água agora e registre: "bebi 300ml". 💚';
 }
 
-// Keys aceitas em entrevista_dados.horarios_refeicoes, na ordem em que aparecem
-// no dia. Mantida em modulo para o sync e os testes compartilharem a fonte.
+// Keys de entrevista_dados.horarios_refeicoes na ordem do dia.
 export const REFEICOES_KEYS = ['cafe', 'lanche_manha', 'almoco', 'lanche_tarde', 'jantar'] as const;
 export type RefeicaoKey = typeof REFEICOES_KEYS[number];
 
-// Mapeia keys de horarios_refeicoes -> colunas de alertas_config.
 const KEY_TO_COL: Record<RefeicaoKey, string> = {
   cafe:         'horario_cafe',
   lanche_manha: 'horario_lanche_manha',
@@ -47,11 +44,7 @@ export interface AlertasConfigPayload {
   ativo: boolean;
 }
 
-// Pura: monta o registro de alertas_config a partir dos dados da entrevista.
-// Sem I/O — usada pelo sincronizador e pelo smoke programatico.
-// horarios_agua = mesmos horarios das refeicoes cadastradas (cada refeicao vira
-// gatilho de lembrete de agua tambem; a porcao e calculada no momento do disparo
-// dividindo hidratacao_ml pelo numero de horarios).
+// horarios_agua = mesmos das refeicoes; porcao vem no disparo (hidratacao_ml / N).
 export function montarAlertasConfigPayload(
   pacienteId: string,
   horariosRefeicoes: Record<string, string> | null | undefined,
@@ -81,10 +74,8 @@ export function montarAlertasConfigPayload(
   return payload;
 }
 
-// Persistencia: upsert em alertas_config com base nos horarios da entrevista.
-// Idempotente via UNIQUE(paciente_id). Se nenhum horario foi cadastrado,
-// nao apaga config existente (decisao de seguranca: nutricionista pode ter
-// preenchido manualmente; preferir nao mexer a sumir com tudo).
+// Idempotente via UNIQUE(paciente_id). Nao apaga config existente quando
+// entrevista vem sem horarios (nutricionista pode ter preenchido manual).
 export async function sincronizarAlertasDaEntrevista(
   pacienteId: string,
   horariosRefeicoes: Record<string, string> | null | undefined,
@@ -110,8 +101,7 @@ export async function sincronizarAlertasDaEntrevista(
 export async function dispararAlertas(horario: string): Promise<void> {
   console.log(`[alertas] Verificando alertas para horario ${horario}`);
 
-  // Buscar pacientes com alertas_config ativo. entrevista_dados entra junto
-  // pra calcular porcao de agua (hidratacao_ml / N_horarios).
+  // entrevista_dados vem junto pra calcular porcao de agua no disparo.
   const { data: configs, error } = await supabase
     .from('alertas_config')
     .select(`
@@ -149,7 +139,6 @@ export async function dispararAlertas(horario: string): Promise<void> {
     };
     const wpp = paciente.whatsapp;
 
-    // Verificar cada tipo de alerta
     const refeicoesParaEnviar: RefeicaoKey[] = [];
 
     if (config.horario_cafe === horario)         refeicoesParaEnviar.push('cafe');
@@ -166,14 +155,12 @@ export async function dispararAlertas(horario: string): Promise<void> {
 
     if (refeicoesParaEnviar.length === 0 && !aguaCasou && !suplementoCasou) continue;
 
-    // Disparar refeicoes
     for (const tipo of refeicoesParaEnviar) {
       await sendText(wpp, MENSAGENS_REFEICAO[tipo]);
       console.log(`[alertas] ${tipo} enviado para ${paciente.nome} (${wpp})`);
       enviados++;
     }
 
-    // Agua: calcular porcao na hora a partir da hidratacao + N_horarios cadastrados
     if (aguaCasou) {
       const hidratacaoMl = Number(paciente.entrevista_dados?.['hidratacao_ml']) || 0;
       const porcaoMl = aguaArr.length > 0 && hidratacaoMl > 0
@@ -184,7 +171,6 @@ export async function dispararAlertas(horario: string): Promise<void> {
       enviados++;
     }
 
-    // Suplemento
     if (suplementoCasou) {
       await sendText(wpp, MENSAGENS_REFEICAO['suplemento']);
       console.log(`[alertas] suplemento enviado para ${paciente.nome} (${wpp})`);

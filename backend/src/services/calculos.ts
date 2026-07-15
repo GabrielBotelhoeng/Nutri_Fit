@@ -43,11 +43,7 @@ export interface ResultadoCreatina {
   mensagem: string;
 }
 
-// Fatores de atividade (Mifflin-St Jeor / Harris-Benedict).
-// Separados em dois eixos (P1-4): frequência semanal domina, tipo orienta o
-// default quando a frequência não está clara. Antes era first-match-wins numa
-// lista achatada — "musculacao 5x" batia em "musculacao" (1.55) sem ler o "5x".
-
+// Frequência semanal domina; tipo só orienta o default quando a frequência não está clara.
 type Nivel = {
   fator: number;
   nivel: string;
@@ -70,30 +66,23 @@ const NUMEROS_PT: Record<string, number> = {
   sete: 7,
 };
 
-// Extrai frequência semanal do texto. Retorna `null` se não detectar (deixa o
-// tipo orientar o default).
 export function extrairFrequenciaSemanal(texto: string): number | null {
   const t = texto.toLowerCase();
 
-  // Sinais de "todo dia / diário / 2x ao dia" → 7+ (cap em 7 pra contagem)
   if (/(2|duas)\s*(x|vezes)\s*(ao|por|no)\s*dia/.test(t)) return 7;
   if (/\btodo(s)?\s+(o\s+)?dia/.test(t) || /\bdiari[oa]\b/.test(t) || /\btodos os dias\b/.test(t)) return 7;
 
-  // "Nx" / "N vezes" / "N x semana"
   const matchDigito = t.match(/(\d+)\s*(x|vezes)(?:\s*(?:por|na|\/|\s)\s*(?:semana|sem))?/);
   if (matchDigito) return parseInt(matchDigito[1], 10);
 
-  // "N x na semana" sem palavra "vezes"
   const matchSlashSemana = t.match(/(\d+)\s*\/?\s*semana/);
   if (matchSlashSemana) return parseInt(matchSlashSemana[1], 10);
 
-  // Números por extenso ("cinco vezes", "tres x", "duas vezes na semana")
   for (const [palavra, n] of Object.entries(NUMEROS_PT)) {
     const re = new RegExp(`\\b${palavra}\\s*(x|vezes)`);
     if (re.test(t)) return n;
   }
 
-  // "Não pratico / nada / sedentário" → freq 0
   if (/\bnao\s+(pratico|faco|faço|treino)/.test(t) || /\bnenhuma\b/.test(t) || /\bsedentari[oa]\b/.test(t)) {
     return 0;
   }
@@ -103,9 +92,6 @@ export function extrairFrequenciaSemanal(texto: string): number | null {
 
 type TipoAtividade = 'sedentario' | 'leve' | 'moderado' | 'intenso' | 'desconhecido';
 
-// Classifica o tipo de atividade. "Intenso" inclui atletismo, crossfit e
-// menções explícitas de "intenso/pesado". "Moderado" cobre musculação, corrida,
-// natação típicas. "Leve" é caminhada, yoga, alongamento.
 export function classificarTipoAtividade(texto: string): TipoAtividade {
   const t = texto.toLowerCase();
   if (/\bsedentari[oa]\b/.test(t) || /\bnao\s+(pratico|faco|faço|treino)/.test(t) || /\bnenhuma\b/.test(t)) {
@@ -123,10 +109,7 @@ export function classificarTipoAtividade(texto: string): TipoAtividade {
   return 'desconhecido';
 }
 
-// Combina frequência + tipo no fator final.
-// Regra: sedentário no tipo sobrescreve frequência (paciente disse "não
-// pratico"). Caso contrário a frequência domina; o tipo só decide o default
-// quando a frequência é desconhecida.
+// Sedentário no tipo sobrescreve frequência; senão frequência domina.
 export function detectarFatorAtividade(
   atividadeTipo: string,
   frequencia?: string,
@@ -135,34 +118,28 @@ export function detectarFatorAtividade(
   const textoFreq = frequencia ?? '';
   const tipo = classificarTipoAtividade(textoTipo);
 
-  // Sedentário sobrescreve qualquer frequência.
   if (tipo === 'sedentario') return NIVEL_SEDENTARIO;
 
   const freq = extrairFrequenciaSemanal(`${textoTipo} ${textoFreq}`);
 
   if (freq !== null) {
     if (freq <= 0) return NIVEL_SEDENTARIO;
-    if (freq <= 2) {
-      // Treino pesado mesmo só 2x pode justificar leve a moderado; mantemos
-      // 1.375 que é o padrão para 1-2x na maioria das referências.
-      return NIVEL_LEVE;
-    }
+    if (freq <= 2) return NIVEL_LEVE;
     if (freq <= 4) return NIVEL_MODERADO;
     if (freq <= 6) return NIVEL_MUITO_ATIVO;
     return NIVEL_EXTREMO;
   }
 
-  // Sem frequência clara — tipo orienta o default.
   switch (tipo) {
     case 'leve': return NIVEL_LEVE;
     case 'intenso': return NIVEL_MUITO_ATIVO;
     case 'moderado': return NIVEL_MODERADO;
-    default: return NIVEL_MODERADO; // mantém compat com versão antiga
+    default: return NIVEL_MODERADO;
   }
 }
 
+// Mifflin-St Jeor
 export function calcularTMB(dados: DadosEntrevista): ResultadoTMB {
-  // Formula Mifflin-St Jeor
   let tmb: number;
   if (dados.sexo === 'masculino') {
     tmb = 10 * dados.peso_kg + 6.25 * dados.altura_cm - 5 * dados.idade + 5;
@@ -184,7 +161,6 @@ export function calcularTMB(dados: DadosEntrevista): ResultadoTMB {
 export function calcularHidratacao(peso_kg: number): ResultadoHidratacao {
   const meta_ml = Math.round(peso_kg * 35);
 
-  // Sugestao de distribuicao: 8 porcoes ao longo do dia
   const porcao_ml = Math.round(meta_ml / 8);
   const distribuicao = [
     `☀️ Ao acordar: ${porcao_ml}ml`,
@@ -207,7 +183,6 @@ export function calcularCreatina(
   if (suplementos && suplementos.length > 0) {
     const textoSuplementos = suplementos.join(' ').toLowerCase();
 
-    // Verificar se o nutricionista ja definiu uma dose de creatina
     const matchDose = textoSuplementos.match(/creatina[^\d]*(\d+(?:[.,]\d+)?)\s*g/);
     if (matchDose) {
       const dose = parseFloat(matchDose[1].replace(',', '.'));
@@ -218,7 +193,6 @@ export function calcularCreatina(
       };
     }
 
-    // Creatina mencionada mas sem dose especifica
     if (textoSuplementos.includes('creatina')) {
       const dose = Math.round(peso_kg * 0.03 * 10) / 10;
       return {
@@ -229,7 +203,6 @@ export function calcularCreatina(
     }
   }
 
-  // Sem creatina nos suplementos — calcular e sugerir
   const dose = Math.round(peso_kg * 0.03 * 10) / 10;
   return {
     dose_g: dose,
@@ -238,11 +211,11 @@ export function calcularCreatina(
   };
 }
 
-// Splits por objetivo (tabela A — decisao fechada com usuario):
-// - emagrecer:    -20% TDEE, 2.0 g/kg proteina, 25% kcal gordura
-// - ganhar_massa: +10% TDEE, 1.8 g/kg proteina, 25% kcal gordura
-// - manter:       TDEE,      1.6 g/kg proteina, 30% kcal gordura
-// - saude_geral:  TDEE,      1.4 g/kg proteina, 30% kcal gordura
+// Splits por objetivo:
+//   emagrecer    -20% TDEE  2.0 g/kg prot  25% kcal gord
+//   ganhar_massa +10% TDEE  1.8 g/kg prot  25% kcal gord
+//   manter        TDEE      1.6 g/kg prot  30% kcal gord
+//   saude_geral   TDEE      1.4 g/kg prot  30% kcal gord
 // Carbo = resto das calorias.
 export function calcularMacros(
   tdee: number,
@@ -299,10 +272,8 @@ export function calcularMacros(
   };
 }
 
-// Le metas_* persistidas em entrevista_dados; fallback ao 30/40/30 antigo
-// quando ausente (compat com pacientes pre-#3). Ponto unico de verdade —
-// meal.ts, vision.ts e agent.ts (saldo da foto) devem chamar isto, nao
-// recalcular splits localmente.
+// Ponto unico de verdade — meal.ts, vision.ts e agent.ts (saldo da foto)
+// devem chamar isto, nao recalcular splits localmente.
 export function obterMetas(dados: Record<string, unknown>): MacrosDiarios {
   const kcal = dados['metas_kcal'] as number | undefined;
   const prot = dados['metas_proteina_g'] as number | undefined;
@@ -325,7 +296,6 @@ export function obterMetas(dados: Record<string, unknown>): MacrosDiarios {
     };
   }
 
-  // Fallback 30/40/30 sobre tdee_kcal
   const tdee = (dados['tdee_kcal'] as number) || 2000;
   return {
     kcal: tdee,
@@ -345,8 +315,7 @@ export interface PerfilExplicacao {
   restricoes: string[];
 }
 
-// Explicacao personalizada via Claude Haiku 4.5. Pode falhar; caller
-// DEVE envolver em try/catch — falha aqui nao pode derrubar o fim de
+// Caller DEVE envolver em try/catch — falha aqui nao pode derrubar o fim de
 // entrevista (o paciente ja recebeu os numeros na mensagem anterior).
 export async function gerarExplicacaoPersonalizada(
   perfil: PerfilExplicacao,
@@ -402,29 +371,21 @@ FORMATACAO (WhatsApp, nao Markdown):
   return sanitizarMencaoConcorrentes(texto);
 }
 
-// Lista de concorrentes/ferramentas que o NutriChat nao deve recomendar.
-// Match case-insensitive e tolerante a variacoes ("My Fitness Pal", "MyFitness
-// Pal"). Quando uma sentenca menciona qualquer um deles, a sentenca inteira e
-// substituida por uma dica on-brand. Conservador: prefere remover a sentenca a
-// re-escrever (evita inventar conteudo).
+// Descarta a sentenca inteira em vez de re-escrever (evita inventar conteudo).
 const CONCORRENTES_RE = /\b(my\s*fitness\s*pal|myfitnesspal|fat\s*secret|fatsecret|cronometer|lose\s*it|loseit|yazio|lifesum|calorie\s*counter|contador\s+de\s+calorias)\b/i;
 
 const DICA_ON_BRAND = 'Se quiser, me manda foto do prato (ou audio descrevendo) que eu calculo as macros pra voce em segundos.';
 
-// Remove sentencas que recomendam concorrentes e substitui por uma dica
-// equivalente usando o proprio NutriChat. Idempotente: se nao encontra
-// concorrente, retorna o texto inalterado.
 export function sanitizarMencaoConcorrentes(texto: string): string {
   if (!CONCORRENTES_RE.test(texto)) return texto;
 
-  // Divide em sentencas preservando o terminador (. ! ? \n).
   const sentencas = texto.split(/(?<=[.!?\n])\s+/);
   let substituiuAlguma = false;
   const limpas = sentencas
     .map((s) => {
       if (CONCORRENTES_RE.test(s)) {
         substituiuAlguma = true;
-        return ''; // descarta a sentenca inteira
+        return '';
       }
       return s;
     })
@@ -433,7 +394,6 @@ export function sanitizarMencaoConcorrentes(texto: string): string {
   let resultado = limpas.join(' ').replace(/\s+/g, ' ').trim();
 
   if (substituiuAlguma) {
-    // Garante que o paciente recebe uma dica equivalente.
     if (!/foto.*prato/i.test(resultado) && !/audio.*descrev/i.test(resultado)) {
       resultado = resultado ? `${resultado} ${DICA_ON_BRAND}` : DICA_ON_BRAND;
     }

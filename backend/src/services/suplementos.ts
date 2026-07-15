@@ -1,29 +1,11 @@
-// P0-3 — Classificacao + dose + explicacao de suplementos.
-// Paciente lista o que toma em texto livre (etapa 13 da entrevista). O bot:
-//
-//   1. Classifica cada item em 3 baldes: seguros / desconhecidos / controlados.
-//   2. Para seguros com dose padrao (whey, cafeina, omega-3), sugere posologia
-//      baseada no peso. Marca como "sugestao inicial, valide com nutri".
-//   3. Se ha estimulantes/termogenicos legitimos (cafeina, cha verde, sinefrina),
-//      explica efeitos e cautelas (nao empilhar, evitar apos 16h).
-//   4. Para controlados (clembuterol, stanozolol, sarms, sibutramina), envia
-//      aviso explicando o *porque* (arritmia, hepatotoxicidade, etc.) e
-//      redirecionamento pra cardiologista/endocrinologista. NUNCA passa dose.
-//   5. Se paciente perguntar dose de controlado fora da entrevista, o handler
-//      dedicado (`detectarPerguntaDoseControlada` / `formatarRespostaDoseControlada`)
-//      responde com o redirect e sinaliza pro nutri.
-//
-// Matching e case-insensitive, ignora acentos, tolera variacoes. Conservador:
-// prefere "desconhecido" a "seguro" sem certeza. NUNCA classifica como
-// "controlado" sem match de palavra inteira — falso positivo derruba confianca.
+// Classificação em 3 baldes (seguros / desconhecidos / controlados) + sugestão de dose.
+// Conservador: prefere "desconhecido" a "seguro" sem certeza. "Controlado" exige match de
+// palavra inteira — falso positivo derruba confiança do paciente no bot.
 
 type CategoriaSeguro = 'proteina' | 'estimulante' | 'omega' | 'outro';
 
-// Mapa de suplementos seguros para categoria. Substrings sao testadas em ordem
-// de especificidade (mais longo primeiro) para "whey protein" nao cair em "whey"
-// generico antes de ser reconhecido como o mesmo item.
+// Substrings ordenadas por especificidade — "whey protein" antes de "whey" genérico.
 const SEGUROS_POR_CATEGORIA: Array<{ padrao: string; categoria: CategoriaSeguro }> = [
-  // proteinas
   { padrao: 'whey protein', categoria: 'proteina' },
   { padrao: 'whey isolado', categoria: 'proteina' },
   { padrao: 'whey concentrado', categoria: 'proteina' },
@@ -33,7 +15,6 @@ const SEGUROS_POR_CATEGORIA: Array<{ padrao: string; categoria: CategoriaSeguro 
   { padrao: 'proteina vegetal', categoria: 'proteina' },
   { padrao: 'proteina de ervilha', categoria: 'proteina' },
   { padrao: 'proteina de soja', categoria: 'proteina' },
-  // estimulantes / termogenicos legitimos
   { padrao: 'pre-treino', categoria: 'estimulante' },
   { padrao: 'pre treino', categoria: 'estimulante' },
   { padrao: 'pre-workout', categoria: 'estimulante' },
@@ -43,12 +24,10 @@ const SEGUROS_POR_CATEGORIA: Array<{ padrao: string; categoria: CategoriaSeguro 
   { padrao: 'sinefrina', categoria: 'estimulante' },
   { padrao: 'guarana', categoria: 'estimulante' },
   { padrao: 'termogenico', categoria: 'estimulante' },
-  // omega / oleos
   { padrao: 'omega 3', categoria: 'omega' },
   { padrao: 'omega-3', categoria: 'omega' },
   { padrao: 'oleo de peixe', categoria: 'omega' },
   { padrao: 'oleo de linhaca', categoria: 'omega' },
-  // aminoacidos / secundarios
   { padrao: 'bcaa', categoria: 'outro' },
   { padrao: 'glutamina', categoria: 'outro' },
   { padrao: 'arginina', categoria: 'outro' },
@@ -56,14 +35,13 @@ const SEGUROS_POR_CATEGORIA: Array<{ padrao: string; categoria: CategoriaSeguro 
   { padrao: 'beta alanina', categoria: 'outro' },
   { padrao: 'citrulina', categoria: 'outro' },
   { padrao: 'taurina', categoria: 'outro' },
-  { padrao: 'creatina', categoria: 'outro' }, // dose ja calculada em calculos.ts
+  { padrao: 'creatina', categoria: 'outro' },
   { padrao: 'leucina', categoria: 'outro' },
   { padrao: 'maltodextrina', categoria: 'outro' },
   { padrao: 'dextrose', categoria: 'outro' },
   { padrao: 'waxy maize', categoria: 'outro' },
   { padrao: 'palatinose', categoria: 'outro' },
   { padrao: 'hipercalorico', categoria: 'outro' },
-  // vitaminas / minerais
   { padrao: 'multivitaminico', categoria: 'outro' },
   { padrao: 'polivitaminico', categoria: 'outro' },
   { padrao: 'complexo b', categoria: 'outro' },
@@ -84,7 +62,6 @@ const SEGUROS_POR_CATEGORIA: Array<{ padrao: string; categoria: CategoriaSeguro 
   { padrao: 'selenio', categoria: 'outro' },
   { padrao: 'cromo', categoria: 'outro' },
   { padrao: 'iodo', categoria: 'outro' },
-  // saude geral / fitoterapicos
   { padrao: 'colageno hidrolisado', categoria: 'outro' },
   { padrao: 'colageno', categoria: 'outro' },
   { padrao: 'glucosamina', categoria: 'outro' },
@@ -106,8 +83,6 @@ const SEGUROS_POR_CATEGORIA: Array<{ padrao: string; categoria: CategoriaSeguro 
   { padrao: 'oleo de coco', categoria: 'outro' },
 ];
 
-// Substancias controladas/proibidas. Estruturado por categoria pro aviso ao
-// paciente explicar o *porque* (nao so "beta-agonista", mas os riscos concretos).
 type CategoriaControlado =
   | 'beta_agonista'
   | 'anabolizante'
@@ -121,11 +96,9 @@ interface DadosControlado {
 }
 
 export const CONTROLADOS: Record<string, DadosControlado> = {
-  // beta-agonistas
   'clembuterol': { motivo: 'beta-agonista, banido pela WADA, uso veterinario', categoria: 'beta_agonista' },
   'clenbuterol': { motivo: 'beta-agonista, banido pela WADA, uso veterinario', categoria: 'beta_agonista' },
   'salbutamol': { motivo: 'beta-agonista, uso off-label controlado', categoria: 'beta_agonista' },
-  // anabolizantes androgenicos
   'stanozolol': { motivo: 'anabolizante androgenico', categoria: 'anabolizante' },
   'winstrol': { motivo: 'anabolizante androgenico (stanozolol)', categoria: 'anabolizante' },
   'oxandrolona': { motivo: 'anabolizante androgenico', categoria: 'anabolizante' },
@@ -142,28 +115,22 @@ export const CONTROLADOS: Record<string, DadosControlado> = {
   'hemogenin': { motivo: 'oximetolona, anabolizante', categoria: 'anabolizante' },
   'oximetolona': { motivo: 'anabolizante androgenico', categoria: 'anabolizante' },
   'masteron': { motivo: 'drostanolona, anabolizante', categoria: 'anabolizante' },
-  // hormonios
   'gh': { motivo: 'hormonio do crescimento, prescricao endocrino', categoria: 'hormonio' },
   'hgh': { motivo: 'hormonio do crescimento humano', categoria: 'hormonio' },
   'somatropina': { motivo: 'hormonio do crescimento sintetico', categoria: 'hormonio' },
   'igf-1': { motivo: 'fator de crescimento, controlado', categoria: 'hormonio' },
   'epo': { motivo: 'eritropoietina, banida em esporte', categoria: 'hormonio' },
   'eritropoietina': { motivo: 'banida pela WADA', categoria: 'hormonio' },
-  // sarms
   'ostarine': { motivo: 'SARM, sem aprovacao da ANVISA', categoria: 'sarm' },
   'ligandrol': { motivo: 'SARM, sem aprovacao da ANVISA', categoria: 'sarm' },
   'lgd-4033': { motivo: 'SARM, sem aprovacao da ANVISA', categoria: 'sarm' },
   'mk-677': { motivo: 'secretagogo de GH, sem aprovacao', categoria: 'sarm' },
   'rad-140': { motivo: 'SARM, sem aprovacao da ANVISA', categoria: 'sarm' },
-  // emagrecedores controlados
   'sibutramina': { motivo: 'controlado, prescricao especial', categoria: 'emagrecedor' },
   'anfepramona': { motivo: 'anorexigeno, controlado', categoria: 'emagrecedor' },
   'efedrina': { motivo: 'simpaticomimetico, controlado', categoria: 'emagrecedor' },
 };
 
-// Riscos concretos por categoria — explicados no aviso ao paciente pra ele
-// entender o *porque* (nao um "porque eu falei"). Baseado em bulas ANVISA e
-// literatura de eventos adversos documentados.
 const RISCOS_POR_CATEGORIA: Record<CategoriaControlado, string[]> = {
   beta_agonista: [
     'taquicardia sustentada e arritmia',
@@ -202,15 +169,11 @@ function normalizar(s: string): string {
     .toLowerCase()
     .trim()
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '') // remove acentos combinantes
-    .replace(/[^\w\s-]/g, ' ') // pontuacao vira espaco
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^\w\s-]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
-
-// ============================================================================
-// CLASSIFICACAO (API compativel com uso existente em agent.ts)
-// ============================================================================
 
 export interface AnaliseSuplementos {
   seguros: string[];
@@ -230,7 +193,6 @@ export function analisarSuplementos(itens: string[] | undefined): AnaliseSupleme
     const norm = normalizar(item);
     if (!norm) continue;
 
-    // 1. Controlado — match por palavra inteira em qualquer chave.
     let controlado: { nome: string; motivo: string } | null = null;
     for (const [chave, dados] of Object.entries(controladosNorm)) {
       const re = new RegExp(`(?:^|\\W)${chave.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}(?=\\W|$)`);
@@ -244,21 +206,18 @@ export function analisarSuplementos(itens: string[] | undefined): AnaliseSupleme
       continue;
     }
 
-    // 2. Seguro — substring tolerante (padroes ja ordenados por especificidade).
     const seguro = SEGUROS_POR_CATEGORIA.some((s) => norm.includes(normalizar(s.padrao)));
     if (seguro) {
       resultado.seguros.push(item.trim());
       continue;
     }
 
-    // 3. Desconhecido.
     resultado.desconhecidos.push(item.trim());
   }
 
   return resultado;
 }
 
-// Retorna a categoria de um item seguro (primeiro match). null se nao for seguro.
 export function categorizarSeguro(item: string): CategoriaSeguro | null {
   const norm = normalizar(item);
   for (const entrada of SEGUROS_POR_CATEGORIA) {
@@ -266,10 +225,6 @@ export function categorizarSeguro(item: string): CategoriaSeguro | null {
   }
   return null;
 }
-
-// ============================================================================
-// CALCULO DE DOSE (whey / cafeina / omega-3)
-// ============================================================================
 
 export interface SugestaoDose {
   suplemento: string;
@@ -279,9 +234,7 @@ export interface SugestaoDose {
   cautela?: string;
 }
 
-// Whey: 0.3 g/kg de peso corporal como sugestao pos-treino, ou 0.4 g/kg quando
-// meta proteica ainda ta longe do aporte alimentar tipico. 1 scoop convencional
-// = 25-30g de po, ~22-24g de proteina. Arredondamos pra multiplos de 5g de po.
+// 0.3 g/kg — sugestão pós-treino; scoop convencional ≈ 24g de proteína.
 export function calcularDoseWhey(peso_kg: number): SugestaoDose {
   const proteinaG = Math.round(peso_kg * 0.3);
   const scoopEquivalente = Math.max(1, Math.round(proteinaG / 24));
@@ -294,9 +247,7 @@ export function calcularDoseWhey(peso_kg: number): SugestaoDose {
   };
 }
 
-// Cafeina: 3 mg/kg como sugestao de dose ergogenica, teto 400 mg/dia (ANVISA).
-// Pre-treino comercial ja tem 200-300mg por dose — se paciente toma pre-treino,
-// contar como cafeina.
+// 3 mg/kg com teto de 400 mg/dia (ANVISA). Pré-treino comercial já entra nesse balde.
 export function calcularDoseCafeina(peso_kg: number): SugestaoDose {
   const doseMg = Math.min(400, Math.round(peso_kg * 3));
   return {
@@ -308,8 +259,6 @@ export function calcularDoseCafeina(peso_kg: number): SugestaoDose {
   };
 }
 
-// Omega-3: dose padrao 1-2g de EPA+DHA/dia (recomendacao American Heart
-// Association pra saude cardiovascular). Nao depende de peso.
 export function calcularDoseOmega(): SugestaoDose {
   return {
     suplemento: 'Omega-3',
@@ -319,10 +268,7 @@ export function calcularDoseOmega(): SugestaoDose {
   };
 }
 
-// A partir dos suplementos seguros que o paciente reportou, gera sugestoes de
-// dose so pras categorias que temos calculo pra: proteina, estimulante, omega.
-// "outro" fica listado no bloco "outros informados" sem calculo — a validacao
-// fica com o nutricionista.
+// Só proteína/estimulante/ômega têm cálculo; "outro" vai pro bloco informativo.
 export function calcularDoseSuplementos(
   peso_kg: number,
   segurosReportados: string[],
@@ -338,8 +284,7 @@ export function calcularDoseSuplementos(
     const cat = categorizarSeguro(item);
     if (!cat) continue;
 
-    // Uma sugestao por categoria (evita duplicar quando paciente lista "whey"
-    // e "whey isolado" separados — a dose e a mesma).
+    // Uma sugestão por categoria — evita duplicar "whey" + "whey isolado".
     if (cat === 'proteina' && !jaIncluido.has('proteina')) {
       comCalculo.push(calcularDoseWhey(peso_kg));
       jaIncluido.add('proteina');
@@ -356,10 +301,6 @@ export function calcularDoseSuplementos(
 
   return { comCalculo, outrosInformados };
 }
-
-// ============================================================================
-// FORMATACAO DE MENSAGEM
-// ============================================================================
 
 export function formatarMensagemSuplementos(
   sugestoes: SugestaoDose[],
@@ -390,9 +331,7 @@ export function formatarMensagemSuplementos(
   return linhas.join('\n');
 }
 
-// Explicacao de termogenicos legitimos (cafeina, cha verde, sinefrina, pre-treino).
-// So aparece quando o paciente reportou algum estimulante — nao spamma quem so
-// toma whey e vitamina D.
+// Só aparece quando há estimulante — não spamma quem toma só whey e vitamina D.
 export function formatarExplicacaoTermogenicos(sugestoes: SugestaoDose[]): string {
   const temEstimulante = sugestoes.some((s) => s.categoria === 'estimulante');
   if (!temEstimulante) return '';
@@ -417,17 +356,13 @@ export function formatarExplicacaoTermogenicos(sugestoes: SugestaoDose[]): strin
   );
 }
 
-// Aviso ao paciente quando ha suplemento controlado. Explica o *porque* pra
-// nao soar como "porque eu falei" — lista riscos concretos por categoria.
-// NAO recomenda parar nem trocar dose — isso e responsabilidade do medico/nutri.
-// Redireciona pra cardiologista + endocrinologista quando cabe.
+// Não recomenda parar/trocar dose — só lista riscos e redireciona pro médico.
 export function formatarAvisoControlados(
   controlados: Array<{ nome: string; motivo: string }>,
   nomePaciente: string,
 ): string {
   if (controlados.length === 0) return '';
 
-  // Pega categorias dos itens reportados pra listar os riscos relevantes.
   const controladosNorm = Object.fromEntries(
     Object.entries(CONTROLADOS).map(([k, v]) => [normalizar(k), v]),
   );
@@ -480,14 +415,6 @@ export function formatarAvisoControlados(
   );
 }
 
-// ============================================================================
-// HANDLER: paciente pergunta dose de controlado fora da entrevista
-// ============================================================================
-
-// Detecta se o texto e uma pergunta sobre *como usar* uma substancia controlada.
-// Casos alvo: "quanto de clembuterol devo tomar?", "como faco ciclo de ostarine?",
-// "posso tomar 2ml de clembuterol?", "que dose de winstrol?". Retorna a substancia
-// encontrada (nome normalizado) ou null.
 const PALAVRAS_DOSE = [
   'quanto', 'quantos', 'quantas', 'como tomar', 'como usar', 'como faco',
   'como comeco', 'como iniciar', 'dose', 'dosagem', 'ciclo', 'protocolo',

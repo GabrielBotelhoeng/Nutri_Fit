@@ -9,9 +9,9 @@ import { calcularStreak, type StreakInfo } from './meal';
 const claude = new Anthropic({ apiKey: env.CLAUDE_API_KEY });
 const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
 
-// Faixas de status kcal por dia. >110% = ultrapassou (alerta principal), 90-110%
-// = na meta, 70-90% = abaixo (recuperavel), <70% com registro = bem abaixo, 0 =
-// sem registro. Espelha OVERSHOOT_THRESHOLD e STREAK_TOLERANCIA de meal.ts.
+// Faixas kcal/dia. >110% acima, 90-110% na_meta, 70-90% abaixo, <70% com
+// registro bem_abaixo, 0 sem_registro. Espelha OVERSHOOT_THRESHOLD e
+// STREAK_TOLERANCIA de meal.ts.
 export type StatusDia = 'acima' | 'na_meta' | 'abaixo' | 'bem_abaixo' | 'sem_registro';
 
 export function statusDia(kcal: number, meta: number): StatusDia {
@@ -31,9 +31,8 @@ const EMOJI_STATUS: Record<StatusDia, string> = {
   sem_registro: '—',
 };
 
-// Barra de 10 blocos + marcador '▶' quando ultrapassa 110% da meta. Distinta da
-// barraProgresso de meal.ts (que satura em 100%) porque aqui precisamos sinalizar
-// o overflow visualmente no relatorio semanal.
+// Barra de 10 blocos + '▶' quando >110% da meta. Distinta da barraProgresso
+// de meal.ts (satura em 100%) porque o relatorio precisa sinalizar overflow.
 export function barraKcalDia(kcal: number, meta: number, blocos = 10): string {
   if (meta <= 0 || kcal <= 0) return '░'.repeat(blocos);
   const ratio = kcal / meta;
@@ -44,10 +43,8 @@ export function barraKcalDia(kcal: number, meta: number, blocos = 10): string {
 
 const DIAS_BR = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'] as const;
 
-// Ancora a data ISO no meio-dia do fuso do paciente (America/Sao_Paulo) pra
-// evitar que UTC-3 empurre pro dia anterior. getDay() do Date interpreta como
-// fuso local do runtime (Docker=UTC), mas com meio-dia -03:00 o instante cai
-// no mesmo dia em qualquer fuso comum, permitindo weekday consistente.
+// Ancora a data ISO no meio-dia -03:00 pra weekday consistente independente
+// do fuso do runtime (Docker=UTC): UTC-3 puxaria pro dia anterior.
 export function diaSemanaBR(dataISO: string): string {
   const d = new Date(`${dataISO}T12:00:00-03:00`);
   return DIAS_BR[d.getUTCDay()] ?? '';
@@ -169,13 +166,11 @@ export function formatarMensagemRelatorio(d: DadosMensagem): string {
   const bateram = d.dias.filter((x) => statusDia(x.kcal, d.metas.kcal) === 'na_meta').length;
   const acima = d.dias.filter((x) => statusDia(x.kcal, d.metas.kcal) === 'acima');
 
-  // Bloco de destaque no topo quando houve excesso.
   const alerta = acima.length > 0
     ? `\n\n🔴 *Atenção:* Você ultrapassou a meta em ${acima.length} ${acima.length === 1 ? 'dia' : 'dias'} (${acima.map((x) => diaSemanaBR(x.data)).join(', ')}).`
     : '';
 
-  // Grafico ASCII dia-a-dia. Padding fixo pra alinhar em fonte monoespaçada
-  // (WhatsApp renderiza dentro do bloco ``` em monospaced).
+  // Padding fixo pra alinhar em monospace (WhatsApp renderiza ``` como fixed-width).
   const linhasGrafico = d.dias.map((x) => {
     const emoji = EMOJI_STATUS[statusDia(x.kcal, d.metas.kcal)];
     const barra = barraKcalDia(x.kcal, d.metas.kcal);
@@ -183,7 +178,6 @@ export function formatarMensagemRelatorio(d: DadosMensagem): string {
     return `${diaSemanaBR(x.data)} ${barra} ${kcalFmt} ${emoji}`;
   }).join('\n');
 
-  // Melhor/pior dia = maior/menor kcal entre dias com registro.
   let melhorLinha = '';
   let piorLinha = '';
   if (comReg.length > 0) {
@@ -195,7 +189,6 @@ export function formatarMensagemRelatorio(d: DadosMensagem): string {
     }
   }
 
-  // Δ vs semana anterior (só quando há dado anterior).
   let comparacaoLinha = '';
   if (d.mediaAnterior > 0) {
     const delta = ((d.mediaAtual - d.mediaAnterior) / d.mediaAnterior) * 100;
@@ -203,8 +196,7 @@ export function formatarMensagemRelatorio(d: DadosMensagem): string {
     comparacaoLinha = `\n• Semana anterior: ${Math.round(d.mediaAnterior)} kcal → *${sinal}${delta.toFixed(1)}%*`;
   }
 
-  // Macros médios / hidratação (só divide por dias-com-registro pra não puxar
-  // média pra baixo por dias em branco).
+  // Macros/agua: divide por dias-com-registro pra nao puxar media com dias vazios.
   const somaP = d.dias.reduce((s, x) => s + x.proteina, 0);
   const somaC = d.dias.reduce((s, x) => s + x.carbo, 0);
   const somaG = d.dias.reduce((s, x) => s + x.gordura, 0);

@@ -26,7 +26,6 @@ ragRouter.post('/processar', requireInternalKey, async (req: Request, res: Respo
     return;
   }
 
-  // Aceitar imediatamente e processar em background
   res.status(202).json({ status: 'processando', dieta_id });
 
   processarDieta(paciente_id, dieta_id, pdf_url).catch((err) => {

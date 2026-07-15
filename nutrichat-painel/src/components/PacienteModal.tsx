@@ -77,14 +77,12 @@ export function PacienteModal({ paciente, onClose, onSaved }: PacienteModalProps
   const primeiroInputRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
 
-  // H3 — Controle: ESC fecha o modal. Foco automatico no primeiro campo.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
     document.addEventListener('keydown', onKey);
     primeiroInputRef.current?.focus();
-    // Bloqueia scroll do body enquanto modal esta aberto.
     const originalOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
@@ -93,16 +91,15 @@ export function PacienteModal({ paciente, onClose, onSaved }: PacienteModalProps
     };
   }, [onClose]);
 
-  // Preview da data calculada a partir do plano (so no cadastro). No submit
-  // do cadastro o backend recalcula do plano, entao nao precisa sincronizar
-  // com o state `dataExpiracao` (que so e usado no modo edicao).
+  // Preview da data calculada — no submit o backend recalcula do plano,
+  // entao dataCalculadaPreview so serve pro cadastro (modo edicao usa
+  // dataExpiracao). Nao sincronizar.
   const dataCalculadaPreview = useMemo(() => calcularDataExpiracao(plano), [plano]);
 
   useEffect(() => {
     if (!paciente) return;
     let cancelado = false;
-    // setState em promise callback (nao no corpo sincrono do efeito) —
-    // satisfaz react-hooks/set-state-in-effect sem mudar o fluxo de UI.
+    // setState fora do corpo sincrono do efeito (regra react-hooks).
     void Promise.resolve().then(async () => {
       if (cancelado) return;
       setCarregandoDieta(true);
@@ -190,8 +187,7 @@ export function PacienteModal({ paciente, onClose, onSaved }: PacienteModalProps
           return;
         }
 
-        // No cadastro nao enviamos data_expiracao — o backend calcula a partir
-        // do plano. Isso garante consistencia mesmo se alguem burlar o UI.
+        // Cadastro nao envia data_expiracao — backend calcula do plano.
         const form = new FormData();
         form.append('nome', nome);
         form.append('whatsapp', `55${whatsappDigitos}`);
@@ -602,8 +598,6 @@ export function PacienteModal({ paciente, onClose, onSaved }: PacienteModalProps
     </div>
   );
 }
-
-// ---------- helpers ----------
 
 function ReadOnlyField({ label, value }: { label: string; value: string }) {
   return (

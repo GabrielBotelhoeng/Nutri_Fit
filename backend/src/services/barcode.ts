@@ -32,17 +32,9 @@ interface OffResponse {
   };
 }
 
-// Open Food Facts costuma colocar a marca-mãe (fabricante) no inicio do
-// product_name — usuario reportou "Coca-Cola Brasil Cristal" como nome da
-// agua mineral. Heuristica para deixar o nome focado no produto:
-//   1. Preferir product_name_pt (BR) sobre product_name (generico).
-//   2. Strip primeira marca de `brands` (separada por ',') se ela aparece
-//      como prefixo do nome. Comparacao normaliza hifens, espacos extras
-//      e case ("Coca-Cola" casa com "Coca Cola"). So aplica se sobrar
-//      substantivo (>=3 chars com letra).
-//   3. Se o strip funcionou e generic_name existe e nao redunda com a
-//      marca, prefixar para enriquecer ("Agua Mineral Cristal").
-// Se nao funcionar nada, mantem o nome original — nunca regride.
+// OFF prefixa a marca-mae no product_name ("Coca-Cola Brasil Cristal" pra agua
+// mineral); heuristica: pt > generico, tira marca prefixada, adiciona generic_name.
+// Nunca regride — se nada funciona, mantem o nome original.
 function formatarNomeProduto(p: NonNullable<OffResponse['product']>, barcode: string): string {
   const nome = (p.product_name_pt ?? p.product_name ?? '').trim();
   if (!nome) return `Produto ${barcode}`;
@@ -56,11 +48,9 @@ function formatarNomeProduto(p: NonNullable<OffResponse['product']>, barcode: st
   if (marcaNorm.length >= 3) {
     const nomeNorm = norm(nome);
     if (nomeNorm.startsWith(marcaNorm + ' ')) {
-      // Conta tokens da marca pra remover N primeiras palavras do nome original
       const nTokens = marcaNorm.split(' ').length;
       const candidato = nome.split(/\s+/).slice(nTokens).join(' ').trim();
-      // So aceita strip se sobrar pelo menos uma palavra com 4+ letras alfa
-      // (evita reduzir "Coca Cola LT 350ml" a "LT 350ml" — sem substantivo real).
+      // Precisa sobrar substantivo (evita reduzir "Coca Cola LT 350ml" a "LT 350ml").
       if (/[a-zA-ZÀ-ÿ]{4,}/.test(candidato)) {
         limpo = candidato;
         stripAplicado = true;
@@ -121,8 +111,7 @@ export async function buscarOpenFoodFacts(barcode: string): Promise<ProdutoBarco
   }
 }
 
-// Extrai código de barras via Vision e busca nutrientes no Open Food Facts.
-// Retorna null se não encontrar produto — vision.ts faz fallback para leitura de rótulo.
+// Retorna null quando OFF nao acha — vision.ts cai no fallback de leitura de rotulo.
 export async function processarCodigoBarras(
   base64: string,
   mimetype: string,

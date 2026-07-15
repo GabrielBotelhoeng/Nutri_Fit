@@ -9,20 +9,12 @@ import { obterMetas, MacrosDiarios } from './calculos';
 import { hojeLocal, diaAnterior, diasAtrasLocal } from '../utils/datas';
 import { comBackoff } from '../utils/retry';
 
-// Janela em minutos durante a qual uma refeicao recente ainda pode ser
-// alvo de "correcao". Fora dela, frases como "na verdade foi assim" voltam
-// a ser registro novo — evita que o paciente acabe "corrigindo" o almoco
-// quando ja jantou.
+// Janela em que uma refeição recente ainda aceita "correção" — fora dela vira registro novo.
 export const TTL_ULTIMA_REFEICAO_MIN = 60;
 
-// Mensagem humana enviada ao paciente quando o backoff de retry esgota. Evita
-// silencio suspeito (paciente esperando resposta que nunca chega) e nao expoe
-// stack trace ("Error 429..."). Menciona o tempo pra sugerir retry consciente.
 const MSG_ERRO_HUMANA = '😅 Tá um pouco lento aqui do meu lado agora. Me manda de novo em uns 30s?';
 
-// Diferencia msg por causa. Se for overload/timeout (429/529/503/ETIMEDOUT/…),
-// pede espera maior — paciente que tenta em 5s so vai bater 429 de novo. Resto
-// (JSON invalido, parse falho) fica com msg curta (30s).
+// Overload/timeout pede espera maior — retry em 5s só bateria 429 de novo.
 export function mensagemErroHumana(err: unknown): string {
   const e = err as { status?: number; response?: { status?: number }; code?: string };
   const status = e?.status ?? e?.response?.status;
@@ -38,10 +30,8 @@ export function mensagemErroHumana(err: unknown): string {
   return MSG_ERRO_HUMANA;
 }
 
-// Peso tipico de porcao individual (pt-BR) — usado como dica visual na
-// pergunta "quantas gramas de X?" (P0-2). NAO e tabela nutricional; e so
-// referencia rapida pro paciente sair de "nao faco ideia" pra "acho que
-// foi 1 unidade → ~120g". Keys sem acento pra casar com input normalizado.
+// Dica visual pra pergunta "quantas gramas de X?" — não é tabela nutricional.
+// Keys sem acento pra casar com input normalizado.
 const PESOS_TIPICOS: Record<string, { media: number; exemplo: string }> = {
   banana:    { media: 120, exemplo: '1 unidade' },
   maca:      { media: 180, exemplo: '1 unidade' },
@@ -71,15 +61,11 @@ const PESOS_TIPICOS: Record<string, { media: number; exemplo: string }> = {
   brocolis:  { media: 80,  exemplo: '1 porção pequena' },
 };
 
-// Remove acentos pra comparar chave do PESOS_TIPICOS sem depender do
-// case exato que o Haiku devolveu ("Pão" vs "pao").
 function semAcento(s: string): string {
   return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 }
 
-// Se `nome` contem uma key do dict, devolve string pronta com a dica
-// entre parenteses (ex: "(ex: 1 pão francês ≈ 50g)"). Senao, "".
-// Usa contains (nao equal) — "Batata frita" bate com "batata".
+// Usa contains (não equal) — "Batata frita" bate com "batata".
 function dicaPesoTipico(nome: string): string {
   const alvo = semAcento(nome);
   for (const [key, info] of Object.entries(PESOS_TIPICOS)) {
@@ -99,13 +85,9 @@ export interface MacrosRefeicao {
   agua_ml?: number;
 }
 
-// Item individual da analise estruturada (P0-2). `material` distingue
-// alimento substancial (frango, arroz, banana) de aditivo/bebida zero
-// (sal, agua, coca zero, cafe preto) — so itens materiais sem quantidade
-// disparam pergunta antes do registro. `preparo_inferido` (P0-2b) marca
-// quando o Haiku escolheu o modo de preparo sozinho (paciente disse so
-// "batata") — opcional pra compatibilidade com analises ja persistidas
-// em estado antes deste campo existir.
+// `material` distingue alimento substancial de aditivo/bebida zero (só material sem
+// quantidade dispara pergunta). `preparo_inferido` marca quando o Haiku escolheu o preparo
+// sozinho — opcional pra compat com analises persistidas antes do campo existir.
 export interface ItemRefeicao {
   nome: string;
   quantidade_g: number;
@@ -114,9 +96,7 @@ export interface ItemRefeicao {
   preparo_inferido?: boolean;
 }
 
-// Uma refeicao individual dentro de uma mensagem. O Haiku pode identificar
-// varias (Fase B: "café: X. almoço: Y") — sempre retorna array, mesmo com 1.
-// `tipo_refeicao` fica null quando o paciente nao especificou.
+// O Haiku pode identificar várias refeições numa mensagem — sempre retorna array (mesmo com 1).
 export interface RefeicaoIndividual {
   tipo_refeicao?: string;
   itens: ItemRefeicao[];
@@ -129,8 +109,6 @@ export interface AnaliseRefeicao {
   totais: MacrosRefeicao;
 }
 
-// Valores validos que o Haiku pode retornar em tipo_refeicao. Usado pelo
-// card multiplo pra escolher emoji.
 const TIPOS_REFEICAO_VALIDOS = new Set<string>([
   'café da manhã',
   'lanche da manhã',
@@ -187,12 +165,7 @@ function agregarMacros(lista: MacrosRefeicao[]): MacrosRefeicao {
   return sanitizarMacros(soma);
 }
 
-// Output estruturado por refeicao (Fase B) e por item (P0-2). O Haiku pode
-// identificar N refeicoes na mesma mensagem ("café: X. almoço: Y"): sempre
-// retorna `refeicoes[]`, mesmo com 1. Cada refeicao tem tipo (café/almoço/...)
-// ou null quando o paciente nao marcou. Compat: parser aceita shape legada
-// `{itens, totais}` — embrulha em 1 refeicao — pra nao quebrar chamadas antigas
-// e as centenas de fixtures dos testes que ainda usam esse shape.
+// Parser aceita shape legada `{itens, totais}` — embrulha em 1 refeição — pra não quebrar fixtures.
 export async function analisarRefeicaoComClaude(descricao: string): Promise<AnaliseRefeicao> {
   const prompt = `Você é um assistente nutricional. Analise a mensagem do paciente e devolva as refeições que ele descreveu.
 
@@ -262,14 +235,12 @@ Saída:
         const tipoRaw = typeof rObj['tipo_refeicao'] === 'string' ? (rObj['tipo_refeicao'] as string) : null;
         const tipo = tipoRaw && TIPOS_REFEICAO_VALIDOS.has(tipoRaw) ? tipoRaw : undefined;
         const itens = normalizarItens(rObj['itens']);
-        // Se o Haiku esqueceu totais por refeicao, deriva dos itens (fallback defensivo).
         const totais = rObj['totais'] !== undefined
           ? macrosDeRaw(rObj['totais'])
           : agregarMacros([{ kcal: 0, proteina_g: 0, carbo_g: 0, gordura_g: 0 }]);
         return { tipo_refeicao: tipo, itens, totais };
       });
     } else {
-      // Fallback legacy: shape antiga {itens, totais} vira 1 refeicao sem tipo.
       refeicoes = [{
         tipo_refeicao: undefined,
         itens: normalizarItens(raw.itens),
@@ -290,26 +261,17 @@ Saída:
   }
 }
 
-// Wrapper de compatibilidade: alguns fluxos (correcao, foto) so querem o
-// total agregado. Mantem a API original sem propagar `itens` por chamadas
-// que nao precisam.
 export async function calcularMacrosComClaude(descricao: string): Promise<MacrosRefeicao> {
   const { totais } = await analisarRefeicaoComClaude(descricao);
   return totais;
 }
 
-// Detecta o primeiro item material sem quantidade informada — base do
-// fluxo "perguntar uma vez antes de registrar" (P0-2). Retorna null quando
-// todos os itens materiais ja tem quantidade explicita (ou so ha bebidas
-// zero/temperos), ou seja, quando NAO se deve interromper o registro.
 export function detectarItemMaterialSemQuantidade(itens: ItemRefeicao[]): ItemRefeicao | null {
   return itens.find((i) => i.material && !i.quantidade_informada) ?? null;
 }
 
-// P0-2b: alimentos cujo preparo muda muito a kcal (batata frita ~310 kcal/100g
-// vs ~80 da cozida). So esses justificam interromper o registro pra perguntar
-// o preparo — pro resto, o preparo assumido fica visivel no card e o paciente
-// corrige via P0-1 se quiser.
+// Alimentos cujo preparo muda muito a kcal (batata frita ~310 vs cozida ~80).
+// Só esses justificam interromper o registro pra perguntar o preparo.
 const PREPARO_CRITICO: RegExp[] = [
   /\bbatatas?\b/,
   /\bfrango\b/,
@@ -327,9 +289,7 @@ export function ehPreparoCritico(nome: string): boolean {
   return PREPARO_CRITICO.some((re) => re.test(n));
 }
 
-// Remove adjetivos de preparo do nome pra pergunta nao sair esquisita
-// ("Como foi o preparo de *Batata cozida*?" → "... de *Batata*?"). O Haiku
-// ja embute o preparo assumido no nome do item.
+// Remove adjetivo de preparo pra pergunta não sair "Como foi o preparo de *Batata cozida*?".
 function nomeSemPreparo(nome: string): string {
   return nome
     .replace(/\b(frit[oa]s?|cozid[oa]s?|assad[oa]s?|grelhad[oa]s?|empanad[oa]s?|mexid[oa]s?|refogad[oa]s?|ao\s+forno)\b/gi, '')
@@ -337,17 +297,11 @@ function nomeSemPreparo(nome: string): string {
     .trim();
 }
 
-// Detecta o primeiro item material de preparo critico cujo preparo foi
-// assumido pelo Haiku (P0-2b). Mesma filosofia do detector de quantidade:
-// null = nao interromper o registro.
 export function detectarItemPreparoInferido(itens: ItemRefeicao[]): ItemRefeicao | null {
   return itens.find((i) => i.material && i.preparo_inferido === true && ehPreparoCritico(i.nome)) ?? null;
 }
 
-// Retorna o snapshot do que foi gravado — usado pelo agente pra montar
-// `ultima_refeicao` em entrevista_dados (base do fluxo de correcao P0-1).
-// `itens` e opcional pra manter compatibilidade com chamadas que ainda
-// nao passam o detalhamento (foto, barcode, rotulo).
+// Retorna snapshot que vira `ultima_refeicao` em entrevista_dados (base do fluxo de correção).
 export async function registrarRefeicao(
   pacienteId: string,
   descricao: string,
@@ -373,7 +327,7 @@ export async function registrarRefeicao(
     .single();
   if (insertError || !inserted) throw new Error(`[meal] Falha ao inserir refeição: ${insertError?.message ?? 'sem dado retornado'}`);
 
-  // Acumulação incremental via RPC — NUNCA usar upsert direto (sobrescreve em vez de somar)
+  // Acumulação incremental via RPC — upsert direto sobrescreveria em vez de somar.
   const { error: rpcError } = await supabase.rpc('acumular_registro_diario', {
     p_paciente_id: pacienteId,
     p_data: hoje,
@@ -392,10 +346,7 @@ export async function registrarRefeicao(
     registrado_em: (inserted.registrado_em as string) ?? new Date().toISOString(),
   };
 
-  // Persistir snapshot da ultima refeicao no estado para o fluxo de correcao.
-  // Try/catch isolado: falha aqui NAO pode derrubar a confirmacao do registro
-  // (paciente ja recebeu confirmacao no chat; correcao ficaria so indisponivel
-  // ate proxima refeicao).
+  // Try/catch isolado: falha aqui não pode derrubar a confirmação do registro.
   try {
     await atualizarEstado(pacienteId, { dados: { ultima_refeicao: ultima } as Parameters<typeof atualizarEstado>[1]['dados'] });
   } catch (err) {
@@ -405,9 +356,6 @@ export async function registrarRefeicao(
   return ultima;
 }
 
-// Verifica se a ultima refeicao registrada ainda esta dentro da janela
-// TTL_ULTIMA_REFEICAO_MIN. Fora dela, retorna null — o agente trata como
-// registro novo.
 export function obterUltimaRefeicaoSeRecente(
   dadosEstado: Record<string, unknown>,
 ): UltimaRefeicao | null {
@@ -418,11 +366,8 @@ export function obterUltimaRefeicaoSeRecente(
   return raw;
 }
 
-// Substitui a ultima refeicao do paciente: faz UPDATE na linha de `refeicoes`
-// e aplica o delta (novos macros - antigos) em `registros_diarios` via RPC
-// dedicada (garante GREATEST(0, ...) — saldo nunca fica negativo).
-// Sobrescreve `ultima_refeicao` no estado com os novos valores pra permitir
-// correcoes em cadeia ("na verdade foram 250g, esqueci o feijao...").
+// UPDATE em `refeicoes` + delta em `registros_diarios` via RPC (GREATEST(0, ...) evita saldo negativo).
+// Sobrescreve `ultima_refeicao` pra permitir correções em cadeia.
 export async function corrigirUltimaRefeicao(
   pacienteId: string,
   ultima: UltimaRefeicao,
@@ -497,9 +442,7 @@ export async function obterSaldoDia(pacienteId: string): Promise<MacrosRefeicao>
   };
 }
 
-// Streak de dias seguidos batendo meta, por dimensao. Agua fica de fora de
-// proposito (quebra facil demais e vira frustracao). `batendo_hoje_*` separa
-// "hoje ja conta" de "hoje ainda em andamento" — muda o tom da mensagem.
+// Água fica de fora do streak de propósito — quebra fácil demais vira frustração.
 export type StreakInfo = {
   proteina: number;
   kcal: number;
@@ -507,23 +450,16 @@ export type StreakInfo = {
   batendo_hoje_kcal: boolean;
 };
 
-// Tolerancia pra considerar meta "batida": >= 95% ja conta. Pra kcal ha
-// tambem teto (OVERSHOOT_THRESHOLD) — ultrapassar 110% nao e bater.
+// >= 95% da meta conta como "batida". Kcal tem teto OVERSHOOT_THRESHOLD (110%).
 export const STREAK_TOLERANCIA = 0.95;
 
-// Janela maxima olhada pra tras. Streak acima disso satura — aceitavel:
-// a mensagem perde precisao so pra quem ja esta ha um mes perfeito.
+// Streak acima disso satura — aceitável, mensagem perde precisão só para quem já está há um mês perfeito.
 export const STREAK_JANELA_DIAS = 30;
 
-// Calcula o streak por dimensao (proteina e kcal) olhando registros_diarios
-// dos ultimos STREAK_JANELA_DIAS. Regras:
-// - Hoje bateu → hoje conta. Hoje ainda nao bateu → nao quebra, pula hoje
-//   e conta de ontem pra tras (o dia ainda esta em andamento).
-// - Excecao kcal: se hoje JA ultrapassou 110% da meta, nao tem mais como
-//   bater hoje → streak de kcal quebra agora (proteina segue independente).
-// - Dia sem registro no meio da sequencia (gap >= 1 dia) quebra.
-// - Dimensao sem meta cadastrada (<= 0) fica em 0 — nunca inventa streak.
-// Datas no fuso do paciente (hojeLocal), consistente com registrarRefeicao.
+// Regras:
+// - Hoje ainda em andamento não quebra streak (só se JÁ estourou 110% de kcal).
+// - Gap >= 1 dia no meio quebra.
+// - Dimensão sem meta cadastrada (<= 0) fica em 0.
 export async function calcularStreak(
   pacienteId: string,
   metas: MacrosDiarios,
@@ -591,11 +527,8 @@ export async function calcularStreak(
   };
 }
 
-// Linha "🔥 N dias..." do card. Streak >= 2 usa 🔥 e comemora sequencia.
-// Streak == 1 usa 🌱 com framing de comeco de habito (empurra aderencia sem
-// forçar) — so aparece quando o paciente bateu hoje, pra evitar mensagem
-// otimista quando na verdade so bateu ontem e hoje esta em zero.
-// Entre as duas dimensoes vence a de streak maior; empate vai pra proteina.
+// Streak == 1 só aparece se bateu HOJE — evita otimismo quando só bateu ontem.
+// Empate entre dimensões vai pra proteína.
 export function linhaStreak(streak?: StreakInfo): string {
   if (!streak) return '';
   const melhor = streak.proteina >= streak.kcal
@@ -611,21 +544,15 @@ export function linhaStreak(streak?: StreakInfo): string {
   return '';
 }
 
-// Limite a partir do qual o paciente recebe alerta proativo de excesso calorico.
-// 110% e tolerancia clinica razoavel: 100% e meta, +10% e overshoot leve digno
-// de aviso amigavel (nao critico). Centralizado pra facilitar tunning futuro.
+// Aviso amigável a partir de 110% da meta calórica.
 export const OVERSHOOT_THRESHOLD = 1.10;
 
-// Pura: decide se ja passou de 110% da meta calorica do dia.
-// Defensiva: meta <= 0 retorna false (sem meta cadastrada, nao alerta).
 export function excedeuMetaKcal(saldo: MacrosRefeicao, metas: MacrosDiarios): boolean {
   if (!metas.kcal || metas.kcal <= 0) return false;
   return saldo.kcal > metas.kcal * OVERSHOOT_THRESHOLD;
 }
 
-// Side-effect: dispara alerta proativo se o saldo passou de 110% da meta.
-// Try/catch isolado interno — falha de notificacao NAO derruba o registro
-// da refeicao. Mesma filosofia do sync de alertas_config em agent.ts:443.
+// Try/catch isolado — falha de notificação não derruba o registro da refeição.
 export async function dispararAlertaOvershoot(
   phone: string,
   saldo: MacrosRefeicao,
@@ -644,9 +571,7 @@ export async function dispararAlertaOvershoot(
   }
 }
 
-// Barra de progresso em texto pra WhatsApp. Satura em 100% (n blocos cheios)
-// quando o paciente passa da meta — a "ultrapassagem" e comunicada na micro-
-// mensagem final, nao na barra. Trata meta<=0 e atual<0 como zero.
+// Satura em 100% quando passa da meta — a ultrapassagem sai na micro-mensagem final.
 export function barraProgresso(atual: number, meta: number, blocos = 10): string {
   if (meta <= 0 || atual <= 0) return '▱'.repeat(blocos);
   const proporcao = Math.min(atual / meta, 1);
@@ -654,14 +579,8 @@ export function barraProgresso(atual: number, meta: number, blocos = 10): string
   return '▰'.repeat(cheios) + '▱'.repeat(blocos - cheios);
 }
 
-// Micro-mensagem final do card. Cinco estados, escolhidos pra dar feedback
-// adaptativo sem nunca culpar:
-// - ultrapassou (kcal > 110% meta): gentil e orientador
-// - perto_limite (kcal 103-110%): aviso suave — bateu mas ja passou um pouco
-// - bateu (kcal 95-102% E proteina >= meta): celebracao limpa
-// - perto (kcal >= 85% meta): reta final
-// - abaixo (default): ainda falta — destacar proteina se ela esta mais
-//   atrasada (paciente comendo carbo demais e o ponto mais comum de falha)
+// Estados: ultrapassou (>110%) | perto_limite (103-110%) | bateu (95-102% + proteína ok)
+// | perto (>=85%) | abaixo (destaca proteína se faltar >30%).
 export function microMensagemFinal(saldo: MacrosRefeicao, metas: MacrosDiarios, streak?: StreakInfo): string {
   const base = microMensagemBase(saldo, metas);
   const fogo = linhaStreak(streak);
@@ -694,7 +613,6 @@ function microMensagemBase(saldo: MacrosRefeicao, metas: MacrosDiarios): string 
     const faltam = Math.max(0, Math.round(kcalMeta - kcalAtual));
     return `🔥 Reta final — faltam *${faltam} kcal* pra fechar o dia.`;
   }
-  // Abaixo: priorizar proteina se faltar mais que 30% dela.
   const faltamKcal = Math.max(0, Math.round(kcalMeta - kcalAtual));
   const faltamProt = Math.max(0, Math.round(protMeta - protAtual));
   if (ratioProt < 0.70 && faltamProt > 0) {
@@ -703,10 +621,7 @@ function microMensagemBase(saldo: MacrosRefeicao, metas: MacrosDiarios): string 
   return `💪 Faltam *${faltamKcal} kcal* pra fechar o dia. Tá indo bem!`;
 }
 
-// Bloco de progresso do dia — barras de texto por macro + micro-mensagem.
-// Usado tanto pelo card per-item (P0-2) quanto pelo formatarSaldoDia (foto).
-// A linha de agua so aparece quando o paciente tem meta cadastrada
-// (`metas.agua_ml`) — calculada a partir do peso na entrevista.
+// Linha de água só aparece quando `metas.agua_ml` está cadastrado (calculado a partir do peso).
 export function formatarBlocoProgressoDia(saldo: MacrosRefeicao, metas: MacrosDiarios, streak?: StreakInfo): string {
   const linhas = [
     `🔥 Energia    ${barraProgresso(saldo.kcal, metas.kcal)}  ${Math.round(saldo.kcal)} / ${Math.round(metas.kcal)} kcal`,
@@ -737,10 +652,7 @@ export function formatarSaldoDia(
   );
 }
 
-// Card P0-2: lista itens materiais com qtd, marcando "_(estimei)_" quando
-// quantidade_informada=false. Itens nao-materiais (coca zero, agua, cafe)
-// viram um rodape leve "+ X" — confirma que o bot reparou sem inflar o card.
-// A secao 3 (redesenho) substitui o saldo cru por barras de progresso.
+// Itens não-materiais (coca zero, água, café) viram rodapé leve "+ X".
 export function formatarCardRefeicao(
   analise: AnaliseRefeicao,
   saldo: MacrosRefeicao,
@@ -752,9 +664,7 @@ export function formatarCardRefeicao(
 
   const linhasItens = materiais.map((i) => {
     const qtd = Math.round(i.quantidade_g);
-    // P0-2b: preparo assumido em alimento critico tambem marca "_(estimei)_"
-    // (paciente respondeu "nao sei" a pergunta de preparo, ou fluxo que nao
-    // pergunta). O "~" continua exclusivo de quantidade estimada.
+    // "~" é exclusivo de quantidade estimada; preparo assumido em item crítico só marca "_(estimei)_".
     const estimou = !i.quantidade_informada || (i.preparo_inferido === true && ehPreparoCritico(i.nome));
     const marcador = estimou ? ' _(estimei)_' : '';
     const prefixo = i.quantidade_informada ? '' : '~';
@@ -778,10 +688,7 @@ export function formatarCardRefeicao(
   );
 }
 
-// Descricao curta usada como texto persistido na tabela `refeicoes` quando
-// vem em batch. Formato: "almoço: 200g de Frango, 100g de Arroz". Sem tipo,
-// omite o prefixo. Sem itens materiais (raro — refeicao so de bebida zero),
-// cai pra lista completa pra nao gravar string vazia.
+// Formato: "almoço: 200g de Frango, 100g de Arroz". Sem itens materiais cai pra lista completa.
 function descricaoRefeicao(r: RefeicaoIndividual): string {
   const materiais = r.itens.filter((i) => i.material);
   const base = materiais.length > 0 ? materiais : r.itens;
@@ -790,11 +697,7 @@ function descricaoRefeicao(r: RefeicaoIndividual): string {
   return partes ? `${prefixo}${partes}` : (r.tipo_refeicao ?? 'refeição');
 }
 
-// Rodape consolidado do card multiplo: lista o que o Haiku estimou (preparo
-// critico assumido + quantidades chutadas). Alternativa ao marcador
-// "_(estimei)_" por item, que poluiria demais em batch. Retorna "" quando
-// nada foi estimado — evita rodape ruidoso pra mensagem com quantidades
-// todas explicitas.
+// Marcador "_(estimei)_" por item poluiria demais em batch — vai concentrado no rodapé.
 function resumoEstimativasBatch(analise: AnaliseRefeicao): string {
   const preparosEstimados: string[] = [];
   const qtdsEstimadas: string[] = [];
@@ -828,11 +731,6 @@ function resumoEstimativasBatch(analise: AnaliseRefeicao): string {
   return `_Estimei ${partes.join(' e ')}. Se algo estiver muito fora, me manda a correção._`;
 }
 
-// Card unico agregando N refeicoes detectadas na mesma mensagem (Fase B).
-// Um bloco por refeicao com emoji por tipo + itens indentados, seguido de
-// total agregado, rodape de estimativas (quando houve) e progresso do dia.
-// Sem marcador "_(estimei)_" por item — em batch a sinalizacao vai
-// concentrada no rodape pra nao poluir cada linha.
 export function formatarCardMultiplo(
   analise: AnaliseRefeicao,
   saldo: MacrosRefeicao,
@@ -895,11 +793,8 @@ export async function sugerirSubstituicao(
   return response.content[0].type === 'text' ? response.content[0].text : '';
 }
 
-// Fase B: registra N refeicoes detectadas na mesma mensagem, uma insert
-// atomica por refeicao. Falha no meio nao rebobina as anteriores — a
-// consequencia (paciente ve card com menos refeicoes que descreveu) e
-// preferivel a perder o registro parcial ja consolidado no saldo do dia.
-// Fluxos P0-2/P0-2b DESLIGADOS aqui por design (ver comentario na branch).
+// Falha no meio não rebobina as anteriores — perder registro parcial é pior que card incompleto.
+// Fluxos de pergunta de preparo/quantidade DESLIGADOS aqui por design.
 async function processarBatch(
   phone: string,
   paciente: PacienteInfo,
@@ -919,14 +814,8 @@ async function processarBatch(
   await dispararAlertaOvershoot(phone, saldo, metas);
 }
 
-// `intentHint` (P1-3 follow-up): quando o agent.ts ja classificou a intencao
-// (fast-path/Haiku), os regexes internos NAO devem re-decidir — eles sao mais
-// burros que o classificador e derrubavam mensagem valida em silencio
-// ("2 copos de leite" classificado como registrar nao batia em ehRegistro e
-// o paciente ficava sem resposta) ou desviavam registro pra substituicao
-// ("comi arroz, nao tenho certeza" batia em "nao tenho"). Sem hint (fallback
-// do fluxo de correcao), os regexes continuam decidindo como antes — ali o
-// ignorar-em-silencio e intencional.
+// Quando `intentHint` vem, os regexes internos NÃO re-decidem — eles são mais burros
+// que o classificador e derrubam mensagem válida em silêncio.
 export async function processarTextoRefeicao(
   phone: string,
   texto: string,
@@ -965,21 +854,14 @@ export async function processarTextoRefeicao(
     return;
   }
 
-  // Fase B: paciente descreveu 2+ refeicoes na mesma mensagem. Registra em
-  // batch (N linhas em `refeicoes`, 1 card agregado) e SEM interromper com
-  // pergunta de preparo/quantidade — interromper batch por 1 item vira UX
-  // ruim. Se houver imprecisao (item material sem qtd, preparo assumido em
-  // alimento critico), fica marcado como estimativa no BD; paciente corrige
-  // via P0-1 se quiser.
+  // 2+ refeições: registra em batch sem interromper com perguntas — interromper batch vira UX ruim.
   if (analise.refeicoes.length >= 2) {
     await processarBatch(phone, paciente, analise);
     return;
   }
 
-  // P0-2b: preparo assumido em alimento critico (batata, frango, ovo...) —
-  // pergunta o preparo antes de tudo (erro de ~4x na kcal e pior que erro
-  // de porcao). A resposta vira pela `preparo_pendente` (intercept em
-  // agent.ts). A checagem de quantidade (P0-2) roda depois da resposta.
+  // Preparo em alimento crítico: erro de ~4x na kcal é pior que erro de porção.
+  // Resposta volta pela `preparo_pendente` (intercept em agent.ts).
   const itemPreparo = detectarItemPreparoInferido(analise.itens);
   if (itemPreparo) {
     await atualizarEstado(paciente.id, {
@@ -1000,9 +882,7 @@ export async function processarTextoRefeicao(
     return;
   }
 
-  // P0-2: se algum item material esta sem quantidade explicita, pergunta
-  // UMA vez antes de registrar. A resposta vira pela `refeicao_pendente`
-  // (intercept em agent.ts).
+  // Pergunta UMA vez antes de registrar. Resposta volta pela `refeicao_pendente`.
   const itemFaltando = detectarItemMaterialSemQuantidade(analise.itens);
   if (itemFaltando) {
     await atualizarEstado(paciente.id, {
@@ -1035,11 +915,8 @@ export async function processarTextoRefeicao(
   await dispararAlertaOvershoot(phone, saldo, metas);
 }
 
-// Resposta do paciente a pergunta P0-2 ("quantas gramas de arroz?"). Tres
-// caminhos: (a) "estima/nao sei/qualquer" → usa o que ja foi estimado;
-// (b) numero → injeta na descricao e recalcula; (c) qualquer outra coisa
-// → trata como caminho (a), pra nao prender o paciente em loop. Em todos
-// os casos, registra e limpa `refeicao_pendente`.
+// Três caminhos: (a) "estima/não sei" → usa estimativa; (b) número → recalcula;
+// (c) qualquer outra coisa → cai em (a) pra não prender em loop.
 export async function processarRespostaQuantidade(
   phone: string,
   texto: string,
@@ -1072,8 +949,7 @@ export async function processarRespostaQuantidade(
     }
   }
 
-  // Limpa pendencia ANTES de gravar — evita resposta nova ser interpretada
-  // como continuacao se algo abaixo falhar.
+  // Limpa pendência ANTES de gravar — evita mensagem nova virar continuação se algo abaixo falhar.
   await atualizarEstado(paciente.id, {
     dados: { refeicao_pendente: null } as Parameters<typeof atualizarEstado>[1]['dados'],
   });
@@ -1088,7 +964,6 @@ export async function processarRespostaQuantidade(
   await dispararAlertaOvershoot(phone, saldo, metas);
 }
 
-// Remove o campo `material` (interno) antes de persistir em UltimaRefeicao.
 function stripMaterial(itens: ItemRefeicao[]): UltimaRefeicao['itens'] {
   return itens.map((i) => ({
     nome: i.nome,
@@ -1097,8 +972,6 @@ function stripMaterial(itens: ItemRefeicao[]): UltimaRefeicao['itens'] {
   }));
 }
 
-// TTL da `refeicao_pendente` — 10 min e suficiente pro paciente responder
-// "100g" sem o estado ficar preso indefinidamente se ele esquecer.
 export const TTL_REFEICAO_PENDENTE_MIN = 10;
 
 export function obterRefeicaoPendenteSeValida(
@@ -1124,9 +997,7 @@ export function obterRefeicaoPendenteSeValida(
   };
 }
 
-// P0-2b: pendencia da pergunta de preparo ("frito, cozido, assado?").
-// Mesmo shape e TTL da refeicao_pendente, chave separada — as duas nunca
-// coexistem (preparo pergunta primeiro; quantidade so depois da resposta).
+// Mesmo shape/TTL da refeicao_pendente, chave separada — as duas nunca coexistem.
 export function obterPreparoPendenteSeValido(
   dadosEstado: Record<string, unknown>,
 ): {
@@ -1150,15 +1021,7 @@ export function obterPreparoPendenteSeValido(
   };
 }
 
-// Resposta do paciente a pergunta de preparo (P0-2b). Dois caminhos:
-// (a) "nao sei/estima/tanto faz" → segue com o preparo assumido pelo Haiku,
-//     que continua marcado `preparo_inferido` → card mostra "_(estimei)_";
-// (b) qualquer outra coisa → injeta na descricao e recalcula (re-analise
-//     com preparo informado zera o `preparo_inferido` do item).
-// Depois da resposta, o fluxo normal continua: se ainda faltar quantidade
-// de item material (P0-2), pergunta a quantidade; senao registra. Preparo
-// NAO e re-checado apos a resposta — uma pergunta de preparo por refeicao,
-// sem loop.
+// Uma pergunta de preparo por refeição, sem loop — depois da resposta, só a quantidade pode ser re-perguntada.
 export async function processarRespostaPreparo(
   phone: string,
   texto: string,
@@ -1190,14 +1053,11 @@ export async function processarRespostaPreparo(
     }
   }
 
-  // Limpa pendencia ANTES de gravar — mesmo racional da resposta de
-  // quantidade: mensagem nova nao pode ser interpretada como continuacao
-  // se algo abaixo falhar.
+  // Limpa pendência ANTES de gravar — evita mensagem nova virar continuação se algo abaixo falhar.
   await atualizarEstado(paciente.id, {
     dados: { preparo_pendente: null } as Parameters<typeof atualizarEstado>[1]['dados'],
   });
 
-  // P0-2: com o preparo resolvido, ainda pode faltar quantidade.
   const itemFaltando = detectarItemMaterialSemQuantidade(analiseFinal.itens);
   if (itemFaltando) {
     await atualizarEstado(paciente.id, {
@@ -1228,10 +1088,7 @@ export async function processarRespostaPreparo(
   await dispararAlertaOvershoot(phone, saldo, metas);
 }
 
-// Fluxo de correcao da ultima refeicao registrada (P0-1). Calcula novos
-// macros a partir da nova descricao, faz UPDATE da linha em `refeicoes` e
-// aplica o delta sobre `registros_diarios`. Mensagem final deixa explicito
-// que foi correcao (nao acrescimo) e mostra o saldo ja ajustado.
+// Mensagem final deixa explícito que foi correção (não acréscimo).
 export async function processarTextoCorrecao(
   phone: string,
   texto: string,

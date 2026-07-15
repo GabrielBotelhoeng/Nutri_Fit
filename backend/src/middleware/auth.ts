@@ -4,11 +4,9 @@ import { env } from '../config/env';
 
 const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
 
-// SEC-1: autenticacao via JWT do Supabase Auth.
-// Antes: header `X-API-Key` com chave que o Vite inlineava no bundle publico
-// — qualquer um podia ler o JS do painel e bater no backend. Agora o painel
-// envia `Authorization: Bearer <access_token>` da sessao do nutricionista,
-// e o backend valida via `auth.getUser(token)`. Sem chave compartilhada.
+// Autenticacao JWT via Supabase Auth. Painel envia
+// `Authorization: Bearer <access_token>` da sessao do nutricionista;
+// backend valida via getUser(). Sem chave compartilhada no bundle.
 export async function requireAuth(
   req: Request,
   res: Response,

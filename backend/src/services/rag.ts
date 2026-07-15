@@ -8,10 +8,7 @@ import { env } from '../config/env';
 const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
 const claude = new Anthropic({ apiKey: env.CLAUDE_API_KEY });
 
-// maxRetries explicito: o AsyncCaller do LangChain ja faz exponential
-// backoff em 429/5xx, mas o default (6) pode mudar entre versoes. Travar
-// aqui evita surpresa em upgrade. timeout por chamada limita o caso patologico
-// de OpenAI travar a request indefinidamente.
+// maxRetries/timeout explicitos: default do AsyncCaller pode mudar entre versoes.
 const embeddings = new OpenAIEmbeddings({
   openAIApiKey: env.OPENAI_API_KEY,
   modelName: 'text-embedding-3-small',
@@ -24,9 +21,7 @@ const splitter = new RecursiveCharacterTextSplitter({
   chunkOverlap: 200,
 });
 
-// Helper compartilhado pelo processarDieta (chunking RAG) e pelo
-// extrairHorariosDieta (Haiku) — assim o PDF e baixado e parseado uma vez so
-// no fluxo de upload.
+// Compartilhado por processarDieta e extrairHorariosDieta — PDF baixado uma vez so.
 export async function baixarTextoPDF(pdfUrl: string): Promise<string> {
   const STORAGE_PREFIX = `${env.SUPABASE_URL}/storage/v1/object/dietas/`;
   if (!pdfUrl.startsWith(STORAGE_PREFIX)) {
@@ -60,14 +55,11 @@ export async function processarDieta(
   console.log(`[rag] Processando dieta ${dietaId} para paciente ${pacienteId}`);
 
   try {
-    // 1+2. Baixar/parsear PDF — reaproveita o texto se ja foi extraido upstream
     const text = textoPreExtraido ?? (await baixarTextoPDF(pdfUrl));
 
-    // 3. Dividir em chunks
     const chunks = await splitter.splitText(text);
     console.log(`[rag] ${chunks.length} chunks gerados para dieta ${dietaId}`);
 
-    // 4. Gerar embeddings em lotes de 20 (evitar rate limit)
     const batchSize = 20;
     const allEmbeddings: number[][] = [];
     for (let i = 0; i < chunks.length; i += batchSize) {
@@ -76,10 +68,9 @@ export async function processarDieta(
       allEmbeddings.push(...batchEmbeddings);
     }
 
-    // 5. Remover chunks anteriores da mesma dieta (re-processamento idempotente)
+    // Re-processamento idempotente.
     await supabase.from('dieta_chunks').delete().eq('dieta_id', dietaId);
 
-    // 6. Inserir novos chunks
     const rows = chunks.map((content, i) => ({
       dieta_id: dietaId,
       paciente_id: pacienteId,
@@ -100,9 +91,7 @@ export async function processarDieta(
 
     console.log(`[rag] Dieta ${dietaId} indexada com ${chunks.length} chunks`);
   } catch (err) {
-    // Persiste falha para o painel parar de mostrar "processando" indefinidamente.
-    // Update e best-effort: se o supabase tambem estiver fora, perdemos so o status,
-    // nao o erro original.
+    // Best-effort: se o supabase tambem cair, perdemos so o status, nao o erro original.
     await supabase
       .from('dietas')
       .update({ processamento_status: 'falhou' })
@@ -114,18 +103,8 @@ export async function processarDieta(
   }
 }
 
-// === P1-6: extracao de horarios da dieta via Haiku 4.5 ===
-//
-// Objetivo: ler o PDF da dieta e identificar APENAS os horarios literalmente
-// escritos. O bot usa isso pra evitar perguntar (etapa 14 da entrevista) o que
-// ja esta prescrito — e tambem pra nao gravar horario diferente do PDF em
-// alertas_config (paciente acabava chutando um horario quando ja tinha um
-// prescrito, criando dissonancia entre lembrete e dieta).
-//
-// Schema rigido (sempre 5 chaves, null quando ausente):
-//   { cafe, lanche_manha, almoco, lanche_tarde, jantar }
-// Valores: "HH:MM" 24h zero-padded ("07:00", "12:30") ou null.
-
+// Schema rigido: 5 chaves sempre presentes, "HH:MM" 24h zero-padded OU null.
+// Extrai APENAS horarios literalmente escritos no PDF (nunca infere).
 export interface HorariosDieta {
   cafe: string | null;
   lanche_manha: string | null;
@@ -140,20 +119,16 @@ export function horariosDietaVazio(): HorariosDieta {
   return { cafe: null, lanche_manha: null, almoco: null, lanche_tarde: null, jantar: null };
 }
 
-// Normaliza variantes que o Haiku/PDF possam emitir para "HH:MM" 24h:
-//   "7h" / "7:00" / "7h00" / "07:00" / "07h" → "07:00"
-//   "7h30" / "7:30" / "07:30" → "07:30"
-//   "12h30" → "12:30"
-// Retorna null se nao reconhece (hora fora de range, formato invalido, etc.)
+// Normaliza "7h" / "7:30" / "07h00" / "12h30" para "HH:MM" 24h.
+// Retorna null se hora fora de range ou formato invalido.
 export function normalizarHora(raw: string | null | undefined): string | null {
   if (typeof raw !== 'string') return null;
   const t = raw.trim().toLowerCase();
   if (t.length === 0) return null;
 
-  // Aceita "7h", "7h00", "7h30", "7:00", "7:30", "07:00"
   const m = t.match(/^(\d{1,2})\s*[h:]\s*(\d{1,2})?\s*(?:h|min)?$/);
   if (!m) {
-    // tambem aceita "7" puro (raro, mas Haiku as vezes corta o "h")
+    // Haiku as vezes corta o "h" e devolve so o numero.
     const justNum = t.match(/^(\d{1,2})$/);
     if (!justNum) return null;
     const h = parseInt(justNum[1], 10);
@@ -198,10 +173,7 @@ PDF: "Faca 5 refeicoes ao dia"
 Devolva APENAS o JSON. Nada de texto antes ou depois.`;
 
 export async function extrairHorariosDieta(textoPDF: string): Promise<HorariosDieta> {
-  // Trunca textos enormes pra controlar custo do Haiku — 8000 chars cobre a
-  // primeira pagina inteira de qualquer dieta tipica (e horarios estao quase
-  // sempre na intro/resumo). Se o PDF for maior, perdemos o que estava no fim,
-  // mas horarios no rodape de dieta sao raros.
+  // 8000 chars cobre a primeira pagina de qualquer dieta tipica; horarios ficam na intro.
   const MAX_CHARS = 8000;
   const textoTruncado = textoPDF.length > MAX_CHARS ? textoPDF.slice(0, MAX_CHARS) : textoPDF;
 
@@ -210,10 +182,6 @@ export async function extrairHorariosDieta(textoPDF: string): Promise<HorariosDi
     const response = await claude.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 256,
-      // Sem campo `temperature` — o SDK default e 1.0 mas o Haiku 4.5 com
-      // instrucoes rigidas + JSON estrito ja e estavel. Usar temperature: 0
-      // exige `top_p` ajustado e o SDK do Anthropic restringe combinacoes.
-      // Em UAT real, se vir inferencia indesejada, adicionar `temperature: 0`.
       system: SYSTEM_PROMPT_HORARIOS,
       messages: [
         { role: 'user', content: `Texto do PDF da dieta:\n\n${textoTruncado}` },
@@ -245,8 +213,7 @@ export async function extrairHorariosDieta(textoPDF: string): Promise<HorariosDi
   return resultado;
 }
 
-// Persiste horarios em dietas.horarios_refeicoes. Falha silenciosa: o caller
-// continua o fluxo (entrevista cai no comportamento de "vazio = pergunta aberta").
+// Falha silenciosa: entrevista cai no fluxo "vazio = pergunta aberta".
 export async function salvarHorariosDieta(
   dietaId: string,
   horarios: HorariosDieta,
@@ -260,9 +227,7 @@ export async function salvarHorariosDieta(
   }
 }
 
-// Le horarios extraidos da dieta ativa do paciente. Retorna null se nao houver
-// dieta, se a extracao ainda nao rodou, ou se todos os horarios sao null
-// (PDF sem horarios prescritos).
+// Retorna null quando nao ha dieta, extracao nao rodou, ou todos horarios sao null.
 export async function buscarHorariosDietaPaciente(
   pacienteId: string,
 ): Promise<HorariosDieta | null> {
@@ -278,15 +243,12 @@ export async function buscarHorariosDietaPaciente(
   if (error || !data || !data.horarios_refeicoes) return null;
 
   const h = data.horarios_refeicoes as HorariosDieta;
-  // Se todos null, tratar como "sem horarios" pra cair na pergunta aberta
   const todosNull = HORARIOS_KEYS_DIETA.every((k) => h[k] === null);
   return todosNull ? null : h;
 }
 
 export async function query(pacienteId: string, pergunta: string): Promise<string> {
-  // Fail-soft: 429 persistente da OpenAI (apos os 6 retries do AsyncCaller)
-  // nao pode derrubar a resposta ao paciente. Retorna '' — o caller cai pro
-  // fluxo "sem contexto de dieta" em vez de propagar 500 pro WhatsApp.
+  // Fail-soft: 429 persistente da OpenAI cai no fluxo "sem contexto" em vez de 500.
   let queryEmbedding: number[];
   try {
     queryEmbedding = await embeddings.embedQuery(pergunta);

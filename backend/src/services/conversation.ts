@@ -6,10 +6,10 @@ const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
 export type ObjetivoNutricional = 'emagrecer' | 'ganhar_massa' | 'manter' | 'saude_geral';
 
 // Snapshot da ultima refeicao registrada no dia — base para o fluxo
-// "corrigir ultima refeicao" (P0-1). Guarda o id da linha em `refeicoes`
-// pra fazer UPDATE in-place + os macros antigos pra calcular o delta que
-// vai pra `corrigir_registro_diario`. registrado_em alimenta o TTL: fora
-// da janela, "na verdade foi assim" volta a ser registro novo.
+// "corrigir ultima refeicao". Guarda o id da linha em `refeicoes` pra
+// fazer UPDATE in-place + os macros antigos pra calcular o delta que vai
+// pra `corrigir_registro_diario`. registrado_em alimenta o TTL: fora da
+// janela, "na verdade foi assim" volta a ser registro novo.
 export interface UltimaRefeicao {
   id: string;
   descricao: string;
@@ -48,23 +48,20 @@ export interface EstadoEntrevista {
     preferencias_recusas?: string[];
     experiencia_dieta?: string;
     suplementos?: string[];
-    // Horarios das refeicoes (HH:MM) — coletados na entrevista (etapa 14)
-    // quando o PDF da dieta nao traz. Servem de base para lembretes de
-    // refeicao + hidratacao (Fase 4 / batch refinamentos #4).
-    // Keys possiveis: cafe, lanche_manha, almoco, lanche_tarde, jantar.
+    // Horarios das refeicoes (HH:MM) coletados na entrevista quando o PDF
+    // nao traz. Base para lembretes. Keys: cafe, lanche_manha, almoco,
+    // lanche_tarde, jantar.
     horarios_refeicoes?: Record<string, string>;
-    // Resultados calculados apos conclusao da entrevista
     tmb_kcal?: number;
     tdee_kcal?: number;
     hidratacao_ml?: number;
     creatina_g?: number;
-    // Metas diarias de macros (ajustadas pelo objetivo) — ponto unico de verdade
-    // consumido por meal.ts, vision.ts, agent.ts ao montar saldo do dia.
+    // Metas diarias — ponto unico de verdade consumido por meal, vision e
+    // agent ao montar o saldo do dia.
     metas_kcal?: number;
     metas_proteina_g?: number;
     metas_carbo_g?: number;
     metas_gordura_g?: number;
-    // Campos dinâmicos para estado de fluxos da Fase 3 (JSONB suporta campos arbitrários)
     [key: string]: unknown;
   };
 }
@@ -85,10 +82,8 @@ export interface PacienteInfo {
 function normalizarWhatsapp(whatsapp: string): string[] {
   const nums = [whatsapp];
   if (whatsapp.startsWith('55') && whatsapp.length === 12) {
-    // 556295514963 → 5562995514963 (inserir 9 apos o DDD, posicao 4)
     nums.push(whatsapp.slice(0, 4) + '9' + whatsapp.slice(4));
   } else if (whatsapp.startsWith('55') && whatsapp.length === 13) {
-    // 5562995514963 → 556295514963 (remover o 9)
     nums.push(whatsapp.slice(0, 4) + whatsapp.slice(5));
   }
   return nums;
@@ -140,7 +135,6 @@ export async function atualizarEstado(
   if (update.status !== undefined) campos['entrevista_status'] = update.status;
   if (update.etapa !== undefined) campos['entrevista_etapa'] = update.etapa;
   if (update.dados !== undefined) {
-    // Merge com dados existentes via Supabase JSONB concat
     const { data: current } = await supabase
       .from('pacientes')
       .select('entrevista_dados')

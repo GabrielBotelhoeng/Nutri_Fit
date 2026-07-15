@@ -25,7 +25,7 @@ type OrdemDir = 'asc' | 'desc';
 type FiltroStatus = 'todos' | 'ativo' | 'expirando' | 'expirado';
 type FiltroDieta = 'todas' | 'indexado' | 'processando' | 'falhou' | 'sem_dieta';
 
-// Pesos para ordenacao categorica — quanto maior, mais "saudavel".
+// Pesos para ordenacao categorica — maior = mais "saudavel".
 const statusPeso: Record<Paciente['status'], number> = { expirado: 0, expirando: 1, ativo: 2 };
 const ragPeso: Record<RagStatus, number> = { falhou: 0, sem_dieta: 1, processando: 2, indexado: 3 };
 
@@ -77,12 +77,11 @@ export function Dashboard() {
   }, []);
 
   useEffect(() => {
-    // Fetch inicial: rodamos em microtask pra manter o setState fora do
-    // corpo sincrono do efeito (satisfaz react-hooks/set-state-in-effect).
+    // setState fora do corpo sincrono do efeito (regra react-hooks).
     void Promise.resolve().then(carregarPacientes);
   }, [carregarPacientes]);
 
-  // H7 — Atalho: "/" foca a busca. Ignora quando ja esta digitando em input.
+  // Atalho "/" foca a busca. Ignora quando ja esta digitando em input.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== '/' || modalAberto) return;
@@ -96,7 +95,6 @@ export function Dashboard() {
     return () => document.removeEventListener('keydown', onKey);
   }, [modalAberto]);
 
-  // Contagens de resumo (calculadas sobre todos os pacientes, nao os filtrados)
   const resumo = useMemo(() => {
     const total = pacientes.length;
     let ativos = 0;
@@ -444,8 +442,6 @@ export function Dashboard() {
     </div>
   );
 }
-
-// ---------- helpers ----------
 
 function SortableTh({
   children,

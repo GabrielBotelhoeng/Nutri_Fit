@@ -23,6 +23,6 @@ export async function sendText(to: string, text: string): Promise<void> {
   if (!response.ok) {
     const body = await response.text().catch(() => '');
     console.error(`[evolution] Falha ao enviar mensagem para ${to}: ${response.status} ${body}`);
-    // Nao lanca excecao — falha de envio nao deve derrubar o webhook handler
+    // Nao lanca — falha de envio nao pode derrubar o webhook.
   }
 }

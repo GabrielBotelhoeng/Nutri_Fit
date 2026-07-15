@@ -8,7 +8,6 @@ const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
 export async function verificarExpiracoes(): Promise<void> {
   const hoje = hojeLocal();
 
-  // AGENT-19: Bloquear pacientes cujo plano venceu hoje ou antes
   const { data: vencidos, error: errVencidos } = await supabase
     .from('pacientes')
     .select('id, nome, whatsapp')
@@ -28,7 +27,6 @@ export async function verificarExpiracoes(): Promise<void> {
     }
   }
 
-  // AGENT-18: Avisar pacientes que vencem em 1, 2 ou 3 dias
   const dataLimite = somarDias(hoje, 3);
   const dataAmanha = somarDias(hoje, 1);
 

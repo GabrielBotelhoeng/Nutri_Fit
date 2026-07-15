@@ -1,25 +1,10 @@
-// Dose dinamica de suplementos via Claude Sonnet. Substitui o formatter
-// hardcoded (`formatarMensagemSuplementos`) que so cobria 3 categorias
-// (whey / cafeina / omega-3). Cobre agora *qualquer* suplemento alimentar
-// legitimo (BCAA, glutamina, colageno, HMB, adaptogenos, vitaminas...) e
-// manipulados descritos por composicao.
-//
-// Guard-rails:
-//   1. `analisarSuplementos()` classifica ANTES — controlados nao entram
-//      no prompt. Aviso deles continua hardcoded (formatarAvisoControlados).
-//   2. Prompt instrui o LLM a nunca dar dose de peptideo/hormonio/SARM/
-//      esteroide/medicamento. Se cair aqui um controlado que escapou do
-//      dicionario, LLM deve categorizar como "controlado" -> sem dose.
-//   3. Whitelist de categorias no output: so categorias marcadas como
-//      "suplemento alimentar classico" recebem dose. Resto vira "valide
-//      com nutri" mesmo se o LLM sugerir posologia.
-//   4. Post-filter de termos suspeitos ("ciclo", "PCT", "ml/semana",
-//      "protocolo hormonal") — se aparecer, descarta o item inteiro.
-//   5. Cross-check contra CONTROLADOS: se o nome do item retornado pelo
-//      LLM bater com algo da lista de controlados, forca `precisa_nutri`.
-//
-// Falha soft: se o Claude der erro (timeout/429/parse invalido), a funcao
-// retorna `falhou: true` e o call site cai no formatter hardcoded antigo.
+// Guard-rails de seguranca (defesa em profundidade — LLM nunca sugere dose de controlado):
+//   1. analisarSuplementos() classifica ANTES — controlados nao entram no prompt.
+//   2. Prompt proibe dose de peptideo/hormonio/SARM/esteroide/medicamento.
+//   3. Whitelist CATEGORIAS_COM_DOSE — resto vira precisa_nutri mesmo se LLM sugerir.
+//   4. TERMOS_SUSPEITOS em dose/timing/cautela descarta o item.
+//   5. Cross-check: nome batendo com lista de controlados forca precisa_nutri.
+// Falha soft: Claude erro → falhou: true → caller usa formatter hardcoded.
 
 import Anthropic from '@anthropic-ai/sdk';
 import { env } from '../config/env';
@@ -27,8 +12,6 @@ import { comBackoff } from '../utils/retry';
 
 const claude = new Anthropic({ apiKey: env.CLAUDE_API_KEY });
 
-// Categorias que o LLM pode retornar. Whitelist = pode ter dose. Blacklist
-// = mesmo se o LLM sugerir posologia, a gente descarta e marca precisa_nutri.
 const CATEGORIAS_COM_DOSE = new Set([
   'proteina',
   'aminoacido',
@@ -53,9 +36,7 @@ const CATEGORIAS_SEM_DOSE = new Set([
   'desconhecido',
 ]);
 
-// Termos que denunciam que o LLM ta descrevendo protocolo de substancia
-// controlada disfarcada. Se aparecer em `dose`, `timing` ou `cautela`,
-// descarta o item.
+// Denunciam protocolo de controlado disfarcado — descarta o item se bater.
 const TERMOS_SUSPEITOS = [
   /\bml\s*\/\s*semana\b/i,
   /\bciclo\s+de\b/i,
@@ -137,9 +118,6 @@ function contemTermoSuspeito(campos: Array<string | null>): boolean {
   return false;
 }
 
-// Cross-check: se o nome bater com algum item da lista de controlados
-// (mesmo depois do filtro pre-LLM), forca precisa_nutri. Import dinamico
-// pra nao criar dependencia circular em teste.
 function nomeEhControlado(nome: string, listaControlados: Set<string>): boolean {
   const norm = nome
     .toLowerCase()

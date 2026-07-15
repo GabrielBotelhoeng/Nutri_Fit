@@ -2,8 +2,6 @@ interface HelpTipProps {
   text: string;
 }
 
-// Icone "?" inline com tooltip nativo (title). Solucao simples, acessivel
-// e sem dependencias — atende H10 (ajuda contextual) sem custo visual.
 export function HelpTip({ text }: HelpTipProps) {
   return (
     <span

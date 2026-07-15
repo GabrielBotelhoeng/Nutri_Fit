@@ -2,11 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { env } from '../config/env';
 import { comBackoff } from '../utils/retry';
 
-// P1-3: classificador de intencao da mensagem do paciente. Substitui o roteamento
-// por regex empilhada do agent.ts (`ehRegistro`, `ehSubstituicao`, `ehCorrecao`,
-// `ehAguaMsg`), que falhava em casos como "bebi 300ml de suco" (caia em agua) e
-// "comi bem hoje, qual minha dieta?" (caia em registro). Estrategia: fast-path
-// regex pra casos obvios; Haiku decide o resto; safe default 'consulta'.
+// Fast-path regex pros casos obvios; Haiku decide o resto; safe default 'consulta'.
 
 const claude = new Anthropic({ apiKey: env.CLAUDE_API_KEY });
 
@@ -19,24 +15,20 @@ export interface IntentResult {
 
 const PERGUNTA_RE = /\?/;
 
-// "como" (presente do indicativo, 1a pessoa) tambem e verbo de registro:
-// "Como 100g de frango" = "Eu como 100g de frango". A protecao contra "como"
-// interrogativo vem da regra 1/2 do fast-path (pergunta + palavra-consulta).
+// "como" tambem e verbo de registro ("Eu como 100g de frango").
+// Protecao contra "como" interrogativo vem da checagem pergunta + palavra-consulta.
 const VERBO_REGISTRO_RE = /\b(como|comi|almocei|jantei|merendei|lanchei|tomei\s+caf[eé])\b/i;
 
 const QUANTIDADE_RE = /\d+\s*(g|ml|kg|gramas?|colher|colheres|fatias?|unidades?)\b/i;
 
 const AGUA_VOLUME_RE = /(\d+)\s*(ml|litros?|copos?)/i;
-// IMPORTANTE: \b em JavaScript nao reconhece caracteres acentuados como \w, entao
-// \b antes de "água" falha (porque "á" nao e \w). Usamos lookahead/lookbehind
-// customizados (?:^|\W) e (?=\W|$) que sao Unicode-safe.
+// \b em JS nao e Unicode-safe (falha antes de "água"); usar (?:^|\W)/(?=\W|$).
 const AGUA_PALAVRA_RE = /(?:^|\W)(agua|água|d['']?[áa]gua|hidrat\w*)(?=\W|$)/i;
 
 // Liquidos com kcal — NUNCA classificar como agua, mesmo com "bebi" e volume.
 const LIQUIDO_CALORICO_RE =
   /\b(suco|refrigerante|guaran[aá]|leite|capuc[ch]ino|cerveja|vinho|whisky|cachac[aá]|achocolatado|smoothie|vitamina|iogurte|chocolate\s+quente|cha\s+gelado|cha\s+doce|isotonico|energetico|ka?besh|red\s+bull|monster)\b/i;
-// Coca tem variantes: classic = caloria, zero = sem caloria. Detectamos
-// separado pra nao bater no fast-path quando for "coca zero".
+// Separado pra excluir "coca zero"/"coca diet" (sem kcal) do fast-path.
 const COCA_CALORICA_RE = /\bcoca(?!.*zero)(?!.*diet)/i;
 
 const CORRECAO_RE =
@@ -45,50 +37,38 @@ const CORRECAO_RE =
 const SUBSTITUICAO_RE =
   /\b(substitu|n[aã]o\s+tenho|alternativa|trocar\s+(o|a|um|uma)|posso\s+trocar|pode\s+ser)\b/i;
 
-// Indicadores fortes de pergunta de consulta. Usados pra desempate quando ha "?".
 const CONSULTA_PALAVRA_RE =
   /\b(qual|quais|como|onde|porqu[eê]|por\s+que|o\s+que\s+(e|é|posso|devo)|minha\s+dieta|meu\s+plano|recomend|sugest|dica\s+de)\b/i;
 
-// Pergunta de saldo do dia (kcal/macros consumidos vs meta). Bug UAT 2026-06-24:
-// "quantas calorias eu consumi hoje?" caia em 'consulta' → RAG → Claude alucinava
-// kcal. Precedencia ALTA no fast-path — antes das regras de pergunta/registro,
-// porque casos como "quanto comi hoje?" combinam "?" + verbo de registro "comi"
-// (regra 2 deferia ao Haiku que classificava como consulta).
-// 2026-07-07: ampliado pra pegar variacoes coloquiais que caiam no Haiku ou pior
-// ("meu dia", "cade meu resumo", "como to hoje", "progresso de hoje", etc).
+// Precedencia ALTA — "quanto comi hoje?" combina "?" + verbo de registro
+// e sem essa regra seria deferida ao Haiku (que errava pra 'consulta').
 const SALDO_RE =
   /\b(quant[oa]s?\s+(de\s+|gramas?\s+de\s+|g\s+de\s+)?(kcal|cal|calorias?|prote[ií]nas?|carb(o|oidrato)s?|gorduras?|[aá]gua|ml\b)|quant[oa]s?\s+(eu\s+)?(j[aá]\s+)?(consumi|comi|tomei|bebi)|saldo\s+do\s+dia|qual\s+(o\s+)?meu\s+(consumo|saldo|dia|progresso|resumo)|consumo\s+(do\s+dia|de\s+hoje|de\s+hj)|t[oô]u?\s+(dentro|fora|perto)\s+(da|de)\s+meta|j[aá]\s+(bati|passei|ultrapasse[ai])\s+(a|da)?\s*meta|bati\s+a?\s*meta|quanto\s+(falt(a|am|ou)|sobr(a|ou)|rest(a|ou|am))\b|meu\s+(dia|progresso|resumo)\b|resumo\s+d[oe]\s+(dia|hoje|hj)\b|progresso\s+(d[oe]\s+)?(hoje|hj|dia)\b|como\s+t[oôõ]u?\s+(hoje|hj)\b|cad[eê]\s+meu\s+(dia|resumo|progresso)\b)/i;
 
-// Fast-path: retorna Intent quando confiante; null quando deve consultar o Haiku.
+// Retorna Intent quando confiante; null quando deve consultar o Haiku.
 export function classificarIntencaoRapida(texto: string): Intent | null {
   const t = texto.trim().toLowerCase();
   if (t.length === 0) return null;
 
-  // 0. Pergunta de saldo do dia (kcal/macros/agua consumidos) → saldo. Precisa
-  // vir antes das regras de pergunta/registro porque "quanto comi hoje?" combina
-  // "?" + verbo de registro "comi" e seria deferida pro Haiku (que errava).
   if (SALDO_RE.test(t)) {
     return 'saldo';
   }
 
-  // 1. Pergunta clara (pergunta + palavra de consulta sem verbo de registro) → consulta
   if (PERGUNTA_RE.test(t) && CONSULTA_PALAVRA_RE.test(t) && !VERBO_REGISTRO_RE.test(t)) {
     return 'consulta';
   }
 
-  // 2. Frase com "?" + verbo de registro: ambigua ("comi bem, qual minha dieta?") → Haiku decide
+  // "?" + verbo de registro e ambiguo ("comi bem, qual minha dieta?") — Haiku decide.
   if (PERGUNTA_RE.test(t) && VERBO_REGISTRO_RE.test(t)) {
     return null;
   }
 
-  // 3. Correcao explicita: precisa vir antes de "registrar" (pra "esqueci de falar 100g" virar corrigir)
+  // Correcao antes de registrar — senao "esqueci de falar 100g" vira registrar.
   if (CORRECAO_RE.test(t)) {
     return 'corrigir';
   }
 
-  // 4. Agua literal + volume, SEM liquido calorico e SEM verbo de registro de
-  // comida na mesma mensagem → agua. Sem essa exclusao, "comi 200g de frango
-  // com 500ml de agua" vira agua e o registro da comida some.
+  // Excluir verbo de comida — "comi 200g de frango com 500ml de agua" nao e agua.
   if (
     AGUA_VOLUME_RE.test(t) &&
     AGUA_PALAVRA_RE.test(t) &&
@@ -99,22 +79,19 @@ export function classificarIntencaoRapida(texto: string): Intent | null {
     return 'agua';
   }
 
-  // 5. Volume + liquido calorico (suco, leite, refrigerante) → registrar, NUNCA agua
   if (AGUA_VOLUME_RE.test(t) && (LIQUIDO_CALORICO_RE.test(t) || COCA_CALORICA_RE.test(t))) {
     return 'registrar';
   }
 
-  // 6. Substituicao explicita SEM quantidade (substituicao com quantidade vira registro novo)
+  // Substituicao com quantidade vira registro novo, nao troca.
   if (SUBSTITUICAO_RE.test(t) && !QUANTIDADE_RE.test(t)) {
     return 'substituicao';
   }
 
-  // 7. Verbo de registro + quantidade explicita → registrar
   if (VERBO_REGISTRO_RE.test(t) && QUANTIDADE_RE.test(t)) {
     return 'registrar';
   }
 
-  // 8. Tudo mais → Haiku decide ("comi banana" sem qtd; "preciso de uma dica"; etc.)
   return null;
 }
 
@@ -187,18 +164,14 @@ export async function classificarIntencao(texto: string): Promise<IntentResult> 
   }
 }
 
-// Detecta "Yml/copo/litro de agua" combinado numa mensagem cuja intencao
-// primaria nao e agua (ex: "comi pao com 500ml de agua"). Usado pelo agent.ts
-// pra incrementar o contador silencioso antes do card da refeicao.
-// Mesmo cuidado com \b unicode-unsafe: usamos (?:^|\W) / (?=\W|$) em vez de \b.
+// Volume + agua junto de outra intencao ("comi pao com 500ml de agua").
+// Usa (?:^|\W)/(?=\W|$) pra ser Unicode-safe (\b falha antes de "água").
 const AGUA_COMBINADA_RE = /(\d+)\s*(ml|litros?|copos?)[^,;.]{0,30}(?:^|\W)(agua|água|d['']?[áa]gua)(?=\W|$)/i;
 export function mencionaAguaCombinada(texto: string): boolean {
   return AGUA_COMBINADA_RE.test(texto);
 }
 
-// P1-3.1: remove o trecho "[com/+/e/,] Yml/copos de agua" do texto antes do
-// processarTextoRefeicao, pra que a LLM nao liste agua como item da refeicao
-// (a hidratacao ja foi incrementada silenciosamente via mencionaAguaCombinada).
+// Chamada antes do processarTextoRefeicao pra Vision nao listar agua como item.
 const AGUA_COMBINADA_STRIP_RE =
   /(?:\s*(?:com|mais|e|,|\+)\s*)+\d+\s*(?:ml|litros?|copos?)\s*(?:de\s+)?(?:agua|água|d['']?[áa]gua)(?=\W|$)[,\s]*/gi;
 export function removerMencaoAgua(texto: string): string {

@@ -1,16 +1,12 @@
-// P2-8: serializacao por telefone do processamento do webhook.
+// Serializa processamento do webhook por telefone.
 //
-// Problema: atualizarEstado em conversation.ts faz read-modify-write em
-// entrevista_dados (JSONB). Se o paciente manda 2 mensagens em sequencia
-// rapida, ambas leem a mesma versao, processam em paralelo, e a segunda
-// escrita sobrescreve a primeira — etapa/dados corrompidos.
+// Problema: atualizarEstado faz read-modify-write em entrevista_dados
+// (JSONB). Mensagens em rajada do mesmo paciente rodariam em paralelo
+// e a segunda escrita sobrescreveria a primeira.
 //
-// Solucao: fila promise-chain por phone. Mensagens do mesmo paciente
-// rodam em ordem; phones diferentes rodam em paralelo normalmente.
-//
-// Cleanup: quando uma task termina e nada novo foi enfileirado depois
-// dela, a entrada some do Map — sem vazamento de memoria por paciente
-// inativo.
+// Solucao: fila promise-chain por phone. Mesmo paciente = ordem
+// estrita; phones diferentes = paralelo. Entrada some do Map quando
+// a ultima task termina — sem vazamento por paciente inativo.
 
 const filas = new Map<string, Promise<unknown>>();
 
@@ -19,16 +15,11 @@ export async function enfileirarPorTelefone<T>(
   task: () => Promise<T>,
 ): Promise<T> {
   const anterior = filas.get(phone) ?? Promise.resolve();
-  // .catch isola: se a task anterior falhar, a proxima ainda roda.
-  // A propria task ainda pode lancar — quem chamou enfileirarPorTelefone
-  // recebe o rejeito da SUA task, nao da anterior.
+  // .catch isola falha da anterior; a atual ainda pode rejeitar pra quem chamou.
   const proxima = anterior.catch(() => undefined).then(() => task());
 
   filas.set(phone, proxima);
 
-  // Cleanup: quando esta task termina, se ainda for a ultima da fila
-  // (ninguem enfileirou nada depois), tira do Map. Caso contrario,
-  // deixa — o proximo na fila vai limpar quando for a vez dele.
   proxima
     .catch(() => undefined)
     .finally(() => {
@@ -38,7 +29,7 @@ export async function enfileirarPorTelefone<T>(
   return proxima;
 }
 
-// Exposto para testes (size do Map indica vazamento).
+// Exposto para testes (size do Map indica vazamento por paciente inativo).
 export function _tamanhoFilaInterna(): number {
   return filas.size;
 }

@@ -12,7 +12,6 @@ function requireInternalKey(req: Request, res: Response, next: NextFunction): vo
   next();
 }
 
-// Validar formato HH:MM (00:00 a 23:59)
 const HORARIO_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 alertasRouter.post('/disparar', requireInternalKey, async (req: Request, res: Response) => {

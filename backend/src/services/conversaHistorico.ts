@@ -3,13 +3,9 @@ import { env } from '../config/env';
 
 const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
 
-// P2-9: memoria multi-turn pra perguntas de follow-up
-// ("e no jantar?", "e se eu trocar?"). Sem isso, cada consulta vai
-// pro Claude sem o que foi conversado antes — o paciente precisa
-// repetir contexto a cada mensagem.
-//
-// Fail-soft em tudo: erro de DB nunca pode derrubar a resposta ao
-// paciente. Memoria e desejavel, nao critica.
+// Memoria multi-turn pra perguntas de follow-up ("e no jantar?",
+// "e se eu trocar?"). Fail-soft em tudo: erro de DB nunca derruba
+// a resposta ao paciente — memoria e desejavel, nao critica.
 
 export type ConversaMensagem = { role: 'user' | 'assistant'; content: string };
 
@@ -43,7 +39,6 @@ export async function obterUltimasMensagens(
     return [];
   }
 
-  // SELECT vem DESC (mais novas primeiro) por causa do index; o Claude
-  // espera ordem cronologica, entao reverte aqui.
+  // SELECT vem DESC por causa do index; Claude espera cronologico.
   return ((data ?? []) as ConversaMensagem[]).reverse();
 }

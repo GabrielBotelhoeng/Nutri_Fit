@@ -28,8 +28,8 @@ function planoValido(p: string): p is PlanoPreset {
   return p in MESES_POR_PLANO;
 }
 
-// Fonte da verdade no cadastro: o plano. A data eh derivada. Depois o
-// nutricionista pode ajustar so a data via PATCH (extensao, prorrogacao).
+// Fonte da verdade e o plano; a data e derivada. PATCH pode ajustar so a data
+// (extensao, prorrogacao) sem tocar no plano.
 function calcularDataExpiracao(plano: PlanoPreset, hoje = new Date()): string {
   const d = new Date(Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth(), hoje.getUTCDate()));
   d.setUTCMonth(d.getUTCMonth() + MESES_POR_PLANO[plano]);
@@ -70,8 +70,7 @@ pacientesRouter.post('/', upload.single('dieta'), async (req: Request, res: Resp
     return;
   }
 
-  // WhatsApp BR canonico: 55 + DDD(2) + 9 + 8 digitos = 13 digitos.
-  // Aceita tambem 12 (sem o 9) para compatibilidade com numeros antigos.
+  // Canonico: 55 + DDD(2) + 9 + 8 digitos = 13. Aceita 12 (sem o 9) legado.
   if (!/^55[1-9][1-9]9?\d{8}$/.test(whatsapp)) {
     res.status(400).json({
       error: 'WhatsApp em formato invalido. Use 55 + DDD + 9 + 8 digitos (ex.: 5562995514963).',
@@ -79,8 +78,6 @@ pacientesRouter.post('/', upload.single('dieta'), async (req: Request, res: Resp
     return;
   }
 
-  // Fonte da verdade eh o plano. Calculamos a data no server para garantir
-  // consistencia mesmo que o cliente ignore o UI (ou mande valores errados).
   const data_expiracao = calcularDataExpiracao(plano);
 
   const { data: paciente, error: pacienteErr } = await supabase
@@ -123,12 +120,10 @@ pacientesRouter.post('/', upload.single('dieta'), async (req: Request, res: Resp
     return;
   }
 
-  // P1-6: extrair horarios literais do PDF ANTES da entrevista comecar.
-  // Faz uma so descida do PDF (baixarTextoPDF) e usa pra dois fluxos:
-  //  - extrairHorariosDieta (sincrono, ~2s) → guarda em dietas.horarios_refeicoes
-  //  - processarDieta (em background) → chunking + embeddings RAG
-  // Falha nao bloqueia o cadastro: paciente ainda recebe boas-vindas e cai na
-  // pergunta aberta da etapa 14 como antes.
+  // Extrai horarios literais do PDF ANTES da entrevista. Uma descida
+  // do PDF alimenta dois fluxos: extracao sincrona de horarios (~2s)
+  // e chunking+embeddings em background. Falha nao bloqueia cadastro
+  // — paciente cai na pergunta aberta de horarios na entrevista.
   let textoPDF: string | null = null;
   try {
     textoPDF = await baixarTextoPDF(pdfUrl);
@@ -359,9 +354,9 @@ pacientesRouter.post('/:id/dieta', upload.single('dieta'), async (req: Request, 
 
   res.json({ sucesso: true, dieta_id: dietaId, processando: true });
 
-  // P1-6: re-extrair horarios e re-processar RAG em background (paciente ja
-  // pode estar com entrevista completa — alertas_config ja foi sincronizado;
-  // os horarios novos servem se o nutricionista re-disparar entrevista futura).
+  // Re-extrai horarios + re-processa RAG em background. Se paciente ja
+  // tem entrevista completa, novos horarios so entram em re-disparo futuro
+  // — alertas_config ja foi sincronizado.
   (async () => {
     try {
       const texto = await baixarTextoPDF(novoPdfUrl);

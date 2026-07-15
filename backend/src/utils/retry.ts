@@ -1,12 +1,6 @@
-// Backoff exponencial pra chamadas a Claude/OpenAI que podem estourar 429/529/503.
-// Motivacao: em picos (varios pacientes registrando refeicao ao mesmo tempo), a
-// Anthropic devolve 529 (overloaded) e o registro falhava sem retry. O helper
-// centraliza o retry pra os callers so precisarem se preocupar com a UX humana
-// quando o backoff nao resolve.
-//
-// Status re-tentaveis: 429 (rate limit), 529 (overloaded, Anthropic), 503
-// (service unavailable). Timeouts de rede vem como ETIMEDOUT/ECONNRESET (nao
-// tem status HTTP) — tambem re-tentaveis.
+// Backoff exponencial pra Claude/OpenAI. Re-tenta 429/529/503 e timeouts
+// de rede (ETIMEDOUT, ECONNRESET, ECONNREFUSED). Callers so precisam
+// tratar UX quando o backoff nao resolve.
 export async function comBackoff<T>(
   fn: () => Promise<T>,
   opts: { maxTentativas?: number; delayInicialMs?: number } = {},
@@ -33,14 +27,12 @@ export async function comBackoff<T>(
 
       if (!reTentavel || i === maxTentativas - 1) throw e;
 
-      // Jitter (0-500ms) evita thundering herd quando o pico vem de varios
-      // requests simultaneos.
+      // Jitter evita thundering herd em pico de requests simultaneos.
       const jitter = Math.random() * 500;
       await new Promise((r) => setTimeout(r, delay + jitter));
       delay *= 2;
     }
   }
 
-  // Inalcancavel pelo laco acima (throw dentro do if), mas TS pede return.
   throw ultimoErro;
 }

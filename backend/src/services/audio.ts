@@ -7,9 +7,6 @@ import { sendText } from './evolution';
 const INSTANCE = 'nutrichat';
 const groq = new Groq({ apiKey: env.GROQ_API_KEY });
 
-// Baixa mídia da Evolution API e retorna Buffer + mimetype.
-// ATENÇÃO: logar response keys na primeira execução para confirmar estrutura real (Assumption A1).
-// Exportado para reutilização em vision.ts.
 export async function downloadMedia(messageId: string): Promise<{ buffer: Buffer; mimetype: string }> {
   const url = `${env.EVOLUTION_API_URL}/chat/getBase64FromMediaMessage/${INSTANCE}`;
   const response = await fetch(url, {
@@ -30,10 +27,8 @@ export async function downloadMedia(messageId: string): Promise<{ buffer: Buffer
   return { buffer: Buffer.from(base64, 'base64'), mimetype };
 }
 
-// Transcreve áudio via Groq Whisper.
-// Pitfall 2: WhatsApp envia mimetype "audio/ogg; codecs=opus" — limpar antes de usar.
-// Exportado para uso em testes unitários.
 export async function transcreverAudio(buffer: Buffer, mimetype: string): Promise<string> {
+  // WhatsApp envia "audio/ogg; codecs=opus" — Groq quer o mimetype limpo.
   const mimeClean = mimetype.split(';')[0].trim();
   const ext = mimeClean.split('/')[1] ?? 'ogg';
   const audioFile = await toFile(buffer, `audio.${ext}`, { type: mimeClean });
@@ -49,14 +44,8 @@ export async function transcreverAudio(buffer: Buffer, mimetype: string): Promis
   return transcription as unknown as string;
 }
 
-// Ponto de entrada chamado pelo webhook.ts para mensagens de áudio.
-// Delegar pro processarMensagem (roteamento completo do agente) em vez de
-// processarTextoRefeicao direto: áudio passa pelas mesmas camadas do texto —
-// bloqueio de plano expirado, entrevista por voz, classificador de intenção
-// (P1-3), correção (P0-1), saldo, água e consulta RAG. O atalho antigo
-// tratava TODO áudio como registro de refeição: resposta de entrevista por
-// voz sumia, correção por áudio duplicava a refeição (o double-count do
-// P0-1 seguia vivo nesse fluxo) e consulta por áudio ficava sem resposta.
+// Delega pro processarMensagem pra audio passar pelas mesmas camadas do texto
+// (entrevista, intent, correcao, saldo, agua, RAG) em vez de virar registro direto.
 export async function processarAudio(phone: string, messageId: string): Promise<void> {
   try {
     const { buffer, mimetype } = await downloadMedia(messageId);
