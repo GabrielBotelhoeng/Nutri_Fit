@@ -27,7 +27,7 @@
           "parameters": [
             {
               "name": "x-internal-key",
-              "value": "nutrichat_internal_dev_key_2026"
+              "value": "={{ $env.N8N_INTERNAL_TOKEN }}"
             }
           ]
         },

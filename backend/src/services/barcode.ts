@@ -88,7 +88,7 @@ export async function buscarOpenFoodFacts(barcode: string): Promise<ProdutoBarco
   const url = `https://world.openfoodfacts.org/api/v0/product/${barcode}.json`;
   try {
     const response = await fetch(url, {
-      headers: { 'User-Agent': 'NutriChat/1.0 (botelhog45@gmail.com)' },
+      headers: { 'User-Agent': 'NutriChat/1.0 (+https://github.com/GabrielBotelhoeng/nutri_fit)' },
     });
     if (!response.ok) return null;
 

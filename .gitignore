@@ -1,25 +1,62 @@
-# Environment files
+# =========================================================================
+# Segredos e variaveis de ambiente
+# =========================================================================
 .env
 .env.local
 .env.notes
+.env.*.local
 evolution-api/.env
+.mcp.json
 
-# Node modules
+# =========================================================================
+# Dependencias e build
+# =========================================================================
 node_modules/
-
-# Build output
 dist/
+build/
+.next/
+*.tsbuildinfo
 
-# Logs
+# =========================================================================
+# Logs e caches
+# =========================================================================
 *.log
 npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.cache/
 
-# OS files
+# =========================================================================
+# OS
+# =========================================================================
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# graphify output (regenerado com `graphify update .`)
+# =========================================================================
+# Ferramental de desenvolvimento (nao deve ir para o repo publico)
+# =========================================================================
+
+# Planejamento interno, handoffs, historico de fases GSD
+.planning/
+PROJETO.md
+.continue-here.md
+
+# Estado local do Claude Code (skills, settings locais, tarefas agendadas)
+.claude/
+!.claude/.gitkeep
+
+# graphify (regenerado com `graphify update .`)
 graphify-out/
 
-# Claude Code harness state
-.claude/scheduled_tasks.lock
+# Submodules externos que nao pertencem ao produto
+antigravity-awesome-skills/
+
+# =========================================================================
+# Editors / IDEs
+# =========================================================================
+.idea/
+.vscode/
+*.swp
+*.swo

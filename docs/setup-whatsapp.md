@@ -4,7 +4,7 @@
 
 - Evolution API rodando (local: http://localhost:8080)
 - Numero WhatsApp dedicado disponivel (D-08)
-- EVOLUTION_API_KEY configurada (`nutrichat_local_key` em dev)
+- EVOLUTION_API_KEY configurada (`$EVOLUTION_API_KEY` em dev)
 
 ## Passo a passo
 
@@ -12,7 +12,7 @@
 
 ```bash
 curl -X POST http://localhost:8080/instance/create \
-  -H "apikey: nutrichat_local_key" \
+  -H "apikey: $EVOLUTION_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"instanceName": "nutrichat", "qrcode": false}'
 ```
@@ -21,7 +21,7 @@ curl -X POST http://localhost:8080/instance/create \
 
 ```bash
 curl -X POST http://localhost:8080/instance/connect/nutrichat \
-  -H "apikey: nutrichat_local_key" \
+  -H "apikey: $EVOLUTION_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"number": "5511999999999"}'
 ```
@@ -37,7 +37,7 @@ Inserir o pairing code retornado no passo 2.
 ### 4. Verificar conexao
 
 ```bash
-curl -H "apikey: nutrichat_local_key" \
+curl -H "apikey: $EVOLUTION_API_KEY" \
   http://localhost:8080/instance/connectionState/nutrichat
 ```
 
@@ -47,7 +47,7 @@ Response esperada: `{ "state": "open" }`
 
 ```bash
 curl -X POST http://localhost:8080/webhook/set/nutrichat \
-  -H "apikey: nutrichat_local_key" \
+  -H "apikey: $EVOLUTION_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "url": "http://n8n:5678/webhook/evolution",
@@ -61,7 +61,7 @@ curl -X POST http://localhost:8080/webhook/set/nutrichat \
 
 ```bash
 curl -X POST http://localhost:8080/message/sendText/nutrichat \
-  -H "apikey: nutrichat_local_key" \
+  -H "apikey: $EVOLUTION_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"number": "5511999999999", "text": "NutriChat conectado com sucesso!"}'
 ```
@@ -81,7 +81,7 @@ Nao e necessario recriar a instancia — ela persiste no banco de dados da Evolu
 Em producao, substituir:
 - `http://localhost:8080` pela URL publica da Evolution API no Railway
 - `http://n8n:5678` pela URL publica do N8N no Railway
-- `nutrichat_local_key` pela chave configurada nas Railway Variables (`EVOLUTION_API_KEY`)
+- `$EVOLUTION_API_KEY` pela chave configurada nas Railway Variables (`EVOLUTION_API_KEY`)
 
 ## Troubleshooting
 
