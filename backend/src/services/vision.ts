@@ -7,6 +7,7 @@ import type { PacienteInfo } from './conversation';
 import { processarCodigoBarras } from './barcode';
 import { registrarRefeicao, obterSaldoDia, formatarBlocoProgressoDia, dispararAlertaOvershoot, calcularStreak, MacrosRefeicao } from './meal';
 import { obterMetas, MacrosDiarios } from './calculos';
+import { redactPhone } from '../utils/redact';
 
 const claude = new Anthropic({ apiKey: env.CLAUDE_API_KEY });
 
@@ -423,7 +424,7 @@ export async function processarImagem(
         await handleConfirmacaoPrato(phone, paciente, analise, metas);
         return;
       } else {
-        console.log(`[vision] Timeout foto2 expirou para ${phone} — processando foto1 com aviso`);
+        console.log(`[vision] Timeout foto2 expirou para ${redactPhone(phone)} — processando foto1 com aviso`);
         await atualizarEstado(paciente.id, { dados: { aguardando_foto_2: null } });
         const analiseFoto1 = await analisarPrato([aguardando.foto1_base64], mimetype);
         if (analiseFoto1.ambiguidade !== 'nenhuma') {
@@ -452,7 +453,7 @@ export async function processarImagem(
     }
 
     const tipo = await detectarTipoImagem(base64, mimetype);
-    console.log(`[vision] Tipo detectado: ${tipo} para ${phone}`);
+    console.log(`[vision] Tipo detectado: ${tipo} para ${redactPhone(phone)}`);
 
     // Barcode/rótulo passam pelo card D-06 (evita registrar embalagem fechada como consumida).
     if (tipo === 'barcode') {

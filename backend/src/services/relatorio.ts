@@ -5,6 +5,7 @@ import { sendText } from './evolution';
 import { hojeLocal, somarDias } from '../utils/datas';
 import { obterMetas, type MacrosDiarios } from './calculos';
 import { calcularStreak, type StreakInfo } from './meal';
+import { redactName } from '../utils/redact';
 
 const claude = new Anthropic({ apiKey: env.CLAUDE_API_KEY });
 const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
@@ -333,9 +334,9 @@ export async function gerarRelatorioSemanal(): Promise<void> {
       });
 
       await sendText(String(p.whatsapp), mensagem);
-      console.log(`[relatorio] Relatorio enviado para ${p.nome}`);
+      console.log(`[relatorio] Relatorio enviado para ${redactName(p.nome as string)}`);
     } catch (err) {
-      console.error(`[relatorio] Erro ao processar paciente ${p.nome}:`, err);
+      console.error(`[relatorio] Erro ao processar paciente ${redactName(p.nome as string)}:`, err);
     }
   }
 

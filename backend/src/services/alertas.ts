@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { env } from '../config/env';
 import { sendText } from './evolution';
+import { redactPhone, redactName } from '../utils/redact';
 
 const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
 
@@ -157,7 +158,7 @@ export async function dispararAlertas(horario: string): Promise<void> {
 
     for (const tipo of refeicoesParaEnviar) {
       await sendText(wpp, MENSAGENS_REFEICAO[tipo]);
-      console.log(`[alertas] ${tipo} enviado para ${paciente.nome} (${wpp})`);
+      console.log(`[alertas] ${tipo} enviado para ${redactName(paciente.nome)} (${redactPhone(wpp)})`);
       enviados++;
     }
 
@@ -167,13 +168,13 @@ export async function dispararAlertas(horario: string): Promise<void> {
         ? Math.ceil(hidratacaoMl / aguaArr.length)
         : null;
       await sendText(wpp, mensagemAgua(porcaoMl));
-      console.log(`[alertas] agua (${porcaoMl ?? 'porcao padrao'}ml) enviado para ${paciente.nome} (${wpp})`);
+      console.log(`[alertas] agua (${porcaoMl ?? 'porcao padrao'}ml) enviado para ${redactName(paciente.nome)} (${redactPhone(wpp)})`);
       enviados++;
     }
 
     if (suplementoCasou) {
       await sendText(wpp, MENSAGENS_REFEICAO['suplemento']);
-      console.log(`[alertas] suplemento enviado para ${paciente.nome} (${wpp})`);
+      console.log(`[alertas] suplemento enviado para ${redactName(paciente.nome)} (${redactPhone(wpp)})`);
       enviados++;
     }
   }

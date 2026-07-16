@@ -14,6 +14,9 @@ interface Env {
   GROQ_API_KEY: string;
   OPENAI_API_KEY: string;
   INTERNAL_API_KEY: string;
+  // Lista separada por virgula das origens permitidas do painel.
+  // Vazio (dev) => allow-all. Em prod SEMPRE preencher.
+  CORS_ORIGIN: string;
 }
 
 function validateEnv(): Env {
@@ -51,6 +54,7 @@ function validateEnv(): Env {
     GROQ_API_KEY: process.env.GROQ_API_KEY!,
     OPENAI_API_KEY: process.env.OPENAI_API_KEY!,
     INTERNAL_API_KEY: process.env.INTERNAL_API_KEY!,
+    CORS_ORIGIN: process.env.CORS_ORIGIN ?? '',
   };
 }
 

@@ -73,7 +73,7 @@ pacientesRouter.post('/', upload.single('dieta'), async (req: Request, res: Resp
   // Canonico: 55 + DDD(2) + 9 + 8 digitos = 13. Aceita 12 (sem o 9) legado.
   if (!/^55[1-9][1-9]9?\d{8}$/.test(whatsapp)) {
     res.status(400).json({
-      error: 'WhatsApp em formato invalido. Use 55 + DDD + 9 + 8 digitos (ex.: 5562995514963).',
+      error: 'WhatsApp em formato invalido. Use 55 + DDD + 9 + 8 digitos (ex.: 5511987654321).',
     });
     return;
   }

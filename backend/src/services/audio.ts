@@ -3,6 +3,7 @@ import { toFile } from 'groq-sdk/uploads';
 import { env } from '../config/env';
 import { processarMensagem } from './agent';
 import { sendText } from './evolution';
+import { redactPhone } from '../utils/redact';
 
 const INSTANCE = 'nutrichat';
 const groq = new Groq({ apiKey: env.GROQ_API_KEY });
@@ -50,7 +51,7 @@ export async function processarAudio(phone: string, messageId: string): Promise<
   try {
     const { buffer, mimetype } = await downloadMedia(messageId);
     const texto = (await transcreverAudio(buffer, mimetype)).trim();
-    console.log(`[audio] Transcrição de ${phone}: "${texto}"`);
+    console.log(`[audio] Transcrição de ${redactPhone(phone)} (${texto.length} chars)`);
     if (!texto) {
       await sendText(phone, '❌ Não consegui entender o áudio. Pode repetir ou mandar por texto?');
       return;

@@ -6,6 +6,7 @@ import * as visionService from '../services/vision';
 import { marcarMensagemProcessada } from '../services/dedup';
 import { enfileirarPorTelefone } from '../services/queue';
 import { requireWebhookAuth } from '../middleware/webhookAuth';
+import { redactPhone } from '../utils/redact';
 
 export const webhookRouter = Router();
 // Auth roda ANTES do handler — sem header valido, 401 antes de tocar agent/audio/vision.
@@ -45,12 +46,12 @@ webhookRouter.post('/', async (req: Request, res: Response) => {
   if (messageId) {
     const novo = await marcarMensagemProcessada(messageId);
     if (!novo) {
-      console.log(`[webhook] Descartado (duplicado) message_id=${messageId} phone=${phone}`);
+      console.log(`[webhook] Descartado (duplicado) message_id=${messageId} phone=${redactPhone(phone)}`);
       return;
     }
   }
 
-  console.log(`[webhook] Mensagem de ${phone} | tipo: ${messageType}`);
+  console.log(`[webhook] Mensagem de ${redactPhone(phone)} | tipo: ${messageType}`);
 
   // Serializa por telefone: read-modify-write em entrevista_dados nao perde
   // escrita concorrente. Telefones diferentes rodam em paralelo.
@@ -65,7 +66,7 @@ webhookRouter.post('/', async (req: Request, res: Response) => {
             '';
           // Sticker/reacao mal classificada, payload truncado.
           if (!text.trim()) {
-            console.log(`[webhook] Texto vazio de ${phone} — ignorado`);
+            console.log(`[webhook] Texto vazio de ${redactPhone(phone)} — ignorado`);
             break;
           }
           await agentService.processarMensagem(phone, text);

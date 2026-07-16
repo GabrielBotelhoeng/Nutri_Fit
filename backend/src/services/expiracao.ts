@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { env } from '../config/env';
 import { sendText } from './evolution';
 import { hojeLocal, somarDias } from '../utils/datas';
+import { redactName } from '../utils/redact';
 
 const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
 
@@ -23,7 +24,7 @@ export async function verificarExpiracoes(): Promise<void> {
         p.whatsapp as string,
         `⏰ Seu plano NutriChat venceu hoje. Para continuar contando com o acompanhamento nutricional, entre em contato com seu nutricionista para renovar. 💚`,
       );
-      console.log(`[expiracao] Paciente ${p.nome} bloqueado (plano vencido)`);
+      console.log(`[expiracao] Paciente ${redactName(p.nome)} bloqueado (plano vencido)`);
     }
   }
 
@@ -48,7 +49,7 @@ export async function verificarExpiracoes(): Promise<void> {
         p.whatsapp as string,
         `⚠️ Atenção, ${p.nome}! Seu plano NutriChat vence em *${diasStr}*.\n\nPara continuar acompanhando sua dieta, renove com seu nutricionista. 💚`,
       );
-      console.log(`[expiracao] Aviso enviado para ${p.nome} — vence em ${diasStr}`);
+      console.log(`[expiracao] Aviso enviado para ${redactName(p.nome)} — vence em ${diasStr}`);
     }
   }
 
