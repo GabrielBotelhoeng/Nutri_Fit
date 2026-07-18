@@ -14,9 +14,12 @@ primary_region = "gru"
   GENERIC_TIMEZONE = "America/Sao_Paulo"
   DB_TYPE = "sqlite"
   DB_SQLITE_DATABASE = "/home/node/.n8n/database.sqlite"
-  N8N_RUNNERS_ENABLED = "true"
   N8N_BLOCK_ENV_ACCESS_IN_NODE = "false"
   N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS = "true"
+  N8N_DIAGNOSTICS_ENABLED = "false"
+  N8N_VERSION_NOTIFICATIONS_ENABLED = "false"
+  EXECUTIONS_DATA_PRUNE = "true"
+  EXECUTIONS_DATA_MAX_AGE = "168"
 
 [http_service]
   internal_port = 5678
@@ -31,4 +34,4 @@ primary_region = "gru"
 
 [[vm]]
   size = "shared-cpu-1x"
-  memory = "512mb"
+  memory = "1gb"
