@@ -42,6 +42,10 @@ webhookRouter.post('/', async (req: Request, res: Response) => {
   const messageType = data.messageType;
   const messageId = data.key?.id;
 
+  // Diagnostico: separa "handler nao rodou" de "rodou mas parou entre dedup e enfileirar".
+  // Remover apos concluir debug do webhook Evolution v2.
+  console.log(`[webhook] recebido msgId=${messageId} event=${payload.event} phone=${redactPhone(phone)} tipo=${messageType}`);
+
   // Dedup de reentregas: mesmo evento reprocessado duplicaria refeicoes.
   if (messageId) {
     const novo = await marcarMensagemProcessada(messageId);
