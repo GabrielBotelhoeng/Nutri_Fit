@@ -8,6 +8,11 @@
 evolution-api/.env
 .mcp.json
 
+# QR code temporario da instancia WhatsApp (gerado localmente)
+qr_whatsapp.png
+qr_resp.json
+create_resp.json
+
 # =========================================================================
 # Dependencias e build
 # =========================================================================
