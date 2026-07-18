@@ -1,0 +1,31 @@
+app = "nutrichat-evolution"
+primary_region = "gru"
+
+[build]
+  image = "evoapicloud/evolution-api:latest"
+
+[env]
+  SERVER_URL = "https://nutrichat-evolution.fly.dev"
+  DATABASE_PROVIDER = "sqlite"
+  DATABASE_CONNECTION_URI = "file:/evolution/instances/evolution.db"
+  CACHE_REDIS_ENABLED = "false"
+  CACHE_LOCAL_ENABLED = "true"
+  QRCODE_COLOR = "#2D5016"
+  CONFIG_SESSION_PHONE_CLIENT = "NutriChat"
+  CONFIG_SESSION_PHONE_NAME = "Chrome"
+  WEBHOOK_GLOBAL_ENABLED = "false"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[mounts]]
+  source = "evolution_data"
+  destination = "/evolution/instances"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

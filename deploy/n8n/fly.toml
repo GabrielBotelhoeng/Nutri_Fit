@@ -1,0 +1,34 @@
+app = "nutrichat-n8n"
+primary_region = "gru"
+
+[build]
+  image = "n8nio/n8n:latest"
+
+[env]
+  N8N_HOST = "nutrichat-n8n.fly.dev"
+  N8N_PROTOCOL = "https"
+  N8N_PORT = "5678"
+  WEBHOOK_URL = "https://nutrichat-n8n.fly.dev"
+  N8N_BASIC_AUTH_ACTIVE = "true"
+  N8N_BASIC_AUTH_USER = "admin"
+  GENERIC_TIMEZONE = "America/Sao_Paulo"
+  DB_TYPE = "sqlite"
+  DB_SQLITE_DATABASE = "/home/node/.n8n/database.sqlite"
+  N8N_RUNNERS_ENABLED = "true"
+  N8N_BLOCK_ENV_ACCESS_IN_NODE = "false"
+  N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS = "true"
+
+[http_service]
+  internal_port = 5678
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[mounts]]
+  source = "n8n_data"
+  destination = "/home/node/.n8n"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
