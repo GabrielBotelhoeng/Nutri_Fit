@@ -1,73 +1,84 @@
-# React + TypeScript + Vite
+# NutriChat — Painel do Nutricionista
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Painel web onde o(a) nutricionista cadastra pacientes, envia o PDF da dieta
+e acompanha adesão. É a **única interface humana** do projeto — todo o
+resto acontece no WhatsApp entre paciente e agente.
 
-Currently, two official plugins are available:
+**Live:** <https://nutrichat-painel.vercel.app>
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Stack
 
-## React Compiler
+| Camada | Tecnologia |
+|---|---|
+| Framework | React 19 + Vite 6 + TypeScript |
+| Estilo | Tailwind v4 |
+| Backend | Supabase (auth + Postgres direto) + backend NutriChat (upload/RAG) |
+| Deploy | Vercel (auto-deploy do branch `main`) |
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Setup local
 
-## Expanding the ESLint configuration
+```bash
+# 1. Copie o exemplo e preencha
+cp .env.example .env.local
+# edite .env.local
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+# 2. Instale
+npm install
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+# 3. Rode em dev
+npm run dev
+# abre http://localhost:5173
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Variáveis de ambiente
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+Todas prefixadas com `VITE_` (Vite só expõe essas ao bundle).
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+| Var | Uso |
+|---|---|
+| `VITE_SUPABASE_URL` | URL do projeto Supabase (auth + listagem de pacientes) |
+| `VITE_SUPABASE_ANON_KEY` | Chave pública do Supabase (RLS ativa) |
+| `VITE_BACKEND_URL` | URL do backend NutriChat (`https://nutrichat-backend.fly.dev` em prod) — usado para upload de PDF, indexação RAG e cadastro de paciente |
+
+## Build de produção
+
+```bash
+npm run build   # tsc -b && vite build → dist/
+npm run preview # serve dist/ localmente
 ```
+
+O `Dockerfile` + `Caddyfile` servem `dist/` estático via Caddy caso queira
+subir num container em vez da Vercel.
+
+## Deploy (Vercel)
+
+Push em `main` dispara build e deploy automático.
+
+- Env vars: **Vercel → Project → Settings → Environment Variables**
+- Alias curto: `nutrichat-painel.vercel.app`
+- **Importante:** a URL do painel precisa estar em `CORS_ORIGIN` do backend
+  (Fly) — se não, o browser bloqueia as chamadas com "Failed to fetch".
+  Whitelist atual: alias curto + deploy longo + `localhost:5173`.
+
+## Estrutura
+
+```
+src/
+  App.tsx           # Router + guard de sessão
+  main.tsx          # Entry
+  pages/            # Login, ListaPacientes, DetalhePaciente, ...
+  components/       # Cards, forms, tabelas
+  lib/
+    supabase.ts     # Cliente Supabase (auth + queries diretas)
+    api.ts          # Wrapper de fetch para o backend NutriChat
+  index.css         # Tailwind v4 setup
+public/             # Assets estáticos servidos como estão
+```
+
+## Autenticação
+
+Login via Supabase Auth (email + senha). Todas as queries diretas ao
+Postgres respeitam RLS — só o próprio nutricionista lê seus pacientes.
+
+Uploads e ações administrativas passam pelo backend NutriChat com o
+token do Supabase no header `Authorization: Bearer <token>`.

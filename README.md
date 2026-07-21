@@ -71,7 +71,30 @@ n8n/workflows/          Definicoes JSON dos crons N8N
 supabase/migrations/    Migrations SQL do banco
 docker/                 Bootstrap do Postgres local
 docker-compose.local.yml   Stack completa para dev
+deploy/                 fly.toml + Dockerfile de Evolution e N8N (Fly.io)
+docs/DEPLOY.md          Checklist de deploy final + smoke test E2E
 ```
+
+## Deploy em producao
+
+Toda a stack roda em nuvem — o PC pode ficar desligado sem afetar o servico.
+
+| Servico | Host | URL publica |
+|---|---|---|
+| Backend (agente) | Fly.io (`gru`) | https://nutrichat-backend.fly.dev |
+| Painel do nutricionista | Vercel | https://nutrichat-painel.vercel.app |
+| Landing page | Vercel | https://nutrichat-landing.vercel.app |
+| Evolution API v2 (WhatsApp) | Fly.io | https://nutrichat-evolution.fly.dev |
+| N8N (crons) | Fly.io | https://nutrichat-n8n.fly.dev |
+| Postgres (Evolution v2) | Fly.io | interno |
+| Supabase (dados NutriChat) | Supabase Cloud | dashboard |
+
+Passo a passo, env vars por servico e smoke test E2E em [`docs/DEPLOY.md`](docs/DEPLOY.md).
+
+READMEs por sub-projeto:
+- [`backend/README.md`](backend/README.md) — endpoints, autenticacao, Fly deploy
+- [`nutrichat-painel/README.md`](nutrichat-painel/README.md) — Vite, VITE_* vars, Vercel
+- [`../nutrichat-landing/README.md`](../nutrichat-landing/README.md) — Next.js, NEXT_PUBLIC_NUTRI_*, Vercel *(repo separado)*
 
 ## Seguranca
 
