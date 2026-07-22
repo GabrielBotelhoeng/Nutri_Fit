@@ -336,7 +336,16 @@ export async function registrarRefeicao(
     p_carbo_g: m.carbo_g,
     p_gordura_g: m.gordura_g,
   });
-  if (rpcError) throw new Error(`[meal] Falha ao acumular saldo: ${rpcError.message}`);
+  if (rpcError) {
+    // Rollback: insert sucedeu mas RPC falhou. Sem isso, a refeicao vira orfa
+    // (existe em `refeicoes` mas nao entra no saldo do dia).
+    const { error: deleteError } = await supabase
+      .from('refeicoes')
+      .delete()
+      .eq('id', inserted.id);
+    if (deleteError) console.error('[meal] Rollback do insert falhou apos erro RPC:', deleteError.message);
+    throw new Error(`[meal] Falha ao acumular saldo: ${rpcError.message}`);
+  }
 
   const ultima: UltimaRefeicao = {
     id: inserted.id as string,
@@ -432,6 +441,7 @@ export async function obterSaldoDia(pacienteId: string): Promise<MacrosRefeicao>
     .eq('data', hoje)
     .maybeSingle();
 
+  if (error) console.error('[meal] obterSaldoDia falhou:', error.message);
   if (error || !data) return { kcal: 0, proteina_g: 0, carbo_g: 0, gordura_g: 0, agua_ml: 0 };
   return {
     kcal:       Number(data.kcal_consumido),
@@ -928,7 +938,8 @@ export async function processarRespostaQuantidade(
   },
 ): Promise<void> {
   const txt = texto.toLowerCase().trim();
-  const aceitarEstimativa = /^(estima|estimar|nao\s+sei|n[aã]o\s+sei|sei\s+l[aá]|qualquer|tanto\s+faz|m[eé]dia|porcao\s+m[eé]dia|por[çc][ãa]o\s+m[eé]dia)\b/.test(txt);
+  // \b em JS falha depois de "á" (nao e Unicode-safe) — usar lookahead com whitespace/pontuacao/fim.
+  const aceitarEstimativa = /^(estima|estimar|nao\s+sei|n[aã]o\s+sei|sei\s+l[aá]|qualquer|tanto\s+faz|m[eé]dia|porcao\s+m[eé]dia|por[çc][ãa]o\s+m[eé]dia)(?=\s|$|[.!?,])/.test(txt);
   const matchQtd = texto.match(/(\d+(?:[.,]\d+)?)\s*(kg|g|gr|gramas?|ml|l|litros?|copos?|colher(?:es)?|colheres|fatias?|unidades?|porc(?:o|ao|ão)es?)?/i);
 
   let analiseFinal = pendente.analise;
@@ -1033,7 +1044,8 @@ export async function processarRespostaPreparo(
   },
 ): Promise<void> {
   const txt = texto.toLowerCase().trim();
-  const naoSabe = /^(n[aã]o\s+sei|sei\s+l[aá]|estima|estimar|qualquer|tanto\s+faz|o\s+mais\s+comum)\b/.test(txt);
+  // \b em JS falha depois de "á" (nao e Unicode-safe) — usar lookahead com whitespace/pontuacao/fim.
+  const naoSabe = /^(n[aã]o\s+sei|sei\s+l[aá]|estima|estimar|qualquer|tanto\s+faz|o\s+mais\s+comum)(?=\s|$|[.!?,])/.test(txt);
 
   let analiseFinal = pendente.analise;
   let descricaoFinal = pendente.descricao_original;

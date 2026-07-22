@@ -71,8 +71,8 @@ async function registrarAgua(pacienteId: string, aguaMl: number): Promise<string
 }
 
 // Converte token de quantidade em numero:
-// "1.5"/"1,5" (decimal), "1 e meio"/"1 e meia" (composto), "meio"/"meia" (0.5),
-// "um"/"uma" (1), "dois"/"duas" (2), "tres"/"três" (3).
+// "1.5"/"1,5" (decimal), "1 e meio"/"1 e meia" (composto), "um e meio"/"uma e meia" (extenso composto),
+// "1/2"/"3/4" (fracao), "meio"/"meia" (0.5), "um"/"uma" (1), "dois"/"duas" (2), "tres"/"três" (3).
 // Retorna null se nao conseguir parsear.
 function parseQuantidade(token: string): number | null {
   const t = token.toLowerCase().trim();
@@ -80,15 +80,25 @@ function parseQuantidade(token: string): number | null {
   if (t === 'um' || t === 'uma') return 1;
   if (t === 'dois' || t === 'duas') return 2;
   if (t === 'tres' || t === 'três') return 3;
+  // "um e meio", "uma e meia" — extenso composto (nao bate no compostoMatch abaixo por nao ter \d+).
+  if (/^(um|uma)\s+e\s+me[ia]o?$/.test(t)) return 1.5;
   const compostoMatch = t.match(/^(\d+)\s+e\s+me[ia]o?$/);
   if (compostoMatch) return parseInt(compostoMatch[1], 10) + 0.5;
+  // Fracoes tipo "1/2", "3/4".
+  const fracaoMatch = t.match(/^(\d+)\s*\/\s*(\d+)$/);
+  if (fracaoMatch) {
+    const n = parseInt(fracaoMatch[1], 10);
+    const d = parseInt(fracaoMatch[2], 10);
+    if (d > 0) return n / d;
+  }
   const num = parseFloat(t.replace(',', '.'));
   if (!isNaN(num) && num > 0) return num;
   return null;
 }
 
 // Padrao de quantidade: mesma regex usada em AGUA_VOLUME_RE do intent.ts.
-const QTY_PATTERN = String.raw`\d+(?:[.,]\d+)?(?:\s+e\s+me[ia]o?)?|meio|meia|um[ao]?|dois|duas|tr[êe]s`;
+// "um e meio"/"uma e meia" precisam vir antes de "um[ao]?" pra nao serem cortados prematuramente.
+const QTY_PATTERN = String.raw`\d+(?:[.,]\d+)?(?:\s+e\s+me[ia]o?)?|(?:um|uma)\s+e\s+me[ia]o?|meio|meia|um[ao]?|dois|duas|tr[êe]s`;
 
 // Copo = 250ml, garrafa = 500ml, litro = 1000ml.
 // Aceita "1 e meio litros", "meia garrafa", "1,5 copos" etc. Retorna 0 quando nao acha volume.
@@ -160,7 +170,8 @@ const NEGATIVA_LISTA_RE = /^(nao|não)(\s+(tenho|uso|come|como))?$|^(nenhum[ao]?
 function parseListaOuVazio(texto: string): string[] {
   const t = texto.toLowerCase().trim();
   if (NEGATIVA_LISTA_RE.test(t)) return [];
-  return texto.split(/[,;]/).map((s) => s.trim()).filter(Boolean);
+  // Aceita ",", ";" e " e " como separador: "lactose e gluten" -> ["lactose", "gluten"].
+  return texto.split(/[,;]\s*|\s+e\s+/i).map((s) => s.trim()).filter(Boolean);
 }
 
 function parseObjetivo(texto: string): ObjetivoNutricional | null {
@@ -463,10 +474,24 @@ async function processarRespostaEntrevista(
       break;
     }
     case 3: {
-      // Aceita número (1/2) ou texto livre (masc/fem/m/f).
-      if (textoLower === '1' || textoLower.includes('masc') || textoLower === 'm') novoDado.sexo = 'masculino';
-      else if (textoLower === '2' || textoLower.includes('fem') || textoLower === 'f') novoDado.sexo = 'feminino';
-      else return {};
+      // Aceita número (1/2) ou texto livre (masc/fem/m/f/homem/mulher).
+      if (
+        textoLower === '1' ||
+        textoLower.includes('masc') ||
+        textoLower === 'm' ||
+        textoLower === 'homem'
+      ) {
+        novoDado.sexo = 'masculino';
+      } else if (
+        textoLower === '2' ||
+        textoLower.includes('fem') ||
+        textoLower === 'f' ||
+        textoLower === 'mulher'
+      ) {
+        novoDado.sexo = 'feminino';
+      } else {
+        return {};
+      }
       break;
     }
     case 4: {
@@ -1017,7 +1042,9 @@ export async function processarMensagem(phone: string, texto: string): Promise<v
       await mealService.processarTextoCorrecao(phone, texto, paciente, ultima);
       return;
     }
-    await mealService.processarTextoRefeicao(phone, texto, paciente);
+    // TTL expirado: sem intentHint, o regex interno pode rejeitar textos sem verbo/quantidade
+    // (ex: "corrigi o almoco") e virar silent fail. Force 'registrar' pra garantir resposta.
+    await mealService.processarTextoRefeicao(phone, texto, paciente, 'registrar');
     return;
   }
 

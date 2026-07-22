@@ -87,8 +87,11 @@ export async function extrairCodigoViaVision(base64: string, mimetype: string): 
 export async function buscarOpenFoodFacts(barcode: string): Promise<ProdutoBarcode | null> {
   const url = `https://world.openfoodfacts.org/api/v0/product/${barcode}.json`;
   try {
+    // Timeout de 3s: sem isso, default do Node (~2min) deixa paciente esperando.
+    // vision.ts cai no fallback de leitura de rotulo quando este retorna null.
     const response = await fetch(url, {
       headers: { 'User-Agent': 'NutriChat/1.0 (+https://github.com/GabrielBotelhoeng/nutri_fit)' },
+      signal: AbortSignal.timeout(3000),
     });
     if (!response.ok) return null;
 

@@ -17,7 +17,8 @@ const PERGUNTA_RE = /\?/;
 
 // "como" tambem e verbo de registro ("Eu como 100g de frango").
 // Protecao contra "como" interrogativo vem da checagem pergunta + palavra-consulta.
-const VERBO_REGISTRO_RE = /\b(como|comi|almocei|jantei|merendei|lanchei|tomei\s+caf[eé])\b/i;
+// \b em JS nao e Unicode-safe (falha depois de "café"); usar (?:^|\W)/(?=\W|$).
+const VERBO_REGISTRO_RE = /(?:^|\W)(como|comi|almocei|jantei|merendei|lanchei|tomei\s+caf[eé])(?=\W|$)/i;
 
 const QUANTIDADE_RE = /\d+\s*(g|ml|kg|gramas?|colher|colheres|fatias?|unidades?)\b/i;
 
@@ -44,8 +45,9 @@ const CORRECAO_RE =
 const SUBSTITUICAO_RE =
   /\b(substitu|n[aã]o\s+tenho|alternativa|trocar\s+(o|a|um|uma)|posso\s+trocar|pode\s+ser)\b/i;
 
+// \b nao e Unicode-safe (falha antes de "porquê"); usar (?:^|\W)/(?=\W|$).
 const CONSULTA_PALAVRA_RE =
-  /\b(qual|quais|como|onde|porqu[eê]|por\s+que|o\s+que\s+(e|é|posso|devo)|minha\s+dieta|meu\s+plano|recomend|sugest|dica\s+de)\b/i;
+  /(?:^|\W)(qual|quais|como|onde|porqu[eê]|por\s+que|o\s+que\s+(e|é|posso|devo)|minha\s+dieta|meu\s+plano|recomend|sugest|dica\s+de)(?=\W|$)/i;
 
 // Precedencia ALTA — "quanto comi hoje?" combina "?" + verbo de registro
 // e sem essa regra seria deferida ao Haiku (que errava pra 'consulta').

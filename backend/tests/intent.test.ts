@@ -281,6 +281,18 @@ describe('classificarIntencaoRapida — fast-path regex', () => {
     expect(classificarIntencaoRapida('tem alguma alternativa pra ovo')).toBe('substituicao');
   });
 
+  // Unicode-safe \b — auditoria 22/07/2026 (fix 1)
+  it('"tomei café 200ml de leite" cai em registrar (\\b unsafe apos "café")', () => {
+    // Antes do fix, VERBO_REGISTRO_RE usava \b que falha depois de "é" (acento).
+    // "tomei café" nao batia -> nao ia pro fast-path. Agora vai pra registrar.
+    expect(classificarIntencaoRapida('tomei café 200ml de leite')).toBe('registrar');
+  });
+
+  it('"porquê engordo?" cai em consulta (CONSULTA_PALAVRA_RE unsafe apos "ê")', () => {
+    // Antes do fix, CONSULTA_PALAVRA_RE usava \b que falhava antes/depois de "porquê".
+    expect(classificarIntencaoRapida('porquê engordo?')).toBe('consulta');
+  });
+
   // Fast-path retorna null em casos genuinamente ambiguos (delega pro Haiku)
   it('"comi banana" sem quantidade defer pro Haiku', () => {
     expect(classificarIntencaoRapida('comi banana')).toBeNull();
