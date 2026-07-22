@@ -21,7 +21,11 @@ const VERBO_REGISTRO_RE = /\b(como|comi|almocei|jantei|merendei|lanchei|tomei\s+
 
 const QUANTIDADE_RE = /\d+\s*(g|ml|kg|gramas?|colher|colheres|fatias?|unidades?)\b/i;
 
-const AGUA_VOLUME_RE = /(\d+)\s*(ml|litros?|copos?)/i;
+// Aceita: inteiro, decimal (1.5 / 1,5), "X e meio/meia", "meio/meia" sozinho,
+// "um/uma/dois/duas/tres/três" por extenso. Unidades: ml, litros, copos, garrafas, copin(inho).
+// "1 e meio de aguas" (sem unidade explicita) NAO bate aqui — cai no Haiku e o handler pede clarificacao.
+const AGUA_VOLUME_RE =
+  /(?:\d+(?:[.,]\d+)?(?:\s+e\s+me[ia]o?)?|meio|meia|um[ao]?|dois|duas|tr[êe]s)\s*(ml|litros?|copos?|garrafas?|copin\w+)\b/i;
 // \b em JS nao e Unicode-safe (falha antes de "água"); usar (?:^|\W)/(?=\W|$).
 const AGUA_PALAVRA_RE = /(?:^|\W)(agua|água|d['']?[áa]gua|hidrat\w*)(?=\W|$)/i;
 
@@ -31,8 +35,11 @@ const LIQUIDO_CALORICO_RE =
 // Separado pra excluir "coca zero"/"coca diet" (sem kcal) do fast-path.
 const COCA_CALORICA_RE = /\bcoca(?!.*zero)(?!.*diet)/i;
 
+// "esqueci" NAO entra aqui: "esqueci de adicionar/falar X" e ADICAO (soma), nao substituicao.
+// O intent 'corrigir' chama corrigirUltimaRefeicao (UPDATE + delta), que SUBSTITUI os macros.
+// Com "esqueci" incluido, "esqueci de adicionar ovo" fazia arroz+feijao virar so ovo (carbo caia de 117 pra 32).
 const CORRECAO_RE =
-  /\b(na\s+verdade|a\s+verdade|foram|esqueci|corrige|corrigir|corre[çc][aã]o|na\s+real|era\s+pra\s+ser)\b/i;
+  /\b(na\s+verdade|a\s+verdade|foram|corrige|corrigir|corre[çc][aã]o|na\s+real|era\s+pra\s+ser)\b/i;
 
 const SUBSTITUICAO_RE =
   /\b(substitu|n[aã]o\s+tenho|alternativa|trocar\s+(o|a|um|uma)|posso\s+trocar|pode\s+ser)\b/i;
@@ -63,7 +70,8 @@ export function classificarIntencaoRapida(texto: string): Intent | null {
     return null;
   }
 
-  // Correcao antes de registrar — senao "esqueci de falar 100g" vira registrar.
+  // Correcao antes de registrar. "esqueci" foi removido de CORRECAO_RE de proposito
+  // (ver comentario em CORRECAO_RE); "esqueci de X" cai em registrar/consulta.
   if (CORRECAO_RE.test(t)) {
     return 'corrigir';
   }
@@ -101,9 +109,9 @@ Responda APENAS com JSON no formato:
 {"intent": "registrar" | "corrigir" | "agua" | "consulta" | "substituicao" | "saldo"}
 
 Definições:
-- "registrar": paciente informa uma refeição/comida/bebida calórica que comeu ou bebeu. Ex: "comi 200g de frango", "tomei iogurte", "bebi 300ml de suco", "almocei arroz com feijão".
-- "corrigir": paciente quer AJUSTAR a última refeição registrada. Ex: "na verdade eram 150g", "esqueci de falar do feijão", "corrige aí", "era pra ser 100g".
-- "agua": registro EXCLUSIVO de hidratação (água pura). Ex: "bebi 500ml de água", "tomei 2 copos d'água". NUNCA classifique suco, refrigerante, leite, café com leite ou cerveja como "agua" — esses são "registrar".
+- "registrar": paciente informa uma refeição/comida/bebida calórica que comeu ou bebeu, OU quer ADICIONAR algo esquecido à última refeição. Ex: "comi 200g de frango", "tomei iogurte", "bebi 300ml de suco", "almocei arroz com feijão", "esqueci de adicionar 1 ovo frito", "esqueci de falar do feijão", "esqueci de incluir 70g de frango".
+- "corrigir": paciente quer SUBSTITUIR o valor de macros/quantidade da última refeição (não adicionar item novo). Ex: "na verdade eram 150g", "corrige aí, foi arroz integral", "era pra ser 100g", "não foi 200g, foi 100g".
+- "agua": registro EXCLUSIVO de hidratação (água pura). Ex: "bebi 500ml de água", "tomei 2 copos d'água", "1 e meio de água", "bebi meia garrafa d'água", "1,5 litro de água". NUNCA classifique suco, refrigerante, leite, café com leite ou cerveja como "agua" — esses são "registrar". Se falar em "água" mesmo SEM unidade clara ("bebi 1 e meio de águas"), classifique como "agua" — o handler pede clarificação.
 - "substituicao": paciente pergunta se pode TROCAR um alimento da dieta prescrita. Ex: "posso trocar arroz por batata?", "não tenho frango, o que uso?", "tem alternativa pra ovo?".
 - "saldo": paciente pergunta QUANTO já consumiu hoje vs a meta (kcal/proteína/carbo/gordura/água), OU pede resumo/progresso do dia. Ex: "quantas calorias consumi hoje?", "quanto comi de proteína?", "tô dentro da meta?", "quanto falta pra fechar o dia?", "qual meu saldo?", "meu dia", "cadê meu resumo", "progresso de hoje", "como tô hoje?".
 - "consulta": qualquer dúvida sobre a dieta, plano, alimentos permitidos, dicas, horários, suplementação. Ex: "qual minha dieta?", "como tomar a creatina?", "que horas posso comer fruta?", "comi bem hoje, qual minha dieta?".
@@ -112,8 +120,9 @@ Regras de prioridade:
 1. Pergunta sobre kcal/macros/água JÁ CONSUMIDOS hoje → "saldo", nunca "consulta". Marcadores: "quanto/quantas/quantos" + (calorias/proteína/carbo/gordura/água/consumi/comi); "saldo do dia"; "tô dentro/fora da meta"; "quanto falta/sobrou".
 2. Frase com "?" geralmente é "consulta", a não ser que seja confirmação curta tipo "comi 200g de arroz, ok?".
 3. "comi bem hoje, qual minha dieta?" → "consulta" (a pergunta é sobre o plano).
-4. "na verdade...", "foram X g...", "esqueci" → "corrigir".
-5. Volume (ml/copo/litro) + suco/leite/refrigerante/cerveja → "registrar", JAMAIS "agua".
+4. "esqueci de adicionar/falar/incluir/somar/colocar X" → SEMPRE "registrar" (soma X à conta do dia). NUNCA "corrigir" — corrigir substitui, o paciente quer somar.
+5. "na verdade foram X", "corrige aí", "era pra ser X" → "corrigir" (substitui macros da última refeição).
+6. Volume (ml/copo/litro/garrafa) + suco/leite/refrigerante/cerveja → "registrar", JAMAIS "agua".
 
 Devolva APENAS o JSON. Nada de explicações.`;
 

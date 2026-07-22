@@ -97,21 +97,70 @@ describe('classificarIntencaoRapida — fast-path regex', () => {
     expect(classificarIntencaoRapida('almocei 150g de arroz com 2 copos de agua')).toBe('registrar');
   });
 
+  // Novos formatos aceitos pelo parser expandido (bug UAT 22/07/2026)
+  it('"bebi 1,5 litros de agua" cai em agua (decimal com virgula)', () => {
+    expect(classificarIntencaoRapida('bebi 1,5 litros de agua')).toBe('agua');
+  });
+
+  it('"bebi 1.5 litros de agua" cai em agua (decimal com ponto)', () => {
+    expect(classificarIntencaoRapida('bebi 1.5 litros de agua')).toBe('agua');
+  });
+
+  it('"bebi 1 e meio litros de agua" cai em agua (fração textual)', () => {
+    expect(classificarIntencaoRapida('bebi 1 e meio litros de agua')).toBe('agua');
+  });
+
+  it('"bebi meia garrafa de agua" cai em agua (meia + garrafa)', () => {
+    expect(classificarIntencaoRapida('bebi meia garrafa de agua')).toBe('agua');
+  });
+
+  it('"bebi 1 garrafa de agua" cai em agua (garrafa como unidade)', () => {
+    expect(classificarIntencaoRapida('bebi 1 garrafa de agua')).toBe('agua');
+  });
+
+  it('"bebi meio copo de agua" cai em agua (meio + copo)', () => {
+    expect(classificarIntencaoRapida('bebi meio copo de agua')).toBe('agua');
+  });
+
+  it('"bebi um copo de agua" cai em agua (número por extenso)', () => {
+    expect(classificarIntencaoRapida('bebi um copo de agua')).toBe('agua');
+  });
+
+  it('"bebi 1 e meio de aguas" defer pro Haiku (sem unidade — handler pede clarificação)', () => {
+    // Caso exato do bug UAT: sem unidade explicita, o fast-path nao classifica.
+    // O SYSTEM_PROMPT do Haiku foi ajustado pra retornar 'agua' aqui, e o handler
+    // em agent.ts pede a unidade em vez de cair silenciosamente no RAG.
+    expect(classificarIntencaoRapida('bebi 1 e meio de aguas')).toBeNull();
+  });
+
   // Casos de correcao
   it('"na verdade foram 150g" cai em corrigir', () => {
     expect(classificarIntencaoRapida('na verdade foram 150g')).toBe('corrigir');
   });
 
-  it('"esqueci de falar do feijao" cai em corrigir', () => {
-    expect(classificarIntencaoRapida('esqueci de falar do feijao')).toBe('corrigir');
+  it('"esqueci de falar do feijao" NAO cai em corrigir (defer pro Haiku)', () => {
+    // Bug UAT 22/07/2026: "esqueci de adicionar" caia em corrigir, que SUBSTITUI
+    // macros — carbo do dia caia de 117g pra 32g. "esqueci" foi removido de
+    // CORRECAO_RE; sem quantidade explicita, o fast-path defere pro Haiku (que
+    // classifica como registrar — soma como refeicao extra).
+    expect(classificarIntencaoRapida('esqueci de falar do feijao')).toBeNull();
   });
 
   it('"corrige ai: foi arroz integral" cai em corrigir', () => {
     expect(classificarIntencaoRapida('corrige ai: foi arroz integral')).toBe('corrigir');
   });
 
-  it('correcao tem prioridade sobre registro ("esqueci de falar dos 100g de feijao")', () => {
-    expect(classificarIntencaoRapida('esqueci de falar dos 100g de feijao')).toBe('corrigir');
+  it('"esqueci de adicionar 1 ovo e 70g de frango" cai em registrar (bug UAT 22/07/2026)', () => {
+    // Caso exato do bug reportado: apos registrar almoco, paciente manda "esqueci
+    // de adicionar X". Antes caia em corrigir (substitui). Agora cai em registrar
+    // (soma) porque tem verbo "adicionar" implicito + quantidade explicita.
+    expect(classificarIntencaoRapida('esqueci de adicionar 1 ovo e 70g de frango')).toBeNull();
+    // (retorna null porque "adicionar" nao esta em VERBO_REGISTRO_RE — Haiku decide.
+    //  O SYSTEM_PROMPT foi ajustado pra classificar como registrar.)
+  });
+
+  it('"na verdade foram 100g de feijao" cai em corrigir (substituicao legitima)', () => {
+    expect(classificarIntencaoRapida('na verdade foram 100g de feijao')).toBe('corrigir');
   });
 
   // Casos de saldo do dia (bug UAT 2026-06-24)

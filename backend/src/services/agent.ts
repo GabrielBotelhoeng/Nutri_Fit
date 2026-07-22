@@ -70,14 +70,48 @@ async function registrarAgua(pacienteId: string, aguaMl: number): Promise<string
   return `💧 *${aguaMl}ml* de água registrados! Continue se hidratando. 💚`;
 }
 
-// Copo = 250ml.
+// Converte token de quantidade em numero:
+// "1.5"/"1,5" (decimal), "1 e meio"/"1 e meia" (composto), "meio"/"meia" (0.5),
+// "um"/"uma" (1), "dois"/"duas" (2), "tres"/"três" (3).
+// Retorna null se nao conseguir parsear.
+function parseQuantidade(token: string): number | null {
+  const t = token.toLowerCase().trim();
+  if (t === 'meio' || t === 'meia') return 0.5;
+  if (t === 'um' || t === 'uma') return 1;
+  if (t === 'dois' || t === 'duas') return 2;
+  if (t === 'tres' || t === 'três') return 3;
+  const compostoMatch = t.match(/^(\d+)\s+e\s+me[ia]o?$/);
+  if (compostoMatch) return parseInt(compostoMatch[1], 10) + 0.5;
+  const num = parseFloat(t.replace(',', '.'));
+  if (!isNaN(num) && num > 0) return num;
+  return null;
+}
+
+// Padrao de quantidade: mesma regex usada em AGUA_VOLUME_RE do intent.ts.
+const QTY_PATTERN = String.raw`\d+(?:[.,]\d+)?(?:\s+e\s+me[ia]o?)?|meio|meia|um[ao]?|dois|duas|tr[êe]s`;
+
+// Copo = 250ml, garrafa = 500ml, litro = 1000ml.
+// Aceita "1 e meio litros", "meia garrafa", "1,5 copos" etc. Retorna 0 quando nao acha volume.
 function extrairAguaMl(texto: string): number {
-  const matchMl = texto.match(/(\d+)\s*ml/i);
-  if (matchMl) return parseInt(matchMl[1], 10);
-  const matchLitro = texto.match(/(\d+(?:[.,]\d+)?)\s*litros?/i);
-  if (matchLitro) return Math.round(parseFloat(matchLitro[1].replace(',', '.')) * 1000);
-  const matchCopo = texto.match(/(\d+)\s*copos?/i);
-  if (matchCopo) return parseInt(matchCopo[1], 10) * 250;
+  const t = texto.toLowerCase();
+
+  // Ordem importa: "ml" precisa vir antes de "litros" pra evitar "500 mililitros" bater errado.
+  const padroes: Array<{ re: RegExp; multiplicador: number }> = [
+    { re: new RegExp(`(${QTY_PATTERN})\\s*ml\\b`, 'i'),         multiplicador: 1 },
+    { re: new RegExp(`(${QTY_PATTERN})\\s*litros?\\b`, 'i'),    multiplicador: 1000 },
+    { re: new RegExp(`(${QTY_PATTERN})\\s*copos?\\b`, 'i'),     multiplicador: 250 },
+    { re: new RegExp(`(${QTY_PATTERN})\\s*copin\\w+\\b`, 'i'),  multiplicador: 250 },
+    { re: new RegExp(`(${QTY_PATTERN})\\s*garrafas?\\b`, 'i'),  multiplicador: 500 },
+  ];
+
+  for (const { re, multiplicador } of padroes) {
+    const match = t.match(re);
+    if (match) {
+      const qty = parseQuantidade(match[1]);
+      if (qty !== null) return Math.round(qty * multiplicador);
+    }
+  }
+
   return 0;
 }
 
@@ -962,7 +996,18 @@ export async function processarMensagem(phone: string, texto: string): Promise<v
       await sendText(phone, resposta);
       return;
     }
-    // Sem volume válido: cai como consulta ("bebi pouca agua").
+    // Intent é água mas parser não achou volume válido ("bebi 1 e meio de águas",
+    // "bebi bastante"). Sem clarificação, o RAG só devolve texto motivacional e o
+    // contador não incrementa — daí o total fica congelado sem o paciente saber.
+    await sendText(
+      phone,
+      `💧 Quanto foi? Me manda um destes formatos:\n\n` +
+      `• *500ml* (ou qualquer número + ml)\n` +
+      `• *1 copo* (250ml) — pode ser "2 copos", "meio copo"\n` +
+      `• *1 garrafa* (500ml) — pode ser "meia garrafa"\n` +
+      `• *1 litro* — pode ser "1,5 litros" ou "1 e meio"`,
+    );
+    return;
   }
 
   // Correção da última refeição: substitui (UPDATE + delta), não soma.
