@@ -65,6 +65,65 @@ function semAcento(s: string): string {
   return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 }
 
+// Safety net: alimentos densos em kcal que o Haiku às vezes classifica como material:false
+// por causa da porção pequena (ex: 5g de farofa, 1 colher de azeite). Se o nome bater a whitelist,
+// forçamos material:true no código E calculamos kcal pela tabela se o LLM não informou.
+// kcal/100g são valores medianos brasileiros (TACO/USDA) — não precisa ser exato pra safety net.
+const ALIMENTOS_DENSOS_KCAL: Record<string, number> = {
+  farofa:     470,
+  torresmo:   550,
+  azeite:     884,
+  oleo:       884,
+  manteiga:   717,
+  banha:      900,
+  bacon:      540,
+  castanha:   620,
+  amendoim:   567,
+  amendoa:    579,
+  noz:        654,
+  pistache:   560,
+  girassol:   584,
+  chia:       486,
+  linhaca:    534,
+  gergelim:   573,
+  mel:        304,
+  acucar:     387,
+  geleia:     250,
+  requeijao:  260,
+  catupiry:   320,
+  'creme de leite': 200,
+  'doce de leite':  315,
+  'leite condensado': 321,
+};
+
+function matchAlimentoDenso(nome: string): number | null {
+  const alvo = semAcento(nome);
+  for (const [key, kcal] of Object.entries(ALIMENTOS_DENSOS_KCAL)) {
+    if (alvo.includes(key)) return kcal;
+  }
+  return null;
+}
+
+// Retorna itens com material corrigido + kcal preenchida se o LLM zerou; delta pra somar ao totais.
+function corrigirItensDensos(itens: ItemRefeicao[]): { itens: ItemRefeicao[]; deltaKcal: number } {
+  let deltaKcal = 0;
+  const corrigidos = itens.map((i) => {
+    const kcalPor100 = matchAlimentoDenso(i.nome);
+    if (kcalPor100 === null) return i;
+    const precisaMaterial = !i.material;
+    const precisaKcal = typeof i.kcal !== 'number' || i.kcal === 0;
+    if (!precisaMaterial && !precisaKcal) return i;
+    const kcalCalculada = Math.round((i.quantidade_g * kcalPor100) / 100);
+    if (precisaKcal) deltaKcal += kcalCalculada;
+    return {
+      ...i,
+      material: true,
+      kcal: precisaKcal ? kcalCalculada : i.kcal,
+    };
+  });
+  return { itens: corrigidos, deltaKcal };
+}
+
 // Usa contains (não equal) — "Batata frita" bate com "batata".
 function dicaPesoTipico(nome: string): string {
   const alvo = semAcento(nome);
@@ -240,18 +299,24 @@ Saída:
         const rObj = (r ?? {}) as Record<string, unknown>;
         const tipoRaw = typeof rObj['tipo_refeicao'] === 'string' ? (rObj['tipo_refeicao'] as string) : null;
         const tipo = tipoRaw && TIPOS_REFEICAO_VALIDOS.has(tipoRaw) ? tipoRaw : undefined;
-        const itens = normalizarItens(rObj['itens']);
-        const totais = rObj['totais'] !== undefined
+        const itensRaw = normalizarItens(rObj['itens']);
+        const { itens, deltaKcal } = corrigirItensDensos(itensRaw);
+        const totaisRaw = rObj['totais'] !== undefined
           ? macrosDeRaw(rObj['totais'])
           : agregarMacros([{ kcal: 0, proteina_g: 0, carbo_g: 0, gordura_g: 0 }]);
+        const totais = deltaKcal > 0
+          ? sanitizarMacros({ ...totaisRaw, kcal: totaisRaw.kcal + deltaKcal })
+          : totaisRaw;
         return { tipo_refeicao: tipo, itens, totais };
       });
     } else {
-      refeicoes = [{
-        tipo_refeicao: undefined,
-        itens: normalizarItens(raw.itens),
-        totais: macrosDeRaw(raw.totais),
-      }];
+      const itensRaw = normalizarItens(raw.itens);
+      const { itens, deltaKcal } = corrigirItensDensos(itensRaw);
+      const totaisRaw = macrosDeRaw(raw.totais);
+      const totais = deltaKcal > 0
+        ? sanitizarMacros({ ...totaisRaw, kcal: totaisRaw.kcal + deltaKcal })
+        : totaisRaw;
+      refeicoes = [{ tipo_refeicao: undefined, itens, totais }];
     }
 
     const itensFlat = refeicoes.flatMap((r) => r.itens);
