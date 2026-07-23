@@ -13,7 +13,7 @@ Toda a stack roda em nuvem. O PC do desenvolvedor pode ficar desligado.
 |---|---|---|---|
 | Backend (agente) | Fly.io — região `gru` | `nutrichat-backend` — https://nutrichat-backend.fly.dev | não (`fly deploy` manual) |
 | Painel do nutricionista | Vercel | https://nutrichat-painel.vercel.app | sim (push em `main` do monorepo) |
-| Landing page | Vercel | https://nutrichat-landing.vercel.app | sim (push em `main` do repo separado `Nutri_Fit_Land_Page`) |
+| Landing page | Vercel | https://nutrichat-landing-six.vercel.app | sim (push em `main` do repo separado `Nutri_Fit_Land_Page`) |
 | Evolution API v2 (WhatsApp) | Fly.io | `nutrichat-evolution` — https://nutrichat-evolution.fly.dev | não |
 | N8N (crons) | Fly.io | `nutrichat-n8n` — https://nutrichat-n8n.fly.dev | não |
 | Postgres dedicado (Evolution) | Fly.io | interno | não |
@@ -147,7 +147,7 @@ curl -sI https://nutrichat-backend.fly.dev/health         # 200
 curl -sI https://nutrichat-evolution.fly.dev             # 200 ou 401 (manager exige login)
 curl -sI https://nutrichat-n8n.fly.dev                   # 401 (basic auth ativo)
 curl -sI https://nutrichat-painel.vercel.app             # 200
-curl -sI https://nutrichat-landing.vercel.app            # 200
+curl -sI https://nutrichat-landing-six.vercel.app        # 200
 ```
 
 ### 2. Autenticação de endpoints protegidos

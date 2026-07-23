@@ -83,7 +83,7 @@ Toda a stack roda em nuvem — o PC pode ficar desligado sem afetar o servico.
 |---|---|---|
 | Backend (agente) | Fly.io (`gru`) | https://nutrichat-backend.fly.dev |
 | Painel do nutricionista | Vercel | https://nutrichat-painel.vercel.app |
-| Landing page | Vercel | https://nutrichat-landing.vercel.app |
+| Landing page | Vercel | https://nutrichat-landing-six.vercel.app |
 | Evolution API v2 (WhatsApp) | Fly.io | https://nutrichat-evolution.fly.dev |
 | N8N (crons) | Fly.io | https://nutrichat-n8n.fly.dev |
 | Postgres (Evolution v2) | Fly.io | interno |
