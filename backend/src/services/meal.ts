@@ -94,6 +94,7 @@ export interface ItemRefeicao {
   quantidade_informada: boolean;
   material: boolean;
   preparo_inferido?: boolean;
+  kcal?: number;
 }
 
 // O Haiku pode identificar várias refeições numa mensagem — sempre retorna array (mesmo com 1).
@@ -132,12 +133,15 @@ function normalizarItens(raw: unknown): ItemRefeicao[] {
   const arr = Array.isArray(raw) ? raw : [];
   return arr.map((i) => {
     const it = i as Record<string, unknown>;
+    const kcalRaw = Number(it['kcal']);
+    const kcal = isNaN(kcalRaw) || kcalRaw < 0 ? undefined : Math.min(kcalRaw, 9999);
     return {
       nome: typeof it['nome'] === 'string' ? (it['nome'] as string) : 'item',
       quantidade_g: Number(it['quantidade_g']) || 0,
       quantidade_informada: it['quantidade_informada'] === true,
       material: it['material'] === true,
       preparo_inferido: it['preparo_inferido'] === true,
+      ...(kcal !== undefined ? { kcal } : {}),
     };
   });
 }
@@ -181,8 +185,9 @@ RESPONDA APENAS COM JSON VÁLIDO no formato:
           "nome": "nome curto do alimento (ex.: 'Frango grelhado', 'Arroz branco', 'Coca Zero')",
           "quantidade_g": numero em gramas (ou ml para liquidos),
           "quantidade_informada": true se o paciente disse a quantidade EXPLICITA (ex.: '200g', '100ml', '2 colheres'); false se você teve que estimar,
-          "material": true para alimentos substanciais que contribuem com macros (carnes, arroz, feijao, frutas, paes); false para itens sem macros relevantes (agua, cafe preto, refrigerante zero, sal, tempero, chá sem açúcar),
-          "preparo_inferido": true se o alimento tem modo de preparo que muda os macros (frito/cozido/assado/grelhado/mexido) e o paciente NÃO disse qual foi — ou seja, você escolheu o preparo sozinho; false se o paciente informou o preparo OU o alimento não tem preparo relevante (fruta, iogurte, pão)
+          "material": true para QUALQUER alimento que tenha kcal (carnes, arroz, feijão, frutas, pães, farofa, torresmo, azeite, manteiga, castanhas, sementes, mel, açúcar, geleias, molhos gordurosos) — mesmo em pequena quantidade (5g de farofa ou 1 colher de azeite ainda é material:true); só use false para itens sem macros relevantes (água, café preto, chá sem açúcar, refrigerante zero, sal, pimenta, orégano, alho em pó, vinagre, adoçante),
+          "preparo_inferido": true se o alimento tem modo de preparo que muda os macros (frito/cozido/assado/grelhado/mexido) e o paciente NÃO disse qual foi — ou seja, você escolheu o preparo sozinho; false se o paciente informou o preparo OU o alimento não tem preparo relevante (fruta, iogurte, pão),
+          "kcal": kcal ESTIMADA deste item individual, considerando quantidade_g e preparo (ex.: 100g arroz branco cozido ≈ 130 kcal; 50g frango frito ≈ 145 kcal). Use 0 para itens material:false.
         }
       ],
       "totais": {"kcal": number, "proteina_g": number, "carbo_g": number, "gordura_g": number}
@@ -197,20 +202,21 @@ Regras OBRIGATÓRIAS:
 - Para cada item, gere uma entrada em "itens".
 - Use porção típica brasileira ao estimar (ex.: arroz médio ~100g, colher de feijão ~60g, fatia de pão ~30g).
 - "quantidade_informada" deve ser true APENAS quando o paciente deu um número explícito (gramas, ml, colheres, fatias, unidades). Se ele só falou "com arroz", marque false.
-- "material" diferencia o que tem caloria real do que é bebida zero ou tempero — bebida zero, agua, café preto, chá sem açúcar e temperos são SEMPRE material:false.
+- "material" diferencia o que tem caloria real do que é bebida zero ou condimento sem kcal. Alimentos densos em kcal (farofa, azeite, manteiga, castanhas, sementes, torresmo, mel, açúcar, geleias, molhos gordurosos) são SEMPRE material:true, mesmo em porções pequenas (5g, 1 colher). Só marque material:false para: água, café preto, chá sem açúcar, refrigerante zero, sal, pimenta, orégano, alho em pó, vinagre, adoçante.
 - "preparo_inferido" só é true quando VOCÊ assumiu o preparo por conta própria: "batata frita" → false (paciente informou); "batata" → true (você escolheu). Ao assumir um preparo, use o mais comum no nome (ex.: "Batata cozida", "Frango grelhado", "Ovo cozido").
 - "totais" de cada refeição deve ser a SOMA exata dos macros dos itens dessa refeição.
+- "kcal" de cada item deve ser individual e coerente com quantidade_g e preparo; a soma dos "kcal" dos itens de uma refeição TEM que bater com "totais.kcal" (tolerância ±5 kcal).
 - Não inclua comentários ou markdown. Apenas JSON puro.
 
 Exemplo 1 — uma refeição sem tipo marcado:
 Entrada: "comi 200g de frango com arroz"
 Saída:
-{"refeicoes":[{"tipo_refeicao":null,"itens":[{"nome":"Frango grelhado","quantidade_g":200,"quantidade_informada":true,"material":true,"preparo_inferido":true},{"nome":"Arroz branco","quantidade_g":100,"quantidade_informada":false,"material":true,"preparo_inferido":false}],"totais":{"kcal":460,"proteina_g":50,"carbo_g":28,"gordura_g":8}}]}
+{"refeicoes":[{"tipo_refeicao":null,"itens":[{"nome":"Frango grelhado","quantidade_g":200,"quantidade_informada":true,"material":true,"preparo_inferido":true,"kcal":330},{"nome":"Arroz branco","quantidade_g":100,"quantidade_informada":false,"material":true,"preparo_inferido":false,"kcal":130}],"totais":{"kcal":460,"proteina_g":50,"carbo_g":28,"gordura_g":8}}]}
 
 Exemplo 2 — três refeições com tipos marcados:
 Entrada: "café: 2 ovos e um pão. almoço: 200g de frango e arroz. janta: salada"
 Saída:
-{"refeicoes":[{"tipo_refeicao":"café da manhã","itens":[{"nome":"Ovo cozido","quantidade_g":100,"quantidade_informada":true,"material":true,"preparo_inferido":true},{"nome":"Pão francês","quantidade_g":50,"quantidade_informada":true,"material":true,"preparo_inferido":false}],"totais":{"kcal":275,"proteina_g":18,"carbo_g":29,"gordura_g":10}},{"tipo_refeicao":"almoço","itens":[{"nome":"Frango grelhado","quantidade_g":200,"quantidade_informada":true,"material":true,"preparo_inferido":true},{"nome":"Arroz branco","quantidade_g":100,"quantidade_informada":false,"material":true,"preparo_inferido":false}],"totais":{"kcal":460,"proteina_g":50,"carbo_g":28,"gordura_g":8}},{"tipo_refeicao":"jantar","itens":[{"nome":"Salada verde","quantidade_g":150,"quantidade_informada":false,"material":true,"preparo_inferido":false}],"totais":{"kcal":30,"proteina_g":2,"carbo_g":5,"gordura_g":0}}]}`;
+{"refeicoes":[{"tipo_refeicao":"café da manhã","itens":[{"nome":"Ovo cozido","quantidade_g":100,"quantidade_informada":true,"material":true,"preparo_inferido":true,"kcal":145},{"nome":"Pão francês","quantidade_g":50,"quantidade_informada":true,"material":true,"preparo_inferido":false,"kcal":130}],"totais":{"kcal":275,"proteina_g":18,"carbo_g":29,"gordura_g":10}},{"tipo_refeicao":"almoço","itens":[{"nome":"Frango grelhado","quantidade_g":200,"quantidade_informada":true,"material":true,"preparo_inferido":true,"kcal":330},{"nome":"Arroz branco","quantidade_g":100,"quantidade_informada":false,"material":true,"preparo_inferido":false,"kcal":130}],"totais":{"kcal":460,"proteina_g":50,"carbo_g":28,"gordura_g":8}},{"tipo_refeicao":"jantar","itens":[{"nome":"Salada verde","quantidade_g":150,"quantidade_informada":false,"material":true,"preparo_inferido":false,"kcal":30}],"totais":{"kcal":30,"proteina_g":2,"carbo_g":5,"gordura_g":0}}]}`;
 
   const response = await comBackoff(() =>
     claude.messages.create({
@@ -678,7 +684,10 @@ export function formatarCardRefeicao(
     const estimou = !i.quantidade_informada || (i.preparo_inferido === true && ehPreparoCritico(i.nome));
     const marcador = estimou ? ' _(estimei)_' : '';
     const prefixo = i.quantidade_informada ? '' : '~';
-    return `• ${i.nome} — ${prefixo}${qtd}g${marcador}`;
+    // kcal por item ajuda o paciente a entender de onde vem o total; vai APÓS o marcador
+    // pra preservar substrings existentes ("Batata cozida — 150g _(estimei)_") em asserts.
+    const kcalSufixo = typeof i.kcal === 'number' && i.kcal > 0 ? ` · ${Math.round(i.kcal)} kcal` : '';
+    return `• ${i.nome} — ${prefixo}${qtd}g${marcador}${kcalSufixo}`;
   });
 
   const rodapeExtras = naoMateriais.length > 0
@@ -760,7 +769,10 @@ export function formatarCardMultiplo(
       ? `${emojiPorTipo[r.tipo_refeicao] ?? '🍴'} *${r.tipo_refeicao}* (${Math.round(r.totais.kcal)} kcal)`
       : `🍴 *Refeição* (${Math.round(r.totais.kcal)} kcal)`;
     const itensMat = r.itens.filter((i) => i.material);
-    const linhas = itensMat.map((i) => `  • ${i.nome} — ${Math.round(i.quantidade_g)}g`);
+    const linhas = itensMat.map((i) => {
+      const kcalSufixo = typeof i.kcal === 'number' && i.kcal > 0 ? ` · ${Math.round(i.kcal)} kcal` : '';
+      return `  • ${i.nome} — ${Math.round(i.quantidade_g)}g${kcalSufixo}`;
+    });
     return linhas.length > 0 ? `${titulo}\n${linhas.join('\n')}` : titulo;
   }).join('\n\n');
 
