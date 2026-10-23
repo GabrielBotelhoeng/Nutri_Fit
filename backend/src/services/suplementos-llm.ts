@@ -79,7 +79,7 @@ SAIDA: apenas um JSON no formato:
       "nome": "string (o que o paciente escreveu, corrigido)",
       "categoria": "proteina|aminoacido|vitamina|mineral|omega|estimulante_leve|fitoterapico|adaptogeno|fibra|probiotico|outro_suplemento_alimentar|peptideo|hormonio|sarm|esteroide|medicamento|controlado|desconhecido",
       "dose": "string com dose sugerida (ex: '10-20g/dia' ou '${'0.3g/kg = ~24g'}') ou null",
-      "timing": "string curta (ex: 'pos-treino') ou null",
+      "timing": "string curta (ex: 'pós-treino') ou null",
       "cautela": "string curta com precaucao relevante ou null"
     }
   ]

@@ -117,10 +117,10 @@ interface ContextoIncentivo {
 
 async function gerarMensagemIncentivo(ctx: ContextoIncentivo): Promise<string> {
   const excessoLinha = ctx.dias_acima_meta > 0
-    ? `- Dias que ULTRAPASSARAM a meta calorica: ${ctx.dias_acima_meta}`
+    ? `- Dias que ULTRAPASSARAM a meta calórica: ${ctx.dias_acima_meta}`
     : '';
   const deltaLinha = ctx.delta_semana_pct !== null
-    ? `- Media vs semana anterior: ${ctx.delta_semana_pct >= 0 ? '+' : ''}${ctx.delta_semana_pct.toFixed(1)}%`
+    ? `- Média vs semana anterior: ${ctx.delta_semana_pct >= 0 ? '+' : ''}${ctx.delta_semana_pct.toFixed(1)}%`
     : '';
 
   const prompt = `Voce e o NutriChat, assistente nutricional via WhatsApp. Gere 1-2 frases motivacionais para ${ctx.nomePaciente}, no fechamento do relatorio semanal.

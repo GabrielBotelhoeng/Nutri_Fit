@@ -164,9 +164,9 @@ export function calcularHidratacao(peso_kg: number): ResultadoHidratacao {
   const porcao_ml = Math.round(meta_ml / 8);
   const distribuicao = [
     `☀️ Ao acordar: ${porcao_ml}ml`,
-    `🍳 Cafe da manha: ${porcao_ml}ml`,
-    `🌤️ Meio da manha: ${porcao_ml}ml`,
-    `🍽️ Almoco: ${porcao_ml}ml`,
+    `🍳 Café da manhã: ${porcao_ml}ml`,
+    `🌤️ Meio da manhã: ${porcao_ml}ml`,
+    `🍽️ Almoço: ${porcao_ml}ml`,
     `☕ Tarde: ${porcao_ml}ml`,
     `🌙 Jantar: ${porcao_ml}ml`,
     `🌃 Noite: ${porcao_ml}ml`,
@@ -327,7 +327,7 @@ export async function gerarExplicacaoPersonalizada(
     emagrecer: 'emagrecer',
     ganhar_massa: 'ganhar massa muscular',
     manter: 'manter o peso',
-    saude_geral: 'saude geral',
+    saude_geral: 'saúde geral',
   };
   const objetivoTxt = perfil.objetivo ? OBJETIVO_LABEL[perfil.objetivo] : 'manter o peso';
   const restricoesTxt = perfil.restricoes.length > 0 ? perfil.restricoes.join(', ') : 'nenhuma';
@@ -351,8 +351,8 @@ Nao repita os numeros exatos — eles ja foram mostrados na mensagem anterior.
 
 REGRA DE MARCA (P1-5, nao-negociavel):
 - NUNCA recomende, mencione ou compare com apps, sites ou ferramentas externas (MyFitnessPal, FatSecret, Cronometer, LoseIt, YAZIO, Lifesum, Calorie Counter, planilhas Excel, contador de calorias, etc.).
-- A "dica pratica" DEVE usar o proprio NutriChat. Exemplos validos: "me manda foto do prato que eu calculo pra voce", "se quiser, manda audio descrevendo o que comeu", "me pergunta a qualquer hora se um alimento cabe na meta".
-- NAO faca promessa medica nem garantia de resultado (ex.: "voce vai perder X kg em Y semanas").
+- A "dica pratica" DEVE usar o proprio NutriChat. Exemplos validos: "me manda foto do prato que eu calculo pra você", "se quiser, manda áudio descrevendo o que comeu", "me pergunta a qualquer hora se um alimento cabe na meta".
+- NAO faca promessa medica nem garantia de resultado (ex.: "você vai perder X kg em Y semanas").
 
 FORMATACAO (WhatsApp, nao Markdown):
 - NUNCA use headers (# ou ##) — WhatsApp renderiza como texto literal feio.
@@ -374,7 +374,7 @@ FORMATACAO (WhatsApp, nao Markdown):
 // Descarta a sentenca inteira em vez de re-escrever (evita inventar conteudo).
 const CONCORRENTES_RE = /\b(my\s*fitness\s*pal|myfitnesspal|fat\s*secret|fatsecret|cronometer|lose\s*it|loseit|yazio|lifesum|calorie\s*counter|contador\s+de\s+calorias)\b/i;
 
-const DICA_ON_BRAND = 'Se quiser, me manda foto do prato (ou audio descrevendo) que eu calculo as macros pra voce em segundos.';
+const DICA_ON_BRAND = 'Se quiser, me manda foto do prato (ou áudio descrevendo) que eu calculo as macros pra você em segundos.';
 
 export function sanitizarMencaoConcorrentes(texto: string): string {
   if (!CONCORRENTES_RE.test(texto)) return texto;
@@ -409,17 +409,17 @@ export function formatarMensagemCalculos(
   creatina: ResultadoCreatina,
 ): string {
   return (
-    `🎯 *Seus numeros personalizados:*\n\n` +
+    `🎯 *Seus números personalizados:*\n\n` +
     `🔥 *Metabolismo (TMB):* ${tmb.tmb_kcal} kcal/dia\n` +
     `⚡ *Gasto total (TDEE):* ${tmb.tdee_kcal} kcal/dia\n` +
-    `🏃 Nivel de atividade: ${tmb.nivel_atividade}\n\n` +
-    `📊 *Meta diaria de macros:*\n` +
-    `• 🍗 Proteina: ${macros.proteina_g}g (${macros.proteina_pct}%)\n` +
+    `🏃 Nível de atividade: ${tmb.nivel_atividade}\n\n` +
+    `📊 *Meta diária de macros:*\n` +
+    `• 🍗 Proteína: ${macros.proteina_g}g (${macros.proteina_pct}%)\n` +
     `• 🍚 Carboidrato: ${macros.carbo_g}g (${macros.carbo_pct}%)\n` +
     `• 🥑 Gordura: ${macros.gordura_g}g (${macros.gordura_pct}%)\n` +
     `• 🎯 Total: *${macros.kcal} kcal/dia*\n\n` +
-    `💧 *Hidratacao diaria:* ${hidratacao.meta_ml}ml\n` +
-    `_Distribuicao sugerida:_\n${hidratacao.distribuicao.slice(0, 4).join('\n')}\n_(e mais 4 porcoes ao longo do dia)_\n\n` +
+    `💧 *Hidratação diária:* ${hidratacao.meta_ml}ml\n` +
+    `_Distribuicao sugerida:_\n${hidratacao.distribuicao.slice(0, 4).join('\n')}\n_(e mais 4 porções ao longo do dia)_\n\n` +
     `💊 *Creatina:* ${creatina.mensagem}`
   );
 }

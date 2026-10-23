@@ -65,3 +65,7 @@ antigravity-awesome-skills/
 .vscode/
 *.swp
 *.swo
+
+# Credenciais do Supabase de TESTES usadas pelos agentes de teste (nunca commitar)
+.env.test
+**/.env.test

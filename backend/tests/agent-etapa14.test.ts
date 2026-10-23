@@ -57,7 +57,7 @@ describe('prepararPerguntaEtapa14', () => {
   it('PDF sem horarios → cai na pergunta aberta original', async () => {
     buscarHorariosDietaPacienteSpy.mockResolvedValueOnce(null);
     const r = await prepararPerguntaEtapa14('paciente-1');
-    expect(r.mensagem).toContain('Em quais horarios voce costuma');
+    expect(r.mensagem).toContain('Em quais horários você costuma');
     expect(r.dadosExtras).toEqual({});
   });
 
@@ -97,7 +97,7 @@ describe('prepararPerguntaEtapa14', () => {
     });
     const r = await prepararPerguntaEtapa14('paciente-3');
     expect(r.mensagem).toContain('Vi na sua dieta');
-    expect(r.mensagem).toContain('Lanche da manha');
+    expect(r.mensagem).toContain('Lanche da manhã');
     expect(r.mensagem).toContain('Lanche da tarde');
     // jantar NAO deve aparecer como faltante — esta preenchido no PDF
     expect(r.mensagem).not.toContain('Jantar*');
@@ -196,7 +196,7 @@ describe('tratarRespostaConfirmacaoHorarios — flag completa', () => {
   it('"nao" → repete pergunta aberta e limpa flags', () => {
     const r = tratarRespostaConfirmacaoHorarios('nao', dadosCompleta());
     expect(r.handled).toBe(true);
-    expect(r.mensagemRepetir).toContain('Em quais horarios');
+    expect(r.mensagemRepetir).toContain('Em quais horários');
     expect(r.novoDado).toMatchObject({
       confirmacao_horarios_pendente: null,
       horarios_pre_extraidos: null,
@@ -207,13 +207,13 @@ describe('tratarRespostaConfirmacaoHorarios — flag completa', () => {
   it('"nao confere" → cai na pergunta aberta', () => {
     const r = tratarRespostaConfirmacaoHorarios('nao confere', dadosCompleta());
     expect(r.handled).toBe(true);
-    expect(r.mensagemRepetir).toContain('Em quais horarios');
+    expect(r.mensagemRepetir).toContain('Em quais horários');
   });
 
   it('"talvez" (nem sim nem nao) → pede sim/nao explicito sem mudar estado', () => {
     const r = tratarRespostaConfirmacaoHorarios('talvez', dadosCompleta());
     expect(r.handled).toBe(true);
-    expect(r.mensagemRepetir).toMatch(/sim.*nao|nao.*sim/i);
+    expect(r.mensagemRepetir).toMatch(/sim.*n[ãa]o|n[ãa]o.*sim/i);
     expect(r.novoDado).toBeUndefined();
   });
 });

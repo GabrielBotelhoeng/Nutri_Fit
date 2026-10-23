@@ -408,3 +408,49 @@ describe('removerMencaoAgua — strip de agua combinada antes do processarTextoR
     expect(removerMencaoAgua('bebi 300ml de suco')).toBe('bebi 300ml de suco');
   });
 });
+
+// Revisão 2026-10-23: pergunta sobre o CONTEÚDO de um alimento não é saldo do dia.
+// Antes, "quantas calorias tem uma banana?" casava SALDO_RE e o paciente recebia o
+// progresso do dia em vez da resposta.
+describe('pergunta sobre nutriente de um alimento (não é saldo)', () => {
+  it.each([
+    'quantas calorias tem uma banana?',
+    'quanto de proteína tem o ovo?',
+    'quantas calorias tem 100g de arroz',
+    'quantos gramas de carbo tem o pão francês?',
+    'quanta gordura tem o abacate?',
+    'quantas calorias têm 2 colheres de azeite?',
+  ])('"%s" cai em consulta', (texto) => {
+    expect(classificarIntencaoRapida(texto)).toBe('consulta');
+  });
+
+  it.each([
+    'quantas calorias eu comi hoje?',
+    'quanto de proteína eu consumi?',
+    'quantas calorias tem no meu dia?',
+  ])('"%s" continua saldo (consumo do próprio paciente)', (texto) => {
+    expect(classificarIntencaoRapida(texto)).toBe('saldo');
+  });
+});
+
+// Revisão 2026-10-23: "foram" em CORRECAO_RE capturava registros de água. Com uma
+// refeição registrada há < 60 min, "hoje foram 3 copos de água" virava correção e
+// substituía os macros da refeição pelos da água (zerava o almoço).
+describe('água com "foram" não é correção de refeição', () => {
+  it.each([
+    'hoje foram 3 copos de água',
+    'foram 2 litros de água hoje',
+    'na verdade foram 500ml de água',
+    'foram 2 garrafas d\'água',
+  ])('"%s" cai em agua', (texto) => {
+    expect(classificarIntencaoRapida(texto)).toBe('agua');
+  });
+
+  it('"na verdade foram 150g" continua corrigir', () => {
+    expect(classificarIntencaoRapida('na verdade foram 150g')).toBe('corrigir');
+  });
+
+  it('"foram 300ml de suco" não vira água (líquido calórico)', () => {
+    expect(classificarIntencaoRapida('foram 300ml de suco')).not.toBe('agua');
+  });
+});
