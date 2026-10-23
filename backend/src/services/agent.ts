@@ -229,20 +229,34 @@ const DEZENAS_PT: Record<string, number> = {
 
 // Idade em dígitos (primeiro número da frase) ou por extenso ("sessenta e um").
 // Antes: replace(/\D/g, '') juntava todos os dígitos — "61 anos e 92 kg" virava 6192.
-export function parseIdade(texto: string): number | null {
+// PRIMEIRO número da frase, em dígitos ("68,5") ou por extenso ("sessenta e um",
+// "cento e dez"). Só o primeiro: somar todos fazia "sessenta e um anos, tenho três
+// netos" virar 64; juntar dígitos fazia "61 anos e 92 kg" virar 6192.
+export function primeiroNumeroPt(texto: string): number | null {
   const t = texto.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-  const digitos = t.match(/\d{1,3}/);
-  let idade: number | null = digitos ? parseInt(digitos[0], 10) : null;
-  if (idade === null) {
-    const palavras = t.split(/[^a-z]+/);
-    let total = 0;
-    for (const p of palavras) {
-      if (DEZENAS_PT[p] !== undefined) total += DEZENAS_PT[p];
-      else if (UNIDADES_PT[p] !== undefined) total += UNIDADES_PT[p];
-    }
-    idade = total > 0 ? total : null;
+  const digitos = t.match(/\d+(?:[.,]\d+)?/);
+  if (digitos) return parseFloat(digitos[0].replace(',', '.'));
+  const tokens = t.split(/[^a-z]+/).filter(Boolean);
+  const inicio = tokens.findIndex((p) => p === 'cento' || DEZENAS_PT[p] !== undefined || UNIDADES_PT[p] !== undefined);
+  if (inicio < 0) return null;
+  let total = 0;
+  let i = inicio;
+  // Cada parte é seguida opcionalmente de "e" + próxima parte menor: "cento e vinte e um".
+  while (i < tokens.length) {
+    const p = tokens[i];
+    const valor = p === 'cento' ? 100 : (DEZENAS_PT[p] ?? UNIDADES_PT[p]);
+    if (valor === undefined) break;
+    total += valor;
+    if (tokens[i + 1] === 'e' && (tokens[i + 2] === 'cento' || DEZENAS_PT[tokens[i + 2]] !== undefined || UNIDADES_PT[tokens[i + 2]] !== undefined)) {
+      i += 2;
+    } else break;
   }
-  return idade !== null && idade >= 10 && idade <= 120 ? idade : null;
+  return total;
+}
+
+export function parseIdade(texto: string): number | null {
+  const idade = primeiroNumeroPt(texto);
+  return idade !== null && Number.isInteger(idade) && idade >= 10 && idade <= 120 ? idade : null;
 }
 
 // Depois de recusar dose de controlado, "e quantos mg a galera usa?" não cita a
@@ -284,10 +298,10 @@ function parseObjetivo(texto: string): ObjetivoNutricional | null {
   return null;
 }
 
-function parsePeso(texto: string): number | null {
-  const limpo = texto.toLowerCase().replace(',', '.').replace(/[^\d.]/g, '');
-  const num = parseFloat(limpo);
-  if (isNaN(num) || num < 30 || num > 300) return null;
+export function parsePeso(texto: string): number | null {
+  // Primeiro número só — antes juntava todos os dígitos ("92 kg e 1,75" quebrava).
+  const num = primeiroNumeroPt(texto);
+  if (num === null || num < 30 || num > 300) return null;
   return num;
 }
 

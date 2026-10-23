@@ -162,3 +162,27 @@ describe('insisteEmDoseControlada', () => {
     expect(insisteEmDoseControlada('e a dose?', undefined, agora)).toBeNull();
   });
 });
+
+// Regressão da 3ª rodada: o leitor de extenso SOMAVA todas as palavras-número da frase —
+// "sessenta e um anos, tenho três netos" virava 64. Só vale o PRIMEIRO número.
+describe('parseIdade — só o primeiro número por extenso', () => {
+  it('"sessenta e um anos, tenho três netos" → 61', () => {
+    expect(parseIdade('sessenta e um anos, tenho três netos')).toBe(61);
+  });
+  it('"tenho sessenta e um, minha esposa tem cinquenta e oito" → 61', () => {
+    expect(parseIdade('tenho sessenta e um, minha esposa tem cinquenta e oito')).toBe(61);
+  });
+});
+
+import { parsePeso } from '../src/services/agent';
+describe('parsePeso — extenso e primeiro número', () => {
+  it.each([
+    ['68', 68],
+    ['68,5 kg', 68.5],
+    ['92 kg e 1,75 de altura', 92],
+    ['noventa e dois quilos', 92],
+    ['peso cento e dez', 110],
+  ])('"%s" → %s', (texto, peso) => {
+    expect(parsePeso(texto)).toBe(peso);
+  });
+});

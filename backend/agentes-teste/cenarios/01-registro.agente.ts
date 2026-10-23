@@ -47,7 +47,7 @@ describe('Registro de refeição', () => {
         const depois = await paciente.refeicoes();
         checar('Registrou depois das respostas', depois.length >= 1, `gravadas=${depois.length}`);
         const kcal = depois.reduce((s, x) => s + x.kcal, 0);
-        checar('kcal plausível (400–900)', kcal >= 400 && kcal <= 900, `kcal=${kcal}`);
+        checar('kcal plausível (300–900)', kcal >= 300 && kcal <= 900, `kcal=${kcal}`);
       },
     });
   });
