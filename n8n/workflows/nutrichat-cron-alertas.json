@@ -16,7 +16,10 @@
       "name": "Cron a cada 15 minutos",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1,
-      "position": [200, 300]
+      "position": [
+        200,
+        300
+      ]
     },
     {
       "parameters": {
@@ -26,7 +29,10 @@
       "name": "Calcular Horario Atual (Brasilia)",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [400, 300]
+      "position": [
+        400,
+        300
+      ]
     },
     {
       "parameters": {
@@ -50,21 +56,45 @@
             }
           ]
         },
-        "options": {}
+        "options": {
+          "timeout": 30000
+        }
       },
       "id": "disparar-alertas",
       "name": "Disparar Alertas no Backend",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [600, 300]
+      "position": [
+        600,
+        300
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
     }
   ],
   "connections": {
     "Cron a cada 15 minutos": {
-      "main": [[{ "node": "Calcular Horario Atual (Brasilia)", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Calcular Horario Atual (Brasilia)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Calcular Horario Atual (Brasilia)": {
-      "main": [[{ "node": "Disparar Alertas no Backend", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Disparar Alertas no Backend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": true,
