@@ -1184,27 +1184,49 @@ export async function processarRespostaPreparo(
 }
 
 // Mensagem final deixa explícito que foi correção (não acréscimo).
+// Itens com gramas ("Arroz branco 300g, Frango grelhado 100g"); sem itens, a descrição.
+export function descreverItensRefeicao(itens: { nome: string; quantidade_g: number }[] | undefined, fallback: string): string {
+  if (!itens || itens.length === 0) return fallback;
+  return itens.map((i) => `${i.nome} ${Math.round(i.quantidade_g)}g`).join(', ');
+}
+
+// A correção é aplicada SOBRE a refeição registrada: o modelo recebe os dois e devolve
+// a refeição completa já corrigida. Antes, só o texto da correção ia pro modelo — em
+// "300g arroz + 100g frango" → "na verdade foram 150g de arroz" o frango sumia.
+export function montarTextoCorrecao(ultima: UltimaRefeicao, texto: string): string {
+  return (
+    `Refeição já registrada: ${descreverItensRefeicao(ultima.itens, ultima.descricao)}.
+` +
+    `Correção do paciente: "${texto}".
+` +
+    `Devolva a refeição COMPLETA já corrigida: aplique só o que o paciente corrigiu e mantenha ` +
+    `os demais itens exatamente como estavam (mesmo nome e quantidade). Retorne uma única refeição.`
+  );
+}
+
 export async function processarTextoCorrecao(
   phone: string,
   texto: string,
   paciente: PacienteInfo,
   ultima: UltimaRefeicao,
 ): Promise<void> {
-  let novosMacros: MacrosRefeicao;
+  let analise: AnaliseRefeicao;
   try {
-    novosMacros = await calcularMacrosComClaude(texto);
+    analise = await analisarRefeicaoComClaude(montarTextoCorrecao(ultima, texto));
   } catch (e) {
     console.error('[meal] Claude falhou apos backoff em processarTextoCorrecao:', e);
     await sendText(phone, mensagemErroHumana(e));
     return;
   }
+  const novosMacros = analise.totais;
 
   if (novosMacros.kcal === 0) {
     await sendText(phone, `⚠️ Não consegui recalcular os macros pra essa correção. Tente descrever com mais detalhes (ex: "foram 200g de frango com 100g de arroz").`);
     return;
   }
 
-  await corrigirUltimaRefeicao(paciente.id, ultima, texto, novosMacros);
+  const novaDescricao = descreverItensRefeicao(analise.itens, texto);
+  await corrigirUltimaRefeicao(paciente.id, ultima, novaDescricao, novosMacros, analise.itens);
 
   const estado = await getEstadoConv(paciente.id);
   const metas = obterMetas(estado.dados as Record<string, unknown>);
@@ -1213,8 +1235,10 @@ export async function processarTextoCorrecao(
 
   await sendText(
     phone,
-    `✏️ *Corrigi a última refeição* (substituí, não somei).\n\n` +
-    formatarSaldoDia(texto, novosMacros.kcal, saldo, metas, streak),
+    `✏️ *Corrigi a última refeição* (substituí, não somei).
+
+` +
+    formatarSaldoDia(novaDescricao, novosMacros.kcal, saldo, metas, streak),
   );
 
   await dispararAlertaOvershoot(phone, saldo, metas);

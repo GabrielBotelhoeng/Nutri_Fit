@@ -69,3 +69,6 @@ antigravity-awesome-skills/
 # Credenciais do Supabase de TESTES usadas pelos agentes de teste (nunca commitar)
 .env.test
 **/.env.test
+
+# Relatórios das rodadas dos agentes de teste (contêm conversas completas)
+backend/agentes-teste/relatorios/

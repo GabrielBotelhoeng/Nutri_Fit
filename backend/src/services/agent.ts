@@ -29,6 +29,7 @@ import {
   analisarSuplementos,
   calcularDoseSuplementos,
   CONTROLADOS,
+  categorizarSeguro,
   detectarPerguntaDoseControlada,
   formatarAvisoControlados,
   formatarExplicacaoTermogenicos,
@@ -64,10 +65,19 @@ async function registrarAguaContador(pacienteId: string, aguaMl: number): Promis
   return true;
 }
 
-async function registrarAgua(pacienteId: string, aguaMl: number): Promise<string> {
+const ml = (n: number) => `${String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, '.')} ml`;
+
+// Mostra o total do dia: sem ele o paciente não percebe se "hoje foram 3 copos" somou.
+export function mensagemAguaRegistrada(aguaMl: number, totalDiaMl: number, metaMl?: number): string {
+  const total = metaMl && metaMl > 0 ? `*${ml(totalDiaMl)}* de ${ml(metaMl)}` : `*${ml(totalDiaMl)}*`;
+  return `💧 *${aguaMl}ml* de água registrados! Hoje: ${total}. Continue se hidratando. 💚`;
+}
+
+async function registrarAgua(pacienteId: string, aguaMl: number, metaMl?: number): Promise<string> {
   const ok = await registrarAguaContador(pacienteId, aguaMl);
   if (!ok) return `⚠️ Erro ao registrar hidratação. Tente novamente.`;
-  return `💧 *${aguaMl}ml* de água registrados! Continue se hidratando. 💚`;
+  const saldo = await mealService.obterSaldoDia(pacienteId);
+  return mensagemAguaRegistrada(aguaMl, saldo.agua_ml ?? aguaMl, metaMl);
 }
 
 // Converte token de quantidade em numero:
@@ -172,6 +182,32 @@ function parseListaOuVazio(texto: string): string[] {
   if (NEGATIVA_LISTA_RE.test(t)) return [];
   // Aceita ",", ";" e " e " como separador: "lactose e gluten" -> ["lactose", "gluten"].
   return texto.split(/[,;]\s*|\s+e\s+/i).map((s) => s.trim()).filter(Boolean);
+}
+
+// Etapa 13. Resposta que COMEÇA negando ("não uso nenhum, só os remédios do médico")
+// não é lista: só sobrevive o que o catálogo reconhece como suplemento ou controlado.
+// Antes, só "não uso" exato virava vazio — o resto era gravado como suplemento.
+const NEGATIVA_INICIO_RE = /^(n[ãa]o|nenhum[ao]?|nada|nunca)(?=\W|$)/i;
+const PREFIXO_FILLER_RE = /^(?:n[ãa]o|uso|tomo|s[óo]|somente|apenas|mas|mesmo)(?:\s+|$)/i;
+
+function limparItemSuplemento(item: string): string {
+  let t = item.trim();
+  for (let i = 0; i < 4 && PREFIXO_FILLER_RE.test(t); i++) t = t.replace(PREFIXO_FILLER_RE, '').trim();
+  return t;
+}
+
+function ehSuplementoConhecido(item: string): boolean {
+  const norm = item.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  return categorizarSeguro(item) !== null || Object.keys(CONTROLADOS).some((c) => norm.includes(c));
+}
+
+export function parseSuplementos(texto: string): string[] {
+  const t = texto.toLowerCase().trim();
+  if (!NEGATIVA_INICIO_RE.test(t)) return parseListaOuVazio(texto);
+  return texto
+    .split(/[,;.]\s*|\s+e\s+/i)
+    .map(limparItemSuplemento)
+    .filter((item) => item.length > 0 && ehSuplementoConhecido(item));
 }
 
 function parseObjetivo(texto: string): ObjetivoNutricional | null {
@@ -550,7 +586,7 @@ async function processarRespostaEntrevista(
       break;
     }
     case 13: {
-      novoDado.suplementos = parseListaOuVazio(texto);
+      novoDado.suplementos = parseSuplementos(texto);
       break;
     }
     case 14: {
@@ -578,12 +614,28 @@ const OBJETIVO_LABEL: Record<ObjetivoNutricional, string> = {
   saude_geral: 'saúde geral / bem-estar',
 };
 
+// Sem trecho do PDF: o texto depende de o paciente TER dieta. Antes dizia sempre que
+// "a dieta JÁ ESTÁ processada" — paciente sem PDF recebia respostas sobre um plano
+// inexistente ("o que seu nutricionista indicou pro jantar...").
+export function textoContextoDieta(contextoRag: string, temDieta: boolean): string {
+  if (contextoRag.trim()) return contextoRag;
+  if (!temDieta) {
+    return 'Este paciente AINDA NÃO TEM DIETA (PDF) cadastrada pelo nutricionista. Responda com princípios gerais ' +
+      'de nutrição adequados ao perfil dele e, quando fizer sentido, diga que o plano personalizado vai ser definido ' +
+      'pelo nutricionista. NUNCA diga ou insinue "sua dieta diz/prevê/indica" nem ofereça consultar o plano dele.';
+  }
+  return 'Nenhum trecho específico da dieta bateu com esta pergunta no momento, mas a dieta dele já está cadastrada. ' +
+    'Responda com princípios gerais adequados ao perfil dele e sugira que ele reformule a pergunta sendo mais ' +
+    'específico (ex.: "qual café da manhã?" em vez de "qual minha dieta?") se quiser detalhes do PDF.';
+}
+
 async function responderComClaude(
   perguntaUsuario: string,
   contextoRag: string,
   nomePaciente: string,
   perfil: PerfilNutricional,
   historico: ConversaMensagem[] = [],
+  temDieta = true,
 ): Promise<string> {
   const objetivoLinha = perfil.objetivo
     ? OBJETIVO_LABEL[perfil.objetivo]
@@ -609,7 +661,7 @@ REGRAS DE SEGURANCA (inegociaveis):
 - Toda recomendacao deve respeitar o objetivo principal do paciente
 
 Contexto da sua dieta (trechos relevantes do PDF prescrito):
-${contextoRag || 'Nenhum trecho especifico da dieta bateu com esta pergunta no momento — mas a dieta dele JÁ ESTA processada no sistema. Responda com principios gerais de nutrição adequados ao perfil dele, e sugira que ele reformule a pergunta sendo mais especifico (ex: "qual café da manhã?" em vez de "qual minha dieta?") se quiser detalhes especificos do PDF. Não diga que a dieta não foi carregada.'}
+${textoContextoDieta(contextoRag, temDieta)}
 
 Regras de comunicacao:
 - Responda sempre em portugues, de forma amigavel e direta
@@ -1017,7 +1069,7 @@ export async function processarMensagem(phone: string, texto: string): Promise<v
   if (intent === 'agua') {
     const aguaMl = extrairAguaMl(texto);
     if (aguaMl > 0 && aguaMl <= 5000) {
-      const resposta = await registrarAgua(paciente.id, aguaMl);
+      const resposta = await registrarAgua(paciente.id, aguaMl, Number(dadosEstado['hidratacao_ml']) || undefined);
       await sendText(phone, resposta);
       return;
     }
@@ -1079,7 +1131,8 @@ export async function processarMensagem(phone: string, texto: string): Promise<v
     console.error('[agent] Erro ao obter historico (seguindo sem memoria):', e);
   }
 
-  const resposta = await responderComClaude(texto, contextoRag, paciente.nome, perfil, historico);
+  const temDieta = contextoRag.trim().length > 0 || (await pacienteTemDietaAtiva(paciente.id));
+  const resposta = await responderComClaude(texto, contextoRag, paciente.nome, perfil, historico, temDieta);
   await sendText(phone, resposta);
 
   // Registra DEPOIS do envio: erro aqui não deve afetar o paciente.
@@ -1089,6 +1142,19 @@ export async function processarMensagem(phone: string, texto: string): Promise<v
   } catch (e) {
     console.error('[agent] Erro ao registrar conversa no historico:', e);
   }
+}
+
+async function pacienteTemDietaAtiva(pacienteId: string): Promise<boolean> {
+  const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
+  const { data, error } = await supabase
+    .from('dietas')
+    .select('id')
+    .eq('paciente_id', pacienteId)
+    .eq('status', 'ativa')
+    .limit(1);
+  // Na dúvida (erro), assume que tem — é o comportamento anterior.
+  if (error) return true;
+  return (data ?? []).length > 0;
 }
 
 export async function enviarBoasVindas(pacienteId: string): Promise<void> {
