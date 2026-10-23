@@ -29,6 +29,7 @@ import {
   analisarSuplementos,
   calcularDoseSuplementos,
   CONTROLADOS,
+  categorizarSeguro,
   detectarPerguntaDoseControlada,
   formatarAvisoControlados,
   formatarExplicacaoTermogenicos,
@@ -64,10 +65,19 @@ async function registrarAguaContador(pacienteId: string, aguaMl: number): Promis
   return true;
 }
 
-async function registrarAgua(pacienteId: string, aguaMl: number): Promise<string> {
+const ml = (n: number) => `${String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, '.')} ml`;
+
+// Mostra o total do dia: sem ele o paciente não percebe se "hoje foram 3 copos" somou.
+export function mensagemAguaRegistrada(aguaMl: number, totalDiaMl: number, metaMl?: number): string {
+  const total = metaMl && metaMl > 0 ? `*${ml(totalDiaMl)}* de ${ml(metaMl)}` : `*${ml(totalDiaMl)}*`;
+  return `💧 *${aguaMl}ml* de água registrados! Hoje: ${total}. Continue se hidratando. 💚`;
+}
+
+async function registrarAgua(pacienteId: string, aguaMl: number, metaMl?: number): Promise<string> {
   const ok = await registrarAguaContador(pacienteId, aguaMl);
   if (!ok) return `⚠️ Erro ao registrar hidratação. Tente novamente.`;
-  return `💧 *${aguaMl}ml* de água registrados! Continue se hidratando. 💚`;
+  const saldo = await mealService.obterSaldoDia(pacienteId);
+  return mensagemAguaRegistrada(aguaMl, saldo.agua_ml ?? aguaMl, metaMl);
 }
 
 // Converte token de quantidade em numero:
@@ -174,6 +184,106 @@ function parseListaOuVazio(texto: string): string[] {
   return texto.split(/[,;]\s*|\s+e\s+/i).map((s) => s.trim()).filter(Boolean);
 }
 
+// Etapa 13. Resposta que COMEÇA negando ("não uso nenhum, só os remédios do médico")
+// não é lista: só sobrevive o que o catálogo reconhece como suplemento ou controlado.
+// Antes, só "não uso" exato virava vazio — o resto era gravado como suplemento.
+const NEGATIVA_INICIO_RE = /^(n[ãa]o|nenhum[ao]?|nada|nunca)(?=\W|$)/i;
+const PREFIXO_FILLER_RE = /^(?:n[ãa]o|uso|tomo|s[óo]|somente|apenas|mas|mesmo)(?:\s+|$)/i;
+
+function limparItemSuplemento(item: string): string {
+  let t = item.trim();
+  for (let i = 0; i < 4 && PREFIXO_FILLER_RE.test(t); i++) t = t.replace(PREFIXO_FILLER_RE, '').trim();
+  return t;
+}
+
+function ehSuplementoConhecido(item: string): boolean {
+  const norm = item.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  return categorizarSeguro(item) !== null || Object.keys(CONTROLADOS).some((c) => norm.includes(c));
+}
+
+// Frequência dita junto com a atividade ("musculação 3x na semana") — evita perguntar de novo.
+export function extrairFrequenciaTreino(texto: string): string | null {
+  const t = texto.toLowerCase();
+  const vezes = t.match(/(\d)\s*(?:x|vezes)(?:\s*(?:na|por|\/)\s*semana)?/);
+  if (vezes) return `${vezes[1]}x por semana`;
+  if (/todo\s+dia|todos\s+os\s+dias|diariamente/.test(t)) return 'todo dia';
+  return null;
+}
+
+// Etapas 7 (frequência) e 8 (horário do treino) são puladas se já tiverem resposta.
+const CAMPO_DA_ETAPA: Record<number, string> = { 7: 'atividade_frequencia', 8: 'atividade_horario' };
+export function proximaEtapaEntrevista(etapaAtual: number, dados: Record<string, unknown>): number {
+  let proxima = etapaAtual + 1;
+  while (CAMPO_DA_ETAPA[proxima] && dados[CAMPO_DA_ETAPA[proxima]]) proxima += 1;
+  return proxima;
+}
+
+const UNIDADES_PT: Record<string, number> = {
+  um: 1, uma: 1, dois: 2, duas: 2, tres: 3, quatro: 4, cinco: 5, seis: 6, sete: 7, oito: 8, nove: 9,
+  dez: 10, onze: 11, doze: 12, treze: 13, quatorze: 14, catorze: 14, quinze: 15, dezesseis: 16,
+  dezessete: 17, dezoito: 18, dezenove: 19,
+};
+const DEZENAS_PT: Record<string, number> = {
+  vinte: 20, trinta: 30, quarenta: 40, cinquenta: 50, sessenta: 60, setenta: 70, oitenta: 80, noventa: 90, cem: 100,
+};
+
+// Idade em dígitos (primeiro número da frase) ou por extenso ("sessenta e um").
+// Antes: replace(/\D/g, '') juntava todos os dígitos — "61 anos e 92 kg" virava 6192.
+// PRIMEIRO número da frase, em dígitos ("68,5") ou por extenso ("sessenta e um",
+// "cento e dez"). Só o primeiro: somar todos fazia "sessenta e um anos, tenho três
+// netos" virar 64; juntar dígitos fazia "61 anos e 92 kg" virar 6192.
+export function primeiroNumeroPt(texto: string): number | null {
+  const t = texto.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const digitos = t.match(/\d+(?:[.,]\d+)?/);
+  if (digitos) return parseFloat(digitos[0].replace(',', '.'));
+  const tokens = t.split(/[^a-z]+/).filter(Boolean);
+  const inicio = tokens.findIndex((p) => p === 'cento' || DEZENAS_PT[p] !== undefined || UNIDADES_PT[p] !== undefined);
+  if (inicio < 0) return null;
+  let total = 0;
+  let i = inicio;
+  // Cada parte é seguida opcionalmente de "e" + próxima parte menor: "cento e vinte e um".
+  while (i < tokens.length) {
+    const p = tokens[i];
+    const valor = p === 'cento' ? 100 : (DEZENAS_PT[p] ?? UNIDADES_PT[p]);
+    if (valor === undefined) break;
+    total += valor;
+    if (tokens[i + 1] === 'e' && (tokens[i + 2] === 'cento' || DEZENAS_PT[tokens[i + 2]] !== undefined || UNIDADES_PT[tokens[i + 2]] !== undefined)) {
+      i += 2;
+    } else break;
+  }
+  return total;
+}
+
+export function parseIdade(texto: string): number | null {
+  const idade = primeiroNumeroPt(texto);
+  return idade !== null && Number.isInteger(idade) && idade >= 10 && idade <= 120 ? idade : null;
+}
+
+// Depois de recusar dose de controlado, "e quantos mg a galera usa?" não cita a
+// substância e escapava do guard. Nos 15 min seguintes, pergunta de dose mantém a recusa.
+const TTL_RECUSA_CONTROLADO_MS = 15 * 60 * 1000;
+// Só termos de DOSE — "ml"/"quanto" sozinhos pegariam "bebi 500ml de água" e "quanto comi hoje?".
+const PERGUNTA_DOSE_RE = /(?:^|\W)(mg|mcg|dose|dosagem|ciclo|como\s+(?:tomar|usar|aplicar)|quant[oa]s?\s+(?:mg|tomar|usar|aplicar|por\s+dia))(?=\W|$)/i;
+
+export function insisteEmDoseControlada(
+  texto: string,
+  pendente: { substancia: string; timestamp: string } | undefined,
+  agora = Date.now(),
+): string | null {
+  if (!pendente?.substancia || !pendente.timestamp) return null;
+  if (agora - Date.parse(pendente.timestamp) > TTL_RECUSA_CONTROLADO_MS) return null;
+  return PERGUNTA_DOSE_RE.test(texto) ? pendente.substancia : null;
+}
+
+export function parseSuplementos(texto: string): string[] {
+  const t = texto.toLowerCase().trim();
+  if (!NEGATIVA_INICIO_RE.test(t)) return parseListaOuVazio(texto);
+  return texto
+    .split(/[,;.]\s*|\s+e\s+/i)
+    .map(limparItemSuplemento)
+    .filter((item) => item.length > 0 && ehSuplementoConhecido(item));
+}
+
 function parseObjetivo(texto: string): ObjetivoNutricional | null {
   const t = texto.toLowerCase().trim();
   if (t === '1') return 'emagrecer';
@@ -188,10 +298,10 @@ function parseObjetivo(texto: string): ObjetivoNutricional | null {
   return null;
 }
 
-function parsePeso(texto: string): number | null {
-  const limpo = texto.toLowerCase().replace(',', '.').replace(/[^\d.]/g, '');
-  const num = parseFloat(limpo);
-  if (isNaN(num) || num < 30 || num > 300) return null;
+export function parsePeso(texto: string): number | null {
+  // Primeiro número só — antes juntava todos os dígitos ("92 kg e 1,75" quebrava).
+  const num = primeiroNumeroPt(texto);
+  if (num === null || num < 30 || num > 300) return null;
   return num;
 }
 
@@ -228,7 +338,7 @@ function formatarHoraValida(h: number, m: number): string | null {
 }
 
 // Aceita "7h", "7:00", "7h00", "19h30", "12:30".
-function parseHorariosRefeicoes(texto: string): Record<string, string> {
+export function parseHorariosRefeicoes(texto: string): Record<string, string> {
   const resultado: Record<string, string> = {};
   const t = texto.toLowerCase();
   const horaRe = /(\d{1,2})[:hH](?:(\d{2}))?/g;
@@ -259,6 +369,20 @@ function parseHorariosRefeicoes(texto: string): Record<string, string> {
     const horaIdx = (horaMatch.index ?? 0) + idx;
     for (let i = idx; i < idx + kwMatch[0].length; i++) ocupados.add(i);
     for (let i = horaIdx; i < horaIdx + horaMatch[0].length; i++) ocupados.add(i);
+  }
+
+  // "lanche 16h" sem "manhã"/"tarde" não casava nenhuma regra acima e era descartado
+  // (o lembrete do lanche nunca saía). Classifica pelo horário: antes do meio-dia = manhã.
+  for (const lancheMatch of t.matchAll(/lanche/g)) {
+    const idx = lancheMatch.index ?? 0;
+    if (ocupados.has(idx)) continue;
+    const horaMatch = t.slice(idx, Math.min(t.length, idx + 'lanche'.length + 25)).match(/(\d{1,2})[:hH](?:(\d{2}))?/);
+    if (!horaMatch) continue;
+    const h = parseInt(horaMatch[1], 10);
+    const hora = formatarHoraValida(h, horaMatch[2] ? parseInt(horaMatch[2], 10) : 0);
+    const key = h < 12 ? 'lanche_manha' : 'lanche_tarde';
+    if (!hora || resultado[key]) continue;
+    resultado[key] = hora;
   }
 
   if (Object.keys(resultado).length > 0) return resultado;
@@ -462,8 +586,8 @@ async function processarRespostaEntrevista(
 
   switch (etapa) {
     case 1: {
-      const idade = parseInt(textoLower.replace(/\D/g, ''), 10);
-      if (isNaN(idade) || idade < 10 || idade > 120) return {};
+      const idade = parseIdade(texto);
+      if (idade === null) return {};
       novoDado.idade = idade;
       break;
     }
@@ -512,6 +636,14 @@ async function processarRespostaEntrevista(
         '1': 'musculação', '2': 'corrida', '3': 'caminhada', '4': 'sedentário',
       };
       novoDado.atividade_tipo = mapaAtiv[textoLower] ?? texto.trim();
+      if (/sedent|n[ãa]o\s+(pratico|treino|fa[çc]o)/.test(String(novoDado.atividade_tipo).toLowerCase())) {
+        // Sedentário: não faz sentido perguntar frequência nem horário de treino.
+        novoDado.atividade_frequencia = 'não treino';
+        novoDado.atividade_horario = 'não treino';
+      } else {
+        const freq = extrairFrequenciaTreino(texto);
+        if (freq) novoDado.atividade_frequencia = freq;
+      }
       break;
     }
     case 7: {
@@ -550,7 +682,7 @@ async function processarRespostaEntrevista(
       break;
     }
     case 13: {
-      novoDado.suplementos = parseListaOuVazio(texto);
+      novoDado.suplementos = parseSuplementos(texto);
       break;
     }
     case 14: {
@@ -578,12 +710,28 @@ const OBJETIVO_LABEL: Record<ObjetivoNutricional, string> = {
   saude_geral: 'saúde geral / bem-estar',
 };
 
+// Sem trecho do PDF: o texto depende de o paciente TER dieta. Antes dizia sempre que
+// "a dieta JÁ ESTÁ processada" — paciente sem PDF recebia respostas sobre um plano
+// inexistente ("o que seu nutricionista indicou pro jantar...").
+export function textoContextoDieta(contextoRag: string, temDieta: boolean): string {
+  if (contextoRag.trim()) return contextoRag;
+  if (!temDieta) {
+    return 'Este paciente AINDA NÃO TEM DIETA (PDF) cadastrada pelo nutricionista. Responda com princípios gerais ' +
+      'de nutrição adequados ao perfil dele e, quando fizer sentido, diga que o plano personalizado vai ser definido ' +
+      'pelo nutricionista. NUNCA diga ou insinue "sua dieta diz/prevê/indica" nem ofereça consultar o plano dele.';
+  }
+  return 'Nenhum trecho específico da dieta bateu com esta pergunta no momento, mas a dieta dele já está cadastrada. ' +
+    'Responda com princípios gerais adequados ao perfil dele e sugira que ele reformule a pergunta sendo mais ' +
+    'específico (ex.: "qual café da manhã?" em vez de "qual minha dieta?") se quiser detalhes do PDF.';
+}
+
 async function responderComClaude(
   perguntaUsuario: string,
   contextoRag: string,
   nomePaciente: string,
   perfil: PerfilNutricional,
   historico: ConversaMensagem[] = [],
+  temDieta = true,
 ): Promise<string> {
   const objetivoLinha = perfil.objetivo
     ? OBJETIVO_LABEL[perfil.objetivo]
@@ -609,7 +757,7 @@ REGRAS DE SEGURANCA (inegociaveis):
 - Toda recomendacao deve respeitar o objetivo principal do paciente
 
 Contexto da sua dieta (trechos relevantes do PDF prescrito):
-${contextoRag || 'Nenhum trecho especifico da dieta bateu com esta pergunta no momento — mas a dieta dele JÁ ESTA processada no sistema. Responda com principios gerais de nutrição adequados ao perfil dele, e sugira que ele reformule a pergunta sendo mais especifico (ex: "qual café da manhã?" em vez de "qual minha dieta?") se quiser detalhes especificos do PDF. Não diga que a dieta não foi carregada.'}
+${textoContextoDieta(contextoRag, temDieta)}
 
 Regras de comunicacao:
 - Responda sempre em portugues, de forma amigavel e direta
@@ -715,7 +863,7 @@ export async function processarMensagem(phone: string, texto: string): Promise<v
       return;
     }
 
-    const proximaEtapa = etapa + 1;
+    const proximaEtapa = proximaEtapaEntrevista(etapa, { ...estado.dados, ...novoDado } as Record<string, unknown>);
 
     if (proximaEtapa > TOTAL_ETAPAS) {
       const dadosCompletos = { ...estado.dados, ...novoDado } as DadosEntrevista & {
@@ -991,8 +1139,20 @@ export async function processarMensagem(phone: string, texto: string): Promise<v
 
   // Guarda de segurança: pergunta sobre dose/ciclo de controlada dispara redirect médico
   // ANTES de qualquer intent handler. Nunca passa dose.
-  const substanciaControlada = detectarPerguntaDoseControlada(texto);
+  const substanciaControlada =
+    detectarPerguntaDoseControlada(texto) ??
+    insisteEmDoseControlada(
+      texto,
+      dadosEstado['recusa_controlado'] as { substancia: string; timestamp: string } | undefined,
+    );
   if (substanciaControlada) {
+    try {
+      await atualizarEstado(paciente.id, {
+        dados: { recusa_controlado: { substancia: substanciaControlada, timestamp: new Date().toISOString() } } as Parameters<typeof atualizarEstado>[1]['dados'],
+      });
+    } catch (err) {
+      console.error('[agent] Falha ao marcar recusa_controlado:', err);
+    }
     console.warn(
       `[agent] Paciente ${paciente.nome} perguntou sobre dose de controlada: ${substanciaControlada}`,
     );
@@ -1017,7 +1177,7 @@ export async function processarMensagem(phone: string, texto: string): Promise<v
   if (intent === 'agua') {
     const aguaMl = extrairAguaMl(texto);
     if (aguaMl > 0 && aguaMl <= 5000) {
-      const resposta = await registrarAgua(paciente.id, aguaMl);
+      const resposta = await registrarAgua(paciente.id, aguaMl, Number(dadosEstado['hidratacao_ml']) || undefined);
       await sendText(phone, resposta);
       return;
     }
@@ -1079,7 +1239,8 @@ export async function processarMensagem(phone: string, texto: string): Promise<v
     console.error('[agent] Erro ao obter historico (seguindo sem memoria):', e);
   }
 
-  const resposta = await responderComClaude(texto, contextoRag, paciente.nome, perfil, historico);
+  const temDieta = contextoRag.trim().length > 0 || (await pacienteTemDietaAtiva(paciente.id));
+  const resposta = await responderComClaude(texto, contextoRag, paciente.nome, perfil, historico, temDieta);
   await sendText(phone, resposta);
 
   // Registra DEPOIS do envio: erro aqui não deve afetar o paciente.
@@ -1089,6 +1250,19 @@ export async function processarMensagem(phone: string, texto: string): Promise<v
   } catch (e) {
     console.error('[agent] Erro ao registrar conversa no historico:', e);
   }
+}
+
+async function pacienteTemDietaAtiva(pacienteId: string): Promise<boolean> {
+  const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
+  const { data, error } = await supabase
+    .from('dietas')
+    .select('id')
+    .eq('paciente_id', pacienteId)
+    .eq('status', 'ativa')
+    .limit(1);
+  // Na dúvida (erro), assume que tem — é o comportamento anterior.
+  if (error) return true;
+  return (data ?? []).length > 0;
 }
 
 export async function enviarBoasVindas(pacienteId: string): Promise<void> {

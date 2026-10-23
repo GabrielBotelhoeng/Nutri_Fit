@@ -193,14 +193,15 @@ export async function classificarIntencao(texto: string): Promise<IntentResult> 
 
 // Volume + agua junto de outra intencao ("comi pao com 500ml de agua").
 // Usa (?:^|\W)/(?=\W|$) pra ser Unicode-safe (\b falha antes de "água").
-const AGUA_COMBINADA_RE = /(\d+)\s*(ml|litros?|copos?)[^,;.]{0,30}(?:^|\W)(agua|água|d['']?[áa]gua)(?=\W|$)/i;
+// "garrafas" incluído: "2 garrafas de água" junto com comida virava item da refeição.
+const AGUA_COMBINADA_RE = /(\d+)\s*(ml|litros?|copos?|garrafas?)[^,;.]{0,30}(?:^|\W)(agua|água|d['']?[áa]gua)(?=\W|$)/i;
 export function mencionaAguaCombinada(texto: string): boolean {
   return AGUA_COMBINADA_RE.test(texto);
 }
 
 // Chamada antes do processarTextoRefeicao pra Vision nao listar agua como item.
 const AGUA_COMBINADA_STRIP_RE =
-  /(?:\s*(?:com|mais|e|,|\+)\s*)+\d+\s*(?:ml|litros?|copos?)\s*(?:de\s+)?(?:agua|água|d['']?[áa]gua)(?=\W|$)[,\s]*/gi;
+  /(?:\s*(?:com|mais|e|,|\+)\s*)+\d+\s*(?:ml|litros?|copos?|garrafas?)\s*(?:de\s+)?(?:agua|água|d['']?[áa]gua)(?=\W|$)[,\s]*/gi;
 export function removerMencaoAgua(texto: string): string {
   return texto.replace(AGUA_COMBINADA_STRIP_RE, ' ').replace(/\s+/g, ' ').trim();
 }

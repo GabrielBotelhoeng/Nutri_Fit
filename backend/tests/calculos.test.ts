@@ -231,3 +231,23 @@ describe('sanitizarMencaoConcorrentes — P1-5', () => {
   });
 });
 
+
+// Agentes de teste 2026-10-23 (onboarding Seu Antônio): "não faço exercício" e a
+// frequência "não treino" (com til) não casavam as regras escritas sem acento ("nao") —
+// sedentário virava "moderadamente ativo" e o TDEE saía ~600 kcal acima.
+import { detectarFatorAtividade as fatorAtividade } from '../src/services/calculos';
+
+describe('detectarFatorAtividade — negativas com acento', () => {
+  it.each([
+    ['4, não faço exercício não, fico mais em casa mesmo aposentado', 'não treino'],
+    ['não pratico nada', undefined],
+    ['sedentário', undefined],
+    ['caminhada', 'não treino'],
+  ])('"%s" / freq "%s" → sedentário', (tipo, freq) => {
+    expect(fatorAtividade(tipo, freq).fator).toBe(fatorAtividade('sedentario').fator);
+  });
+
+  it('musculação 3x continua moderado', () => {
+    expect(fatorAtividade('musculação', '3x por semana').fator).toBeGreaterThan(fatorAtividade('sedentario').fator);
+  });
+});

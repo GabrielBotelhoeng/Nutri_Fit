@@ -9,7 +9,9 @@
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "agentes": "vitest run --config vitest.agentes.config.ts",
+    "agentes:env": "node agentes-teste/scripts/gerar-env.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.36.3",
