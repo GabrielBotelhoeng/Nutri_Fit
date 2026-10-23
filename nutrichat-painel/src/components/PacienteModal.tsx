@@ -182,7 +182,7 @@ export function PacienteModal({ paciente, onClose, onSaved }: PacienteModalProps
           return;
         }
         if (!whatsappBRValido(whatsappDigitos)) {
-          setErro('WhatsApp invalido. Use o formato (DDD) 9XXXX-XXXX — 11 digitos com 9 apos o DDD.');
+          setErro('WhatsApp inválido. Use o formato (DDD) 9XXXX-XXXX — 11 dígitos com 9 após o DDD.');
           setLoading(false);
           return;
         }
@@ -227,7 +227,7 @@ export function PacienteModal({ paciente, onClose, onSaved }: PacienteModalProps
         const err = await res.json().catch(() => ({}));
         throw new Error((err as { error?: string }).error ?? 'Erro ao excluir paciente');
       }
-      setSucesso('Paciente excluido com sucesso.');
+      setSucesso('Paciente excluído com sucesso.');
       setTimeout(() => {
         onSaved();
         onClose();
@@ -242,8 +242,8 @@ export function PacienteModal({ paciente, onClose, onSaved }: PacienteModalProps
 
   return (
     <div
-      className="fixed inset-0 flex items-center justify-center z-50 p-4"
-      style={{ background: 'rgba(15, 22, 10, 0.5)' }}
+      className="fixed inset-0 flex items-end sm:items-center justify-center z-50 sm:p-4"
+      style={{ background: 'rgba(35, 64, 16, 0.45)', backdropFilter: 'blur(3px)' }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -253,16 +253,16 @@ export function PacienteModal({ paciente, onClose, onSaved }: PacienteModalProps
     >
       <div
         ref={dialogRef}
-        className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-t-3xl sm:rounded-3xl w-full sm:max-w-lg max-h-[92dvh] sm:max-h-[90vh] overflow-y-auto overscroll-contain"
         style={{ boxShadow: 'var(--shadow-modal)' }}
       >
         {/* Cabecalho */}
         <div
-          className="sticky top-0 flex items-center justify-between px-6 py-4 bg-white z-10"
+          className="sticky top-0 flex items-center justify-between px-5 sm:px-6 py-4 bg-white z-10"
           style={{ borderBottom: '1px solid var(--color-border-subtle)' }}
         >
           <div>
-            <h2 id="modal-title" className="text-lg font-bold" style={{ color: 'var(--color-text-primary)' }}>
+            <h2 id="modal-title" className="font-display text-2xl leading-tight" style={{ color: 'var(--color-floresta)' }}>
               {isEdicao ? 'Editar paciente' : 'Novo paciente'}
             </h2>
             {isEdicao && (
@@ -274,7 +274,7 @@ export function PacienteModal({ paciente, onClose, onSaved }: PacienteModalProps
           <button
             onClick={onClose}
             aria-label="Fechar (ESC)"
-            className="w-8 h-8 flex items-center justify-center rounded-full text-xl cursor-pointer hover:bg-gray-100 transition"
+            className="w-10 h-10 -mr-2 flex items-center justify-center rounded-full text-2xl cursor-pointer hover:bg-[color:var(--color-bg-muted)] transition"
             style={{ color: 'var(--color-text-muted)' }}
           >
             ×
@@ -283,10 +283,10 @@ export function PacienteModal({ paciente, onClose, onSaved }: PacienteModalProps
 
         {/* Feedback global (topo do form, sem scroll) */}
         {(erro || sucesso) && (
-          <div className="px-6 pt-4">
+          <div className="px-5 sm:px-6 pt-4">
             {erro && (
               <div
-                className="px-3 py-2 rounded-md text-sm"
+                className="px-3 py-2 rounded-lg text-sm"
                 style={{ background: 'var(--color-danger-soft)', color: 'var(--color-danger)' }}
                 role="alert"
               >
@@ -295,7 +295,7 @@ export function PacienteModal({ paciente, onClose, onSaved }: PacienteModalProps
             )}
             {sucesso && (
               <div
-                className="px-3 py-2 rounded-md text-sm"
+                className="px-3 py-2 rounded-lg text-sm"
                 style={{ background: 'var(--color-success-soft)', color: 'var(--color-success)' }}
                 role="status"
               >
@@ -305,7 +305,7 @@ export function PacienteModal({ paciente, onClose, onSaved }: PacienteModalProps
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-5 sm:p-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] space-y-4">
           {!isEdicao && (
             <>
               {/* Nome */}
@@ -319,8 +319,7 @@ export function PacienteModal({ paciente, onClose, onSaved }: PacienteModalProps
                   value={nome}
                   onChange={(e) => setNome(e.target.value)}
                   required
-                  className="w-full border rounded-md px-3 py-2 text-sm"
-                  style={{ borderColor: 'var(--color-border-subtle)' }}
+                  className="campo"
                   placeholder="Ex.: Maria da Silva"
                 />
               </div>
@@ -329,7 +328,7 @@ export function PacienteModal({ paciente, onClose, onSaved }: PacienteModalProps
               <div>
                 <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text-primary)' }}>
                   WhatsApp
-                  <HelpTip text="Apenas Brasil (DDD + 9 + numero). O codigo 55 e adicionado automaticamente." />
+                  <HelpTip text="Apenas Brasil (DDD + 9 + número). O código 55 é adicionado automaticamente." />
                 </label>
                 <input
                   type="tel"
@@ -337,8 +336,7 @@ export function PacienteModal({ paciente, onClose, onSaved }: PacienteModalProps
                   value={formatarWhatsappBR(whatsappDigitos)}
                   onChange={(e) => setWhatsappDigitos(soDigitos(e.target.value).slice(0, 11))}
                   required
-                  className="w-full border rounded-md px-3 py-2 text-sm"
-                  style={{ borderColor: 'var(--color-border-subtle)' }}
+                  className="campo"
                   placeholder="(62) 99999-9999"
                 />
               </div>
@@ -347,7 +345,7 @@ export function PacienteModal({ paciente, onClose, onSaved }: PacienteModalProps
               <div>
                 <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text-primary)' }}>
                   Plano contratado
-                  <HelpTip text="Define quanto tempo o paciente tera acesso. A data de expiracao e calculada automaticamente." />
+                  <HelpTip text="Define quanto tempo o paciente terá acesso. A data de expiração é calculada automaticamente." />
                 </label>
                 <div className="grid grid-cols-2 gap-2">
                   {PLANOS_ORDENADOS.map((p) => (
@@ -356,11 +354,11 @@ export function PacienteModal({ paciente, onClose, onSaved }: PacienteModalProps
                       key={p}
                       onClick={() => setPlano(p)}
                       aria-pressed={plano === p}
-                      className="rounded-md py-2 px-3 text-sm font-medium border transition cursor-pointer"
+                      className="rounded-lg min-h-[44px] px-3 text-sm font-medium border transition cursor-pointer"
                       style={{
-                        borderColor: plano === p ? 'var(--color-floresta)' : 'var(--color-border-subtle)',
+                        borderColor: plano === p ? 'var(--color-medio)' : 'var(--color-border-subtle)',
                         background: plano === p ? 'var(--color-floresta-soft)' : 'white',
-                        color: plano === p ? 'var(--color-floresta-dark)' : 'var(--color-text-primary)',
+                        color: plano === p ? 'var(--color-floresta)' : 'var(--color-text-primary)',
                       }}
                     >
                       {PLANO_LABELS[p]}
@@ -371,15 +369,15 @@ export function PacienteModal({ paciente, onClose, onSaved }: PacienteModalProps
 
               {/* Preview da data calculada — mostra a relacao plano → data */}
               <div
-                className="flex items-start gap-2 px-3 py-2 rounded-md text-sm"
+                className="flex items-start gap-2 px-3 py-2 rounded-lg text-sm"
                 style={{ background: 'var(--color-floresta-soft)', color: 'var(--color-floresta-dark)' }}
               >
                 <span aria-hidden>📅</span>
                 <div>
                   <div className="font-semibold">Expira em {formatarDataBR(dataCalculadaPreview)}</div>
                   <div className="text-xs opacity-80">
-                    Calculado a partir de hoje + {MESES_POR_PLANO[plano]} {MESES_POR_PLANO[plano] === 1 ? 'mes' : 'meses'}.
-                    Voce pode ajustar a data depois pela edicao.
+                    Calculado a partir de hoje + {MESES_POR_PLANO[plano]} {MESES_POR_PLANO[plano] === 1 ? 'mês' : 'meses'}.
+                    Você pode ajustar a data depois pela edição.
                   </div>
                 </div>
               </div>
@@ -388,14 +386,14 @@ export function PacienteModal({ paciente, onClose, onSaved }: PacienteModalProps
               <div>
                 <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text-primary)' }}>
                   Dieta (PDF)
-                  <HelpTip text="O PDF sera processado para que o bot responda duvidas sobre a dieta." />
+                  <HelpTip text="O PDF será processado para que o bot responda duvidas sobre a dieta." />
                 </label>
                 <input
                   type="file"
                   accept=".pdf"
                   onChange={(e) => setPdf(e.target.files?.[0] ?? null)}
                   required
-                  className="w-full text-sm"
+                  className="w-full text-sm file:mr-3 file:min-h-[40px] file:rounded-lg file:border file:border-solid file:border-[color:var(--color-border-subtle)] file:bg-[color:var(--color-bg-muted)] file:px-3 file:text-sm file:font-medium file:text-[color:var(--color-floresta)] file:cursor-pointer hover:file:bg-[color:var(--color-floresta-soft)]"
                   style={{ color: 'var(--color-text-secondary)' }}
                 />
                 {pdf && (
@@ -410,7 +408,7 @@ export function PacienteModal({ paciente, onClose, onSaved }: PacienteModalProps
           {isEdicao && (
             <>
               {/* Resumo (read-only) — H2 reconhecimento sobre memoria */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <ReadOnlyField label="WhatsApp" value={formatarWhatsappBR(whatsappDigitos)} />
                 <ReadOnlyField label="Plano contratado" value={PLANO_LABELS[plano] ?? plano} />
               </div>
@@ -418,16 +416,15 @@ export function PacienteModal({ paciente, onClose, onSaved }: PacienteModalProps
               {/* Data de expiracao editavel — proposito claro */}
               <div>
                 <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text-primary)' }}>
-                  Data de expiracao
-                  <HelpTip text="Prolongue ou reduza a validade sem trocar o plano cadastrado. Util para renovacoes e bonus." />
+                  Data de expiração
+                  <HelpTip text="Prolongue ou reduza a validade sem trocar o plano cadastrado. Útil para renovações e bônus." />
                 </label>
                 <input
                   type="date"
                   value={dataExpiracao}
                   onChange={(e) => setDataExpiracao(e.target.value)}
                   required
-                  className="w-full border rounded-md px-3 py-2 text-sm"
-                  style={{ borderColor: 'var(--color-border-subtle)' }}
+                  className="campo"
                 />
                 {dataAlteradaNaEdicao && !dataNoPassado && (
                   <p className="text-xs mt-1" style={{ color: 'var(--color-text-secondary)' }}>
@@ -436,7 +433,7 @@ export function PacienteModal({ paciente, onClose, onSaved }: PacienteModalProps
                 )}
                 {dataNoPassado && (
                   <p className="text-xs mt-1" style={{ color: 'var(--color-danger)' }}>
-                    Atencao: essa data ja passou — o bot bloqueara o paciente ao salvar.
+                    Atenção: essa data já passou — o bot bloqueará o paciente ao salvar.
                   </p>
                 )}
               </div>
@@ -444,7 +441,7 @@ export function PacienteModal({ paciente, onClose, onSaved }: PacienteModalProps
               {/* Acesso ativo */}
               <div>
                 <div
-                  className="flex items-center justify-between p-3 rounded-md"
+                  className="flex items-center justify-between p-3 rounded-lg"
                   style={{ background: 'var(--color-bg-muted)' }}
                 >
                   <div>
@@ -465,12 +462,12 @@ export function PacienteModal({ paciente, onClose, onSaved }: PacienteModalProps
                 </div>
                 {confirmandoDesativar && (
                   <div
-                    className="mt-2 px-3 py-2 rounded-md text-sm"
+                    className="mt-2 px-3 py-2 rounded-lg text-sm"
                     style={{ background: 'var(--color-warning-soft)', color: 'var(--color-warning)' }}
                   >
                     <p className="mb-2">
-                      Vai desativar <strong>{paciente!.nome}</strong>. O bot nao respondera mais mensagens deste WhatsApp
-                      ate voce reativar. Continuar?
+                      Vai desativar <strong>{paciente!.nome}</strong>. O bot não responderá mais mensagens deste WhatsApp
+                      até você reativar. Continuar?
                     </p>
                     <div className="flex gap-2">
                       <Button
@@ -526,12 +523,12 @@ export function PacienteModal({ paciente, onClose, onSaved }: PacienteModalProps
                   type="file"
                   accept=".pdf"
                   onChange={(e) => setPdf(e.target.files?.[0] ?? null)}
-                  className="w-full text-sm"
+                  className="w-full text-sm file:mr-3 file:min-h-[40px] file:rounded-lg file:border file:border-solid file:border-[color:var(--color-border-subtle)] file:bg-[color:var(--color-bg-muted)] file:px-3 file:text-sm file:font-medium file:text-[color:var(--color-floresta)] file:cursor-pointer hover:file:bg-[color:var(--color-floresta-soft)]"
                   style={{ color: 'var(--color-text-secondary)' }}
                 />
                 {pdf && (
                   <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>
-                    📄 {pdf.name} — substituira a dieta atual e re-processara o bot.
+                    📄 {pdf.name} — substituirá a dieta atual e reprocessará o bot.
                   </p>
                 )}
               </div>
@@ -539,12 +536,12 @@ export function PacienteModal({ paciente, onClose, onSaved }: PacienteModalProps
           )}
 
           {/* Botoes principais */}
-          <div className="flex gap-2 pt-2">
+          <div className="flex flex-col-reverse sm:flex-row gap-2 pt-2">
             <Button type="button" variant="secondary" onClick={onClose} fullWidth>
               Cancelar
             </Button>
             <Button type="submit" variant="primary" fullWidth loading={loading} disabled={loading || excluindo}>
-              {isEdicao ? 'Salvar alteracoes' : 'Cadastrar paciente'}
+              {isEdicao ? 'Salvar alterações' : 'Cadastrar paciente'}
             </Button>
           </div>
 
@@ -565,8 +562,8 @@ export function PacienteModal({ paciente, onClose, onSaved }: PacienteModalProps
               ) : (
                 <div className="space-y-2">
                   <p className="text-sm" style={{ color: 'var(--color-danger)' }}>
-                    Excluir <strong>{paciente!.nome}</strong> apaga historico, dieta e conversas.
-                    Esta acao nao pode ser desfeita.
+                    Excluir <strong>{paciente!.nome}</strong> apaga histórico, dieta e conversas.
+                    Esta ação não pode ser desfeita.
                   </p>
                   <div className="flex gap-2">
                     <Button
@@ -576,7 +573,7 @@ export function PacienteModal({ paciente, onClose, onSaved }: PacienteModalProps
                       onClick={() => setConfirmandoExcluir(false)}
                       disabled={excluindo}
                     >
-                      Nao, voltar
+                      Não, voltar
                     </Button>
                     <Button
                       type="button"
@@ -606,7 +603,7 @@ function ReadOnlyField({ label, value }: { label: string; value: string }) {
         {label}
       </div>
       <div
-        className="px-3 py-2 rounded-md text-sm"
+        className="px-3 py-2 rounded-lg text-sm"
         style={{ background: 'var(--color-bg-muted)', color: 'var(--color-text-primary)' }}
       >
         {value || '—'}

@@ -1,60 +1,144 @@
 @import "tailwindcss";
 
 @theme {
-  /* Paleta base — herdada, mantida por consistencia visual. */
+  /* Paleta da landing (nutrichat-landing/app/globals.css) — manter em sincronia. */
   --color-floresta: #2D5016;
   --color-floresta-dark: #234010;
-  --color-floresta-soft: #E9F0E2;
+  --color-floresta-soft: #E4F0DC;
+  --color-medio: #4A7C2F;
+  --color-claro: #7DB85A;
+  --color-menta: #C8E6C0;
   --color-terra: #6B3D1E;
   --color-terra-soft: #F2E7DC;
   --color-offwhite: #F0F7EC;
+  --color-creme: #FAF4ED;
 
-  /* Tokens semanticos — usar preferencialmente estes, nao a paleta bruta. */
-  --color-bg-app: #F5F8F2;
+  /* Tokens semânticos — usar preferencialmente estes, não a paleta bruta. */
+  --color-bg-app: #F7F2E8;
   --color-bg-surface: #FFFFFF;
-  --color-bg-muted: #F7F7F5;
-  --color-border-subtle: #E5E7E1;
-  --color-text-primary: #1F2A17;
-  --color-text-secondary: #52604A;
-  --color-text-muted: #8A9282;
+  --color-bg-muted: #FAF4ED;
+  --color-border-subtle: #E8DFD0;
+  --color-text-primary: #3A2618;
+  --color-text-secondary: #6B5340;
+  --color-text-muted: #94816F;
 
-  --color-success: #15803D;
-  --color-success-soft: #DCFCE7;
-  --color-warning: #B45309;
-  --color-warning-soft: #FEF3C7;
-  --color-danger: #B91C1C;
-  --color-danger-soft: #FEE2E2;
+  --color-success: #3F6E24;
+  --color-success-soft: #E4F0DC;
+  --color-warning: #A8590C;
+  --color-warning-soft: #FCEFD9;
+  --color-danger: #B3261E;
+  --color-danger-soft: #FBE4E1;
   --color-info: #1D4ED8;
   --color-info-soft: #DBEAFE;
 
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Instrument Serif", Georgia, serif;
 
-  --shadow-card: 0 1px 2px rgba(31, 42, 23, 0.04), 0 1px 3px rgba(31, 42, 23, 0.06);
-  --shadow-modal: 0 10px 30px rgba(31, 42, 23, 0.15);
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+
+  --shadow-card:
+    0 1px 2px rgba(45, 80, 22, 0.04),
+    0 4px 8px rgba(45, 80, 22, 0.05);
+  --shadow-elevated:
+    0 1px 2px rgba(45, 80, 22, 0.06),
+    0 8px 16px rgba(45, 80, 22, 0.08),
+    0 24px 48px rgba(45, 80, 22, 0.06);
+  --shadow-glow:
+    0 0 0 1px rgba(74, 124, 47, 0.10),
+    0 8px 24px rgba(74, 124, 47, 0.22);
+  --shadow-modal: 0 24px 60px rgba(45, 80, 22, 0.22);
 }
 
 * { box-sizing: border-box; }
 
-html, body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  color: var(--color-text-primary);
-  background: var(--color-bg-app);
-  -webkit-font-smoothing: antialiased;
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
-/* Reset visual leve pra formularios — foco visivel e consistente. */
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible,
-button:focus-visible {
-  outline: 2px solid var(--color-floresta);
-  outline-offset: 1px;
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  line-height: 1.5;
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-app);
+  /* Mesmo fundo "aurora" da landing, sem o grain. */
+  background-image:
+    radial-gradient(at 12% 8%,  rgba(200, 230, 192, 0.55) 0px, transparent 50%),
+    radial-gradient(at 88% 4%,  rgba(125, 184, 90, 0.16)  0px, transparent 45%),
+    radial-gradient(at 92% 92%, rgba(200, 230, 192, 0.40) 0px, transparent 55%),
+    radial-gradient(at 6%  82%, rgba(247, 235, 218, 0.85) 0px, transparent 50%);
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+::selection {
+  background: #C8E6C0;
+  color: #2D5016;
+}
+
+.font-display {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+
+.eyebrow {
+  font-size: 11px;
+  line-height: 1;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--color-medio);
+}
+
+/* Botão primário com o gradiente do CTA da landing. */
+.btn-cta {
+  background: linear-gradient(135deg, #2D5016 0%, #4A7C2F 100%);
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.25s ease, filter 0.2s ease;
+}
+.btn-cta:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-glow);
+}
+.btn-cta:active:not(:disabled) { transform: translateY(0); filter: brightness(0.95); }
+
+/* Campos de formulário — mesmo visual em todo o painel. */
+.campo {
+  width: 100%;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.875rem;
+  color: var(--color-text-primary);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.campo::placeholder { color: var(--color-text-muted); }
+.campo:hover { border-color: #D6CAB6; }
+.campo:focus {
+  outline: none;
+  border-color: var(--color-medio);
+  box-shadow: 0 0 0 3px rgba(125, 184, 90, 0.25);
+}
+/* iOS dá zoom em input com fonte < 16px. */
+@media (max-width: 767px) {
+  .campo { font-size: 16px; }
+}
+
+/* Foco visível e consistente. */
+button:focus-visible,
+a:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--color-medio);
+  outline-offset: 2px;
 }
 
 /* Scrollbar suave (Chrome/Edge). */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-thumb { background: #d5dccd; border-radius: 6px; }
-::-webkit-scrollbar-thumb:hover { background: #b9c4ae; }
+::-webkit-scrollbar-thumb { background: #DCD1BF; border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: #C7B9A2; }

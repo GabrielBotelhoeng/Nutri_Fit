@@ -12,7 +12,7 @@ export const MESES_POR_PLANO = {
 export type PlanoId = keyof typeof MESES_POR_PLANO;
 
 export const PLANO_LABELS: Record<PlanoId, string> = {
-  '1mes': '1 mes',
+  '1mes': '1 mês',
   '3meses': '3 meses',
   '6meses': '6 meses',
   '12meses': '12 meses',
