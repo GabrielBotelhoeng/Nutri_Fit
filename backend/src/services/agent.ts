@@ -201,6 +201,23 @@ function ehSuplementoConhecido(item: string): boolean {
   return categorizarSeguro(item) !== null || Object.keys(CONTROLADOS).some((c) => norm.includes(c));
 }
 
+// Frequência dita junto com a atividade ("musculação 3x na semana") — evita perguntar de novo.
+export function extrairFrequenciaTreino(texto: string): string | null {
+  const t = texto.toLowerCase();
+  const vezes = t.match(/(\d)\s*(?:x|vezes)(?:\s*(?:na|por|\/)\s*semana)?/);
+  if (vezes) return `${vezes[1]}x por semana`;
+  if (/todo\s+dia|todos\s+os\s+dias|diariamente/.test(t)) return 'todo dia';
+  return null;
+}
+
+// Etapas 7 (frequência) e 8 (horário do treino) são puladas se já tiverem resposta.
+const CAMPO_DA_ETAPA: Record<number, string> = { 7: 'atividade_frequencia', 8: 'atividade_horario' };
+export function proximaEtapaEntrevista(etapaAtual: number, dados: Record<string, unknown>): number {
+  let proxima = etapaAtual + 1;
+  while (CAMPO_DA_ETAPA[proxima] && dados[CAMPO_DA_ETAPA[proxima]]) proxima += 1;
+  return proxima;
+}
+
 export function parseSuplementos(texto: string): string[] {
   const t = texto.toLowerCase().trim();
   if (!NEGATIVA_INICIO_RE.test(t)) return parseListaOuVazio(texto);
@@ -264,7 +281,7 @@ function formatarHoraValida(h: number, m: number): string | null {
 }
 
 // Aceita "7h", "7:00", "7h00", "19h30", "12:30".
-function parseHorariosRefeicoes(texto: string): Record<string, string> {
+export function parseHorariosRefeicoes(texto: string): Record<string, string> {
   const resultado: Record<string, string> = {};
   const t = texto.toLowerCase();
   const horaRe = /(\d{1,2})[:hH](?:(\d{2}))?/g;
@@ -295,6 +312,20 @@ function parseHorariosRefeicoes(texto: string): Record<string, string> {
     const horaIdx = (horaMatch.index ?? 0) + idx;
     for (let i = idx; i < idx + kwMatch[0].length; i++) ocupados.add(i);
     for (let i = horaIdx; i < horaIdx + horaMatch[0].length; i++) ocupados.add(i);
+  }
+
+  // "lanche 16h" sem "manhã"/"tarde" não casava nenhuma regra acima e era descartado
+  // (o lembrete do lanche nunca saía). Classifica pelo horário: antes do meio-dia = manhã.
+  for (const lancheMatch of t.matchAll(/lanche/g)) {
+    const idx = lancheMatch.index ?? 0;
+    if (ocupados.has(idx)) continue;
+    const horaMatch = t.slice(idx, Math.min(t.length, idx + 'lanche'.length + 25)).match(/(\d{1,2})[:hH](?:(\d{2}))?/);
+    if (!horaMatch) continue;
+    const h = parseInt(horaMatch[1], 10);
+    const hora = formatarHoraValida(h, horaMatch[2] ? parseInt(horaMatch[2], 10) : 0);
+    const key = h < 12 ? 'lanche_manha' : 'lanche_tarde';
+    if (!hora || resultado[key]) continue;
+    resultado[key] = hora;
   }
 
   if (Object.keys(resultado).length > 0) return resultado;
@@ -548,6 +579,14 @@ async function processarRespostaEntrevista(
         '1': 'musculação', '2': 'corrida', '3': 'caminhada', '4': 'sedentário',
       };
       novoDado.atividade_tipo = mapaAtiv[textoLower] ?? texto.trim();
+      if (/sedent|n[ãa]o\s+(pratico|treino|fa[çc]o)/.test(String(novoDado.atividade_tipo).toLowerCase())) {
+        // Sedentário: não faz sentido perguntar frequência nem horário de treino.
+        novoDado.atividade_frequencia = 'não treino';
+        novoDado.atividade_horario = 'não treino';
+      } else {
+        const freq = extrairFrequenciaTreino(texto);
+        if (freq) novoDado.atividade_frequencia = freq;
+      }
       break;
     }
     case 7: {
@@ -767,7 +806,7 @@ export async function processarMensagem(phone: string, texto: string): Promise<v
       return;
     }
 
-    const proximaEtapa = etapa + 1;
+    const proximaEtapa = proximaEtapaEntrevista(etapa, { ...estado.dados, ...novoDado } as Record<string, unknown>);
 
     if (proximaEtapa > TOTAL_ETAPAS) {
       const dadosCompletos = { ...estado.dados, ...novoDado } as DadosEntrevista & {

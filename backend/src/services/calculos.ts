@@ -176,6 +176,13 @@ export function calcularHidratacao(peso_kg: number): ResultadoHidratacao {
   return { meta_ml, distribuicao };
 }
 
+// Faixa padrão de manutenção (3–5 g/dia), a mesma citada na mensagem de suplementos.
+// 0,03 g/kg sozinho dava 2 g pra 68 kg e contradizia o "3-5g/dia" mandado logo depois.
+function doseCreatinaManutencao(peso_kg: number): number {
+  const bruta = Math.min(5, Math.max(3, peso_kg * 0.05));
+  return Math.round(bruta * 2) / 2;
+}
+
 export function calcularCreatina(
   peso_kg: number,
   suplementos?: string[],
@@ -194,20 +201,20 @@ export function calcularCreatina(
     }
 
     if (textoSuplementos.includes('creatina')) {
-      const dose = Math.round(peso_kg * 0.03 * 10) / 10;
+      const dose = doseCreatinaManutencao(peso_kg);
       return {
         dose_g: dose,
         fonte: 'calculada',
-        mensagem: `${dose}g/dia (0,03g/kg — dose padrao de manutencao)`,
+        mensagem: `${dose}g/dia (faixa padrão de manutenção: 3–5 g/dia)`,
       };
     }
   }
 
-  const dose = Math.round(peso_kg * 0.03 * 10) / 10;
+  const dose = doseCreatinaManutencao(peso_kg);
   return {
     dose_g: dose,
     fonte: 'calculada',
-    mensagem: `${dose}g/dia (sugestao baseada em 0,03g/kg — confirme com seu nutricionista)`,
+    mensagem: `${dose}g/dia (faixa padrão de manutenção: 3–5 g/dia — confirme com seu nutricionista)`,
   };
 }
 
