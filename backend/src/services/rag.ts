@@ -144,7 +144,7 @@ export function normalizarHora(raw: string | null | undefined): string | null {
 const SYSTEM_PROMPT_HORARIOS = `Voce extrai horarios de refeicoes do texto de um PDF de dieta prescrita por nutricionista.
 
 REGRA NUMERO 1: extraia APENAS horarios LITERALMENTE escritos no texto.
-- NUNCA infira ("almoco proximo do meio-dia" → null, NAO "12:00")
+- NUNCA infira ("almoço próximo do meio-dia" → null, NAO "12:00")
 - NUNCA arredonde ou calcule
 - NUNCA preencha por bom senso (se a refeicao nao aparece com horario, e null)
 
@@ -158,16 +158,16 @@ Mapeie cada refeicao para uma das 5 chaves:
 Formato de saida: JSON estrito, todas as 5 chaves sempre presentes, string "HH:MM" 24h OU null.
 
 Exemplos:
-PDF: "Cafe da manha: 7h. Almoco: 12h30. Jantar: 20h"
+PDF: "Café da manhã: 7h. Almoço: 12h30. Jantar: 20h"
 → {"cafe":"07:00","lanche_manha":null,"almoco":"12:30","lanche_tarde":null,"jantar":"20:00"}
 
-PDF: "Refeicoes: 7h, 10h, 12h30, 16h, 20h"
+PDF: "Refeições: 7h, 10h, 12h30, 16h, 20h"
 → {"cafe":"07:00","lanche_manha":"10:00","almoco":"12:30","lanche_tarde":"16:00","jantar":"20:00"}
 
-PDF: "Almoco proximo do meio-dia, jantar a noite"
+PDF: "Almoço próximo do meio-dia, jantar a noite"
 → {"cafe":null,"lanche_manha":null,"almoco":null,"lanche_tarde":null,"jantar":null}
 
-PDF: "Faca 5 refeicoes ao dia"
+PDF: "Faça 5 refeições ao dia"
 → {"cafe":null,"lanche_manha":null,"almoco":null,"lanche_tarde":null,"jantar":null}
 
 Devolva APENAS o JSON. Nada de texto antes ou depois.`;

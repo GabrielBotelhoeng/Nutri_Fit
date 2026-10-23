@@ -54,10 +54,23 @@ const CONSULTA_PALAVRA_RE =
 const SALDO_RE =
   /\b(quant[oa]s?\s+(de\s+|gramas?\s+de\s+|g\s+de\s+)?(kcal|cal|calorias?|prote[ií]nas?|carb(o|oidrato)s?|gorduras?|[aá]gua|ml\b)|quant[oa]s?\s+(eu\s+)?(j[aá]\s+)?(consumi|comi|tomei|bebi)|saldo\s+do\s+dia|qual\s+(o\s+)?meu\s+(consumo|saldo|dia|progresso|resumo)|consumo\s+(do\s+dia|de\s+hoje|de\s+hj)|t[oô]u?\s+(dentro|fora|perto)\s+(da|de)\s+meta|j[aá]\s+(bati|passei|ultrapasse[ai])\s+(a|da)?\s*meta|bati\s+a?\s*meta|quanto\s+(falt(a|am|ou)|sobr(a|ou)|rest(a|ou|am))\b|meu\s+(dia|progresso|resumo)\b|resumo\s+d[oe]\s+(dia|hoje|hj)\b|progresso\s+(d[oe]\s+)?(hoje|hj|dia)\b|como\s+t[oôõ]u?\s+(hoje|hj)\b|cad[eê]\s+meu\s+(dia|resumo|progresso)\b)/i;
 
+// "quantas calorias TEM uma banana?" pergunta sobre o alimento, não sobre o consumo do
+// dia. Sem isso, SALDO_RE capturava a pergunta e o paciente recebia o progresso do dia.
+//  não é Unicode-safe ("têm", "contém"); usar (?:^|\W)/(?=\W|$).
+const NUTRIENTE_DE_ALIMENTO_RE =
+  /quant[oa]s?\s+(?:de\s+|gramas?\s+de\s+|g\s+de\s+)?(?:kcal|cal|calorias?|prote[ií]nas?|carb\w*|gorduras?|fibras?|a[çc][uú]car(?:es)?)[^?]*?(?:^|\W)(?:tem|t[eê]m|possui|possuem|cont[eé]m)(?=\W|$)/i;
+// Marcadores de que a pergunta é sobre o próprio consumo ("tem no MEU dia", "EU comi").
+const CONSUMO_PROPRIO_RE = /(?:^|\W)(?:eu|meu|minha|hoje|hj|consumi|comi|bebi|tomei)(?=\W|$)/i;
+
 // Retorna Intent quando confiante; null quando deve consultar o Haiku.
 export function classificarIntencaoRapida(texto: string): Intent | null {
   const t = texto.trim().toLowerCase();
   if (t.length === 0) return null;
+
+  // Antes de SALDO_RE: "quanto de proteína tem o ovo?" também casa SALDO_RE.
+  if (NUTRIENTE_DE_ALIMENTO_RE.test(t) && !CONSUMO_PROPRIO_RE.test(t)) {
+    return 'consulta';
+  }
 
   if (SALDO_RE.test(t)) {
     return 'saldo';
@@ -72,12 +85,8 @@ export function classificarIntencaoRapida(texto: string): Intent | null {
     return null;
   }
 
-  // Correcao antes de registrar. "esqueci" foi removido de CORRECAO_RE de proposito
-  // (ver comentario em CORRECAO_RE); "esqueci de X" cai em registrar/consulta.
-  if (CORRECAO_RE.test(t)) {
-    return 'corrigir';
-  }
-
+  // Água ANTES da correção: "hoje foram 3 copos de água" casava CORRECAO_RE ("foram")
+  // e substituía os macros da última refeição pelos da água. Correção só existe pra refeição.
   // Excluir verbo de comida — "comi 200g de frango com 500ml de agua" nao e agua.
   if (
     AGUA_VOLUME_RE.test(t) &&
@@ -87,6 +96,12 @@ export function classificarIntencaoRapida(texto: string): Intent | null {
     !VERBO_REGISTRO_RE.test(t)
   ) {
     return 'agua';
+  }
+
+  // Correcao antes de registrar. "esqueci" foi removido de CORRECAO_RE de proposito
+  // (ver comentario em CORRECAO_RE); "esqueci de X" cai em registrar/consulta.
+  if (CORRECAO_RE.test(t)) {
+    return 'corrigir';
   }
 
   if (AGUA_VOLUME_RE.test(t) && (LIQUIDO_CALORICO_RE.test(t) || COCA_CALORICA_RE.test(t))) {
@@ -125,6 +140,7 @@ Regras de prioridade:
 4. "esqueci de adicionar/falar/incluir/somar/colocar X" → SEMPRE "registrar" (soma X à conta do dia). NUNCA "corrigir" — corrigir substitui, o paciente quer somar.
 5. "na verdade foram X", "corrige aí", "era pra ser X" → "corrigir" (substitui macros da última refeição).
 6. Volume (ml/copo/litro/garrafa) + suco/leite/refrigerante/cerveja → "registrar", JAMAIS "agua".
+7. Pergunta sobre quanto um ALIMENTO tem ("quantas calorias tem uma banana?", "quanto de proteína tem o ovo?") → "consulta". Só é "saldo" se for sobre o que o PACIENTE consumiu.
 
 Devolva APENAS o JSON. Nada de explicações.`;
 

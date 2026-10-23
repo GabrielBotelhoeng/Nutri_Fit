@@ -226,7 +226,7 @@ describe('calcularDoseWhey', () => {
   });
 
   it('timing menciona pos-treino', () => {
-    expect(calcularDoseWhey(70).timing).toMatch(/pos-treino/i);
+    expect(calcularDoseWhey(70).timing).toMatch(/p[óo]s-treino/i);
   });
 });
 
@@ -294,7 +294,7 @@ describe('formatarMensagemSuplementos', () => {
 
   it('lista outros informados como "tambem anotei"', () => {
     const msg = formatarMensagemSuplementos([], ['creatina', 'vitamina d']);
-    expect(msg).toMatch(/Tambem anotei/i);
+    expect(msg).toMatch(/Tamb[ée]m anotei/i);
     expect(msg).toMatch(/creatina/);
     expect(msg).toMatch(/vitamina d/);
   });
@@ -313,7 +313,7 @@ describe('formatarExplicacaoTermogenicos', () => {
 
   it('com cafeina → menciona efeitos e cautelas', () => {
     const msg = formatarExplicacaoTermogenicos([calcularDoseCafeina(80)]);
-    expect(msg).toMatch(/Termogenicos/i);
+    expect(msg).toMatch(/Termog[êe]nicos/i);
     expect(msg).toMatch(/taquicardia|batimento/i);
     expect(msg).toMatch(/16h/);
   });
@@ -359,7 +359,7 @@ describe('formatarRespostaDoseControlada', () => {
   it('clembuterol → nome, riscos, redirect cardio', () => {
     const msg = formatarRespostaDoseControlada('Gabriel', 'clembuterol');
     expect(msg).toMatch(/Gabriel/);
-    expect(msg).toMatch(/nao posso te passar dose/i);
+    expect(msg).toMatch(/n[ãa]o posso te passar dose/i);
     expect(msg).toMatch(/clembuterol/);
     expect(msg).toMatch(/cardiologista/);
     expect(msg).toMatch(/taquicardia|arritmia/i);
@@ -383,7 +383,7 @@ describe('formatarRespostaDoseControlada', () => {
 
   it('substancia desconhecida → resposta generica sem falhar', () => {
     const msg = formatarRespostaDoseControlada('Gabriel', 'substancia_x');
-    expect(msg).toMatch(/nao posso/i);
-    expect(msg).toMatch(/medico/i);
+    expect(msg).toMatch(/n[ãa]o posso/i);
+    expect(msg).toMatch(/m[ée]dico/i);
   });
 });

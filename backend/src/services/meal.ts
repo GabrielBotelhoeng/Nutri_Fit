@@ -6,29 +6,16 @@ import { sendText } from './evolution';
 import { getEstado as getEstadoConv, atualizarEstado, UltimaRefeicao } from './conversation';
 import type { PacienteInfo } from './conversation';
 import { obterMetas, MacrosDiarios } from './calculos';
-import { hojeLocal, diaAnterior, diasAtrasLocal } from '../utils/datas';
+import { hojeLocal, diaAnterior, diasAtrasLocal, dataLocalDe } from '../utils/datas';
 import { comBackoff } from '../utils/retry';
 
 // Janela em que uma refeição recente ainda aceita "correção" — fora dela vira registro novo.
 export const TTL_ULTIMA_REFEICAO_MIN = 60;
 
-const MSG_ERRO_HUMANA = '😅 Tá um pouco lento aqui do meu lado agora. Me manda de novo em uns 30s?';
-
-// Overload/timeout pede espera maior — retry em 5s só bateria 429 de novo.
-export function mensagemErroHumana(err: unknown): string {
-  const e = err as { status?: number; response?: { status?: number }; code?: string };
-  const status = e?.status ?? e?.response?.status;
-  const code = e?.code;
-  const sobrecarga =
-    status === 429 ||
-    status === 529 ||
-    status === 503 ||
-    code === 'ETIMEDOUT' ||
-    code === 'ECONNRESET' ||
-    code === 'ECONNREFUSED';
-  if (sobrecarga) return '😅 Meu servidor tá cheio agora. Tenta em 1-2 minutos.';
-  return MSG_ERRO_HUMANA;
-}
+// Reexportada daqui por compatibilidade — a implementação vive em utils/erro-humano
+// pra o webhook poder usá-la sem carregar o módulo de refeições inteiro.
+import { mensagemErroHumana } from '../utils/erro-humano';
+export { mensagemErroHumana };
 
 // Dica visual pra pergunta "quantas gramas de X?" — não é tabela nutricional.
 // Keys sem acento pra casar com input normalizado.
@@ -456,7 +443,9 @@ export async function corrigirUltimaRefeicao(
   novosItens?: UltimaRefeicao['itens'],
 ): Promise<UltimaRefeicao> {
   const novos = sanitizarMacros(novosMacros);
-  const hoje = hojeLocal();
+  // Dia em que a refeição foi REGISTRADA, não hoje: correção às 00h10 de uma refeição
+  // das 23h30 (dentro do TTL) precisa ajustar o saldo de ontem.
+  const dia = dataLocalDe(ultima.registrado_em);
 
   const { error: updateError } = await supabase
     .from('refeicoes')
@@ -478,13 +467,30 @@ export async function corrigirUltimaRefeicao(
 
   const { error: rpcError } = await supabase.rpc('corrigir_registro_diario', {
     p_paciente_id: pacienteId,
-    p_data: hoje,
+    p_data: dia,
     p_delta_kcal: dKcal,
     p_delta_proteina_g: dProteina,
     p_delta_carbo_g: dCarbo,
     p_delta_gordura_g: dGordura,
   });
-  if (rpcError) throw new Error(`[meal] Falha ao corrigir saldo: ${rpcError.message}`);
+  if (rpcError) {
+    // Rollback: volta a refeição pra versão anterior. Sem isso ela ficava corrigida
+    // e o saldo do dia não (mesmo padrão de registrarRefeicao).
+    const anterior = sanitizarMacros(ultima.macros);
+    const { error: rollbackError } = await supabase
+      .from('refeicoes')
+      .update({
+        descricao: ultima.descricao,
+        kcal: anterior.kcal,
+        proteina_g: anterior.proteina_g,
+        carbo_g: anterior.carbo_g,
+        gordura_g: anterior.gordura_g,
+      })
+      .eq('id', ultima.id)
+      .eq('paciente_id', pacienteId);
+    if (rollbackError) console.error('[meal] Rollback da correção falhou apos erro RPC:', rollbackError.message);
+    throw new Error(`[meal] Falha ao corrigir saldo: ${rpcError.message}`);
+  }
 
   const atualizada: UltimaRefeicao = {
     id: ultima.id,
@@ -644,8 +650,8 @@ export async function dispararAlertaOvershoot(
     const pct = Math.round((saldo.kcal / metas.kcal) * 100);
     await sendText(
       phone,
-      `⚠️ Voce ja consumiu ${pct}% da sua meta calorica de hoje (${Math.round(saldo.kcal)} / ${Math.round(metas.kcal)} kcal).\n\n` +
-      `Sugiro pausar a proxima refeicao ou trocar por algo mais leve. 💚`,
+      `⚠️ Você já consumiu ${pct}% da sua meta calórica de hoje (${Math.round(saldo.kcal)} / ${Math.round(metas.kcal)} kcal).\n\n` +
+      `Sugiro pausar a próxima refeição ou trocar por algo mais leve. 💚`,
     );
   } catch (err) {
     console.error('[meal] Falha ao disparar alerta de overshoot:', err);

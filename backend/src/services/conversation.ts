@@ -110,16 +110,22 @@ export async function getEstado(pacienteId: string): Promise<EstadoEntrevista> {
     .from('pacientes')
     .select('entrevista_status, entrevista_etapa, entrevista_dados')
     .eq('id', pacienteId)
-    .single();
+    // maybeSingle: 0 linhas = data null SEM erro (single() trataria como erro PGRST116).
+    .maybeSingle();
 
-  if (error || !data) {
+  // Falha do banco precisa LANÇAR: devolver 'pendente' aqui fazia processarMensagem
+  // reiniciar a entrevista (etapa 1) de quem já tinha concluído o onboarding.
+  if (error) {
+    throw new Error(`[conversation] Falha ao ler estado do paciente ${pacienteId}: ${error.message}`);
+  }
+  if (!data) {
     return { status: 'pendente', etapa: 0, dados: {} };
   }
 
   return {
     status: data.entrevista_status as EstadoEntrevista['status'],
     etapa: data.entrevista_etapa,
-    dados: data.entrevista_dados as EstadoEntrevista['dados'],
+    dados: (data.entrevista_dados ?? {}) as EstadoEntrevista['dados'],
   };
 }
 

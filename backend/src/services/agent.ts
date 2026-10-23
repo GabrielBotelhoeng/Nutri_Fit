@@ -133,35 +133,35 @@ const PERGUNTAS_ENTREVISTA: Record<number, string> = {
      '1️⃣ Emagrecer\n' +
      '2️⃣ Ganhar massa\n' +
      '3️⃣ Manter o peso\n' +
-     '4️⃣ Saude geral\n\n' +
-     '_Responda com o numero (1, 2, 3 ou 4)._',
+     '4️⃣ Saúde geral\n\n' +
+     '_Responda com o número (1, 2, 3 ou 4)._',
   3: '👤 *Qual e o seu sexo?*\n\n' +
      '1️⃣ Masculino\n' +
      '2️⃣ Feminino\n\n' +
-     '_Responda com o numero (1 ou 2)._',
+     '_Responda com o número (1 ou 2)._',
   4: '⚖️ *Qual e o seu peso atual em kg?*\n\n_Escreva o valor (ex: 75 ou 70,5)._',
   5: '📏 *Qual e a sua altura?*\n\n_Escreva o valor em cm (ex: 175) ou em metros (ex: 1,75)._',
-  6: '🏃 *Que tipo de atividade fisica voce pratica?*\n\n' +
+  6: '🏃 *Que tipo de atividade física você pratica?*\n\n' +
      '1️⃣ Musculação\n' +
      '2️⃣ Corrida\n' +
      '3️⃣ Caminhada\n' +
      '4️⃣ Sedentário (não pratico)\n\n' +
-     '_Responda com o numero ou escreva outra atividade (ex: "natação")._',
-  7: '📅 *Com que frequencia voce treina?*\n\n' +
+     '_Responda com o número ou escreva outra atividade (ex: "natação")._',
+  7: '📅 *Com que frequência você treina?*\n\n' +
      '1️⃣ Não treino\n' +
      '2️⃣ 1-2x por semana\n' +
      '3️⃣ 3-4x por semana\n' +
      '4️⃣ 5+ por semana\n\n' +
-     '_Responda com o numero._',
-  8: '⏰ *Em que horario voce costuma treinar?*\n\n_Escreva o horario (ex: 18h, "de manha" ou "nao treino")._',
-  9: '🌙 *Que horas voce costuma acordar e dormir?*\n\n_Escreva os dois horarios (ex: 6h e 23h)._',
-  10: '⚠️ *Voce tem alergias, intolerancias ou condicoes de saude?* (ex: lactose, gluten, diabetes, hipertensao).\n\nSe nao tiver, responda "nenhuma".',
-  11: '🚫 *Tem algum alimento que voce NAO come ou tem aversao?* (ex: peixe, quiabo, frutos do mar).\n\nSe nao tiver, responda "nenhuma".',
-  12: '📖 *Voce ja fez dieta antes?* Conte rapidamente o que funcionou ou nao funcionou pra voce. Se for a primeira vez, responda "nunca".',
-  13: '💊 *Voce usa algum suplemento hoje?* Se sim, quais (separados por virgula). Se nao, responda "nao uso".',
-  14: '🍽️ *Em quais horarios voce costuma fazer suas refeicoes?*\n\n' +
-      'Voce pode mandar 3 (cafe, almoco, jantar) ou 5 (incluindo lanches da manha/tarde).\n\n' +
-      'Ex: "cafe 7h, almoco 12h30, jantar 20h"\n' +
+     '_Responda com o número._',
+  8: '⏰ *Em que horário você costuma treinar?*\n\n_Escreva o horário (ex: 18h, "de manhã" ou "não treino")._',
+  9: '🌙 *Que horas você costuma acordar e dormir?*\n\n_Escreva os dois horários (ex: 6h e 23h)._',
+  10: '⚠️ *Você tem alergias, intolerâncias ou condições de saúde?* (ex: lactose, glúten, diabetes, hipertensão).\n\nSe não tiver, responda "nenhuma".',
+  11: '🚫 *Tem algum alimento que você NÃO come ou tem aversão?* (ex: peixe, quiabo, frutos do mar).\n\nSe não tiver, responda "nenhuma".',
+  12: '📖 *Você já fez dieta antes?* Conte rapidamente o que funcionou ou não funcionou pra você. Se for a primeira vez, responda "nunca".',
+  13: '💊 *Você usa algum suplemento hoje?* Se sim, quais (separados por vírgula). Se não, responda "não uso".',
+  14: '🍽️ *Em quais horários você costuma fazer suas refeições?*\n\n' +
+      'Você pode mandar 3 (café, almoço, jantar) ou 5 (incluindo lanches da manhã/tarde).\n\n' +
+      'Ex: "café 7h, almoço 12h30, jantar 20h"\n' +
       'Ou: "7h, 10h, 12h30, 16h, 20h"',
 };
 
@@ -300,9 +300,9 @@ function extrairHorariosEmOrdem(texto: string): string[] {
 type RefeicaoKey = 'cafe' | 'lanche_manha' | 'almoco' | 'lanche_tarde' | 'jantar';
 
 const LABEL_REFEICAO: Record<RefeicaoKey, string> = {
-  cafe: '☕ Cafe',
-  lanche_manha: '🥪 Lanche da manha',
-  almoco: '🍽️ Almoco',
+  cafe: '☕ Café',
+  lanche_manha: '🥪 Lanche da manhã',
+  almoco: '🍽️ Almoço',
   lanche_tarde: '🍎 Lanche da tarde',
   jantar: '🌙 Jantar',
 };
@@ -340,9 +340,9 @@ export async function prepararPerguntaEtapa14(pacienteId: string): Promise<Pergu
   if (faltantes.length === 0) {
     const linhas = preenchidos.map(([k, h]) => `${LABEL_REFEICAO[k]} — ${formatarHoraLabel(h)}`);
     const mensagem =
-      `🍽️ *Vi na sua dieta os seguintes horarios:*\n\n` +
+      `🍽️ *Vi na sua dieta os seguintes horários:*\n\n` +
       linhas.join('\n') +
-      `\n\nConfere? (responda *sim* ou *nao*)`;
+      `\n\nConfere? (responda *sim* ou *não*)`;
     return {
       mensagem,
       dadosExtras: {
@@ -360,7 +360,7 @@ export async function prepararPerguntaEtapa14(pacienteId: string): Promise<Pergu
     .join(', ');
   const mensagem =
     `🍽️ *Vi na sua dieta:* ${linhasPreenchidas}.\n\n` +
-    `Que horas voce costuma fazer *${labelsFaltantes}*?\n` +
+    `Que horas você costuma fazer *${labelsFaltantes}*?\n` +
     `(ex: "10h e 16h")`;
   return {
     mensagem,
@@ -416,7 +416,7 @@ export function tratarRespostaConfirmacaoHorarios(
     }
     return {
       handled: true,
-      mensagemRepetir: '❓ Responda *sim* se os horarios conferem ou *nao* para informar diferentes.',
+      mensagemRepetir: '❓ Responda *sim* se os horários conferem ou *não* para informar diferentes.',
     };
   }
 
@@ -434,7 +434,7 @@ export function tratarRespostaConfirmacaoHorarios(
     if (Object.keys(novos).length === 0) {
       return {
         handled: true,
-        mensagemRepetir: '❓ Nao entendi os horarios. Tente algo como "10h e 16h".',
+        mensagemRepetir: '❓ Não entendi os horários. Tente algo como "10h e 16h".',
       };
     }
     const mesclado: Record<string, string> = { ...pre, ...novos };
@@ -575,7 +575,7 @@ const OBJETIVO_LABEL: Record<ObjetivoNutricional, string> = {
   emagrecer: 'emagrecer (perder gordura)',
   ganhar_massa: 'ganhar massa muscular',
   manter: 'manter o peso atual',
-  saude_geral: 'saude geral / bem-estar',
+  saude_geral: 'saúde geral / bem-estar',
 };
 
 async function responderComClaude(
@@ -587,7 +587,7 @@ async function responderComClaude(
 ): Promise<string> {
   const objetivoLinha = perfil.objetivo
     ? OBJETIVO_LABEL[perfil.objetivo]
-    : 'nao informado';
+    : 'não informado';
   const restricoesLinha = perfil.restricoes && perfil.restricoes.length > 0
     ? perfil.restricoes.join(', ')
     : 'nenhuma';
@@ -609,7 +609,7 @@ REGRAS DE SEGURANCA (inegociaveis):
 - Toda recomendacao deve respeitar o objetivo principal do paciente
 
 Contexto da sua dieta (trechos relevantes do PDF prescrito):
-${contextoRag || 'Nenhum trecho especifico da dieta bateu com esta pergunta no momento — mas a dieta dele JA ESTA processada no sistema. Responda com principios gerais de nutricao adequados ao perfil dele, e sugira que ele reformule a pergunta sendo mais especifico (ex: "qual cafe da manha?" em vez de "qual minha dieta?") se quiser detalhes especificos do PDF. Nao diga que a dieta nao foi carregada.'}
+${contextoRag || 'Nenhum trecho especifico da dieta bateu com esta pergunta no momento — mas a dieta dele JÁ ESTA processada no sistema. Responda com principios gerais de nutrição adequados ao perfil dele, e sugira que ele reformule a pergunta sendo mais especifico (ex: "qual café da manhã?" em vez de "qual minha dieta?") se quiser detalhes especificos do PDF. Não diga que a dieta não foi carregada.'}
 
 Regras de comunicacao:
 - Responda sempre em portugues, de forma amigavel e direta
@@ -640,14 +640,14 @@ export function avisoVencimentoPendente(
   const dados = (paciente.entrevista_dados ?? {}) as Record<string, unknown>;
   if (dados['ultimo_aviso_expiracao'] === hoje) return null;
   const diasStr = diasParaVencer === 1 ? '1 dia' : `${diasParaVencer} dias`;
-  return `⚠️ Lembrete: seu plano NutriChat vence em *${diasStr}*. Renove com seu nutricionista para nao perder o acompanhamento. 💚`;
+  return `⚠️ Lembrete: seu plano NutriChat vence em *${diasStr}*. Renove com seu nutricionista para não perder o acompanhamento. 💚`;
 }
 
 export async function processarMensagem(phone: string, texto: string): Promise<void> {
   const paciente = await buscarPacientePorWhatsapp(phone);
 
   if (!paciente) {
-    await sendText(phone, '😕 Seu numero nao esta cadastrado. Fale com seu nutricionista.');
+    await sendText(phone, '😕 Seu número não está cadastrado. Fale com seu nutricionista.');
     return;
   }
 
@@ -679,7 +679,7 @@ export async function processarMensagem(phone: string, texto: string): Promise<v
     await atualizarEstado(paciente.id, { status: 'em_andamento', etapa: 1 });
     await sendText(
       phone,
-      `Ola, ${paciente.nome}! 👋 Sou o *NutriChat*, seu assistente nutricional.\n\n` +
+      `Olá, ${paciente.nome}! 👋 Sou o *NutriChat*, seu assistente nutricional.\n\n` +
       `Vou te ajudar a acompanhar sua dieta diariamente pelo WhatsApp. 🥗\n\n` +
       PERGUNTAS_ENTREVISTA[1],
     );
@@ -711,7 +711,7 @@ export async function processarMensagem(phone: string, texto: string): Promise<v
     }
 
     if (Object.keys(novoDado).length === 0) {
-      await sendText(phone, `❓ Nao entendi. ${PERGUNTAS_ENTREVISTA[etapa]}`);
+      await sendText(phone, `❓ Não entendi. ${PERGUNTAS_ENTREVISTA[etapa]}`);
       return;
     }
 
@@ -755,8 +755,8 @@ export async function processarMensagem(phone: string, texto: string): Promise<v
 
       await sendText(
         phone,
-        `✅ Perfeito, ${paciente.nome}! Entrevista concluida.\n\n` +
-        `Calculando seus numeros personalizados... ⏳`,
+        `✅ Perfeito, ${paciente.nome}! Entrevista concluída.\n\n` +
+        `Calculando seus números personalizados... ⏳`,
       );
 
       await new Promise((resolve) => setTimeout(resolve, 1500));
@@ -849,10 +849,10 @@ export async function processarMensagem(phone: string, texto: string): Promise<v
         phone,
         `💡 *Como usar o NutriChat:*\n\n` +
         `• _"comi 200g de frango com arroz"_ — registro por texto\n` +
-        `• 🎤 Audio descrevendo sua refeicao\n` +
-        `• 📸 Foto do prato ou codigo de barras\n` +
-        `• _"qual e minha dieta?"_ — consulta ao PDF\n\n` +
-        `Vamos la! 🚀`,
+        `• 🎤 Áudio descrevendo sua refeição\n` +
+        `• 📸 Foto do prato ou código de barras\n` +
+        `• _"qual é minha dieta?"_ — consulta ao PDF\n\n` +
+        `Vamos lá! 🚀`,
       );
 
       // Nudge neutro sem exemplo literal — copiar/colar viraria registro real de refeição.
@@ -1107,7 +1107,7 @@ export async function enviarBoasVindas(pacienteId: string): Promise<void> {
   await atualizarEstado(pacienteId, { status: 'em_andamento', etapa: 1 });
   await sendText(
     data.whatsapp as string,
-    `Ola, ${data.nome}! 👋 Sou o *NutriChat*, seu assistente nutricional pelo WhatsApp.\n\n` +
+    `Olá, ${data.nome}! 👋 Sou o *NutriChat*, seu assistente nutricional pelo WhatsApp.\n\n` +
     `Fui cadastrado pelo seu nutricionista para te ajudar com sua dieta. 🥗\n\n` +
     PERGUNTAS_ENTREVISTA[1],
   );

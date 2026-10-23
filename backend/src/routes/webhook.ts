@@ -7,6 +7,7 @@ import { marcarMensagemProcessada } from '../services/dedup';
 import { enfileirarPorTelefone } from '../services/queue';
 import { requireWebhookAuth } from '../middleware/webhookAuth';
 import { redactPhone } from '../utils/redact';
+import { mensagemErroHumana } from '../utils/erro-humano';
 
 export const webhookRouter = Router();
 // Auth roda ANTES do handler — sem header valido, 401 antes de tocar agent/audio/vision.
@@ -93,6 +94,12 @@ webhookRouter.post('/', async (req: Request, res: Response) => {
       }
     } catch (err) {
       console.error('[webhook] Erro ao processar mensagem:', err);
+      // Sem isso o paciente ficava sem resposta nenhuma e não sabia que precisava reenviar.
+      try {
+        await sendText(phone, mensagemErroHumana(err));
+      } catch (avisoErr) {
+        console.error('[webhook] Falha ao avisar o paciente sobre o erro:', avisoErr);
+      }
     }
   });
 });

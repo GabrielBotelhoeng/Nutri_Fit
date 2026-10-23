@@ -18,6 +18,13 @@ export function hojeLocal(): string {
   return formatador.format(new Date());
 }
 
+// Dia de calendário local (YYYY-MM-DD) de um instante ISO — ex.: em que dia uma
+// refeição foi registrada. Instante inválido cai em hoje.
+export function dataLocalDe(instanteISO: string): string {
+  const d = new Date(instanteISO);
+  return Number.isNaN(d.getTime()) ? hojeLocal() : formatador.format(d);
+}
+
 // Aritmetica sobre YYYY-MM-DD ancorada em meia-noite UTC — sem risco de DST.
 export function somarDias(dataISO: string, n: number): string {
   const d = new Date(`${dataISO}T00:00:00Z`);

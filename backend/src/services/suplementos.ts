@@ -141,26 +141,26 @@ const RISCOS_POR_CATEGORIA: Record<CategoriaControlado, string[]> = {
   anabolizante: [
     'hepatotoxicidade (dano ao figado, comum em ciclos orais)',
     'piora do perfil lipidico (LDL sobe, HDL desce) e risco cardiovascular',
-    'supressao do eixo hormonal proprio, requer PCT medica',
+    'supressão do eixo hormonal próprio, requer PCT médica',
     'ginecomastia, acne, alopecia androgenetica',
   ],
   hormonio: [
-    'alteracao do eixo endocrino natural',
-    'resistencia insulinica e alteracao glicemica',
-    'em uso nao supervisionado: acromegalia, cardiomegalia',
+    'alteração do eixo endócrino natural',
+    'resistencia insulinica e alteração glicemica',
+    'em uso não supervisionado: acromegalia, cardiomegalia',
     'risco tumoral (potencial estimulo de tumores existentes)',
   ],
   sarm: [
-    'sem estudos de seguranca de longo prazo em humanos',
-    'hepatotoxicidade e alteracao lipidica documentadas',
-    'supressao hormonal (menor que anabolizante, mas existe)',
+    'sem estudos de segurança de longo prazo em humanos',
+    'hepatotoxicidade e alteração lipidica documentadas',
+    'supressão hormonal (menor que anabolizante, mas existe)',
     'contaminacao frequente: analises independentes acham anabolizante em muitos frascos',
   ],
   emagrecedor: [
-    'taquicardia, hipertensao e risco cardiovascular',
-    'insonia, ansiedade, alteracao de humor',
+    'taquicardia, hipertensão e risco cardiovascular',
+    'insonia, ansiedade, alteração de humor',
     'dependencia psicologica e efeito rebote ao interromper',
-    'requer prescricao medica e acompanhamento (RDC ANVISA)',
+    'requer prescrição médica e acompanhamento (RDC ANVISA)',
   ],
 };
 
@@ -241,9 +241,9 @@ export function calcularDoseWhey(peso_kg: number): SugestaoDose {
   return {
     suplemento: 'Whey Protein',
     categoria: 'proteina',
-    dose: `~${proteinaG}g de proteina/dia (${scoopEquivalente} scoop${scoopEquivalente > 1 ? 's' : ''})`,
-    timing: 'pos-treino ou entre refeicoes, se a proteina do dia ficar abaixo da meta',
-    cautela: 'nao substitui alimento — e complemento; hidrata bem porque proteina exige mais agua',
+    dose: `~${proteinaG}g de proteína/dia (${scoopEquivalente} scoop${scoopEquivalente > 1 ? 's' : ''})`,
+    timing: 'pós-treino ou entre refeições, se a proteína do dia ficar abaixo da meta',
+    cautela: 'não substitui alimento — é complemento; hidrata bem porque proteína exige mais água',
   };
 }
 
@@ -251,11 +251,11 @@ export function calcularDoseWhey(peso_kg: number): SugestaoDose {
 export function calcularDoseCafeina(peso_kg: number): SugestaoDose {
   const doseMg = Math.min(400, Math.round(peso_kg * 3));
   return {
-    suplemento: 'Cafeina / Pre-treino',
+    suplemento: 'Cafeína / Pré-treino',
     categoria: 'estimulante',
     dose: `${doseMg} mg/dia (limite ANVISA: 400 mg)`,
     timing: '30-45 min antes do treino',
-    cautela: 'evitar apos 16h (atrapalha o sono); nao empilhar com cha verde, cafe e pre-treino no mesmo dia',
+    cautela: 'evitar após 16h (atrapalha o sono); não empilhar com chá verde, café e pré-treino no mesmo dia',
   };
 }
 
@@ -264,7 +264,7 @@ export function calcularDoseOmega(): SugestaoDose {
     suplemento: 'Omega-3',
     categoria: 'omega',
     dose: '1-2g de EPA+DHA/dia (leia o rotulo — nem toda capsula de 1g tem 1g de EPA+DHA)',
-    timing: 'junto a uma refeicao com gordura pra melhor absorcao',
+    timing: 'junto a uma refeição com gordura pra melhor absorção',
   };
 }
 
@@ -319,13 +319,13 @@ export function formatarMensagemSuplementos(
   }
 
   if (outrosInformados.length > 0) {
-    linhas.push(`*Tambem anotei:* ${outrosInformados.join(', ')}`);
-    linhas.push('_Confirme a dose com seu(sua) nutri — nao vou sugerir sem prescricao dele(a)._');
+    linhas.push(`*Também anotei:* ${outrosInformados.join(', ')}`);
+    linhas.push('_Confirme a dose com seu(sua) nutri — não vou sugerir sem prescrição dele(a)._');
     linhas.push('');
   }
 
   linhas.push(
-    '_Essas sao sugestoes iniciais baseadas em referencia (SBP, ISSN, AHA). Seu(sua) nutricionista pode ajustar._',
+    '_Essas são sugestoes iniciais baseadas em referencia (SBP, ISSN, AHA). Seu(sua) nutricionista pode ajustar._',
   );
 
   return linhas.join('\n');
@@ -337,21 +337,21 @@ export function formatarExplicacaoTermogenicos(sugestoes: SugestaoDose[]): strin
   if (!temEstimulante) return '';
 
   return (
-    '🔥 *Termogenicos e estimulantes — como usar sem passar do ponto*\n\n' +
-    'Cafeina, cha verde, sinefrina e pre-treino sao *estimulantes suaves*. Funcionam ' +
-    'aumentando um pouco o gasto calorico e a disposicao pro treino, mas nao emagrecem ' +
-    'sozinhos — o deficit calorico continua sendo o motor.\n\n' +
+    '🔥 *Termogênicos e estimulantes — como usar sem passar do ponto*\n\n' +
+    'Cafeína, chá verde, sinefrina e pré-treino são *estimulantes suaves*. Funcionam ' +
+    'aumentando um pouco o gasto calórico e a disposição pro treino, mas não emagrecem ' +
+    'sozinhos — o deficit calórico continua sendo o motor.\n\n' +
     '*Efeitos comuns em dose normal:*\n' +
-    '• Mais atencao e menos cansaco no treino\n' +
+    '• Mais atenção e menos cansaço no treino\n' +
     '• Leve aceleracao do batimento cardiaco\n' +
     '• Boca seca, mais sede\n\n' +
     '*Quando parar ou reduzir:*\n' +
     '• Palpitacao forte, tremor, tontura → reduz a dose ou suspende\n' +
-    '• Dificuldade pra dormir → nao usa apos 16h\n' +
+    '• Dificuldade pra dormir → não usa após 16h\n' +
     '• Ansiedade ou irritacao → mesmo esquema, reduzir\n\n' +
-    '*Nao empilhar:* cafe + pre-treino + termogenico no mesmo dia estoura o teto de ' +
-    '400 mg de cafeina (ANVISA) e pode dar taquicardia. Escolha um.\n\n' +
-    'Se voce tem *hipertensao, arritmia, ansiedade ou gestacao*, converse com seu(sua) ' +
+    '*Não empilhar:* café + pré-treino + termogênico no mesmo dia estoura o teto de ' +
+    '400 mg de cafeína (ANVISA) e pode dar taquicardia. Escolha um.\n\n' +
+    'Se você tem *hipertensão, arritmia, ansiedade ou gestação*, converse com seu(sua) ' +
     'nutri antes de continuar — pode ser contraindicado.'
   );
 }
@@ -397,21 +397,21 @@ export function formatarAvisoControlados(
 
   const redirects: string[] = [];
   if (precisaCardio) redirects.push('*cardiologista* (avaliar coracao antes de continuar)');
-  if (precisaEndo) redirects.push('*endocrinologista* (avaliar eixo hormonal e prescricao formal)');
+  if (precisaEndo) redirects.push('*endocrinologista* (avaliar eixo hormonal e prescrição formal)');
   const blocoRedirect = redirects.length > 0
     ? `\n\nAntes de continuar, procure: ${redirects.join(' e ')}.`
     : '';
 
   return (
-    `⚠️ *Atencao, ${nomePaciente}.*\n\n` +
-    `Voce mencionou ${plural ? 'as seguintes substancias controladas' : 'a seguinte substancia controlada'}:\n\n` +
+    `⚠️ *Atenção, ${nomePaciente}.*\n\n` +
+    `Você mencionou ${plural ? 'as seguintes substancias controladas' : 'a seguinte substancia controlada'}:\n\n` +
     `${lista}\n\n` +
-    `_Essas substancias nao sao suplemento alimentar._ Nao posso recomendar dosagem — ` +
-    `nutricionista nao prescreve medicamento (CFN 656/2020), e essas nao tem aprovacao ` +
+    `_Essas substâncias não são suplemento alimentar._ Não posso recomendar dosagem — ` +
+    `nutricionista não prescreve medicamento (CFN 656/2020), e essas não têm aprovação ` +
     `ANVISA pra uso humano corriqueiro.` +
     blocoRiscos +
     blocoRedirect +
-    `\n\nVou registrar isso pra seu(sua) nutri saber e conversar contigo com seguranca.`
+    `\n\nVou registrar isso pra seu(sua) nutri saber e conversar contigo com segurança.`
   );
 }
 
@@ -445,8 +445,8 @@ export function formatarRespostaDoseControlada(
   const dados = CONTROLADOS[substancia];
   if (!dados) {
     return (
-      `${nomePaciente}, nao posso te orientar dose dessa substancia. Ela nao e suplemento ` +
-      `alimentar comum e requer prescricao medica. Procure um medico especializado antes ` +
+      `${nomePaciente}, não posso te orientar dose dessa substância. Ela não é suplemento ` +
+      `alimentar comum e requer prescrição médica. Procure um médico especializado antes ` +
       `de continuar. Vou avisar seu(sua) nutri pra conversar contigo.`
     );
   }
@@ -462,15 +462,15 @@ export function formatarRespostaDoseControlada(
   if (precisaEndo) redirects.push('*endocrinologista*');
   const blocoRedirect = redirects.length > 0
     ? `Procure ${redirects.join(' + ')} antes de continuar.`
-    : 'Procure um medico especializado antes de continuar.';
+    : 'Procure um médico especializado antes de continuar.';
 
   return (
-    `${nomePaciente}, *nao posso te passar dose de ${substancia}*.\n\n` +
-    `Nao e suplemento alimentar — e ${dados.motivo}. Nutricionista nao prescreve ` +
-    `medicamento (CFN Resolucao 656/2020), e essa substancia nao tem aprovacao ANVISA ` +
+    `${nomePaciente}, *não posso te passar dose de ${substancia}*.\n\n` +
+    `Não é suplemento alimentar — é ${dados.motivo}. Nutricionista não prescreve ` +
+    `medicamento (CFN Resolução 656/2020), e essa substância não tem aprovação ANVISA ` +
     `pra uso humano corriqueiro.\n\n` +
     `*Riscos documentados:*\n${riscos}\n\n` +
     `${blocoRedirect}\n\n` +
-    `Vou sinalizar essa conversa pro seu(sua) nutri saber e orientar voce com seguranca.`
+    `Vou sinalizar essa conversa pro seu(sua) nutri saber e orientar você com segurança.`
   );
 }
