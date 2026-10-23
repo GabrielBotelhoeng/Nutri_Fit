@@ -3,21 +3,21 @@ import type { RagStatus } from '../lib/rag';
 const config: Record<RagStatus, { label: string; hint: string; bg: string; fg: string; icon: string }> = {
   indexado: {
     label: 'Bot pronto',
-    hint: 'A dieta foi processada — o bot ja consegue responder duvidas sobre ela pelo WhatsApp.',
+    hint: 'A dieta foi processada — o bot já consegue responder duvidas sobre ela pelo WhatsApp.',
     bg: 'var(--color-success-soft)',
     fg: 'var(--color-success)',
     icon: '✓',
   },
   processando: {
     label: 'Preparando',
-    hint: 'Extraindo texto e indexando a dieta. Costuma levar ate 5 minutos.',
+    hint: 'Extraindo texto e indexando a dieta. Costuma levar até 5 minutos.',
     bg: 'var(--color-warning-soft)',
     fg: 'var(--color-warning)',
     icon: '⏳',
   },
   falhou: {
     label: 'Falhou — reenviar',
-    hint: 'O processamento da dieta falhou. Abra a edicao do paciente e envie o PDF novamente.',
+    hint: 'O processamento da dieta falhou. Abra a edição do paciente e envie o PDF novamente.',
     bg: 'var(--color-danger-soft)',
     fg: 'var(--color-danger)',
     icon: '✕',
