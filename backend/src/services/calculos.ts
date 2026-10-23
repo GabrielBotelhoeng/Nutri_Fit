@@ -39,7 +39,7 @@ export interface ResultadoHidratacao {
 
 export interface ResultadoCreatina {
   dose_g: number;
-  fonte: 'calculada' | 'nutricionista';
+  fonte: 'calculada' | 'nutricionista' | 'nao_usa';
   mensagem: string;
 }
 
@@ -67,7 +67,8 @@ const NUMEROS_PT: Record<string, number> = {
 };
 
 export function extrairFrequenciaSemanal(texto: string): number | null {
-  const t = texto.toLowerCase();
+  // Sem acento: as regras abaixo são escritas sem til/acento ("nao faco", "sedentario").
+  const t = texto.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
   if (/(2|duas)\s*(x|vezes)\s*(ao|por|no)\s*dia/.test(t)) return 7;
   if (/\btodo(s)?\s+(o\s+)?dia/.test(t) || /\bdiari[oa]\b/.test(t) || /\btodos os dias\b/.test(t)) return 7;
@@ -93,7 +94,8 @@ export function extrairFrequenciaSemanal(texto: string): number | null {
 type TipoAtividade = 'sedentario' | 'leve' | 'moderado' | 'intenso' | 'desconhecido';
 
 export function classificarTipoAtividade(texto: string): TipoAtividade {
-  const t = texto.toLowerCase();
+  // Sem acento: as regras abaixo são escritas sem til/acento ("nao faco", "sedentario").
+  const t = texto.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   if (/\bsedentari[oa]\b/.test(t) || /\bnao\s+(pratico|faco|faço|treino)/.test(t) || /\bnenhuma\b/.test(t)) {
     return 'sedentario';
   }
@@ -210,12 +212,9 @@ export function calcularCreatina(
     }
   }
 
-  const dose = doseCreatinaManutencao(peso_kg);
-  return {
-    dose_g: dose,
-    fonte: 'calculada',
-    mensagem: `${dose}g/dia (faixa padrão de manutenção: 3–5 g/dia — confirme com seu nutricionista)`,
-  };
+  // Quem não usa creatina não recebe sugestão de dose: suplemento não é indicado por
+  // padrão (ex.: idoso sedentário com diabetes). Quem decide começar é o nutricionista.
+  return { dose_g: 0, fonte: 'nao_usa', mensagem: '' };
 }
 
 // Splits por objetivo:
@@ -426,7 +425,7 @@ export function formatarMensagemCalculos(
     `• 🥑 Gordura: ${macros.gordura_g}g (${macros.gordura_pct}%)\n` +
     `• 🎯 Total: *${macros.kcal} kcal/dia*\n\n` +
     `💧 *Hidratação diária:* ${hidratacao.meta_ml}ml\n` +
-    `_Distribuicao sugerida:_\n${hidratacao.distribuicao.slice(0, 4).join('\n')}\n_(e mais 4 porções ao longo do dia)_\n\n` +
-    `💊 *Creatina:* ${creatina.mensagem}`
+    `_Distribuição sugerida:_\n${hidratacao.distribuicao.slice(0, 4).join('\n')}\n_(e mais 4 porções ao longo do dia)_` +
+    (creatina.dose_g > 0 ? `\n\n💊 *Creatina:* ${creatina.mensagem}` : '')
   );
 }

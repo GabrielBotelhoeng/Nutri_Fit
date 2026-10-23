@@ -26,3 +26,23 @@ describe('calcularCreatina', () => {
     expect(calcularCreatina(68, ['creatina 2g']).dose_g).toBe(2);
   });
 });
+
+// Agentes de teste 2026-10-23 (Seu Antônio, 61 anos, sedentário, diabético, sem
+// suplementos): a mensagem de números sugeria "4,5 g/dia" de creatina mesmo ele não
+// usando. Sem creatina na lista, não há dose e a linha não aparece.
+import { formatarMensagemCalculos, calcularTMB, calcularMacros, calcularHidratacao } from '../src/services/calculos';
+
+describe('creatina para quem não usa', () => {
+  it('sem creatina nos suplementos → dose 0', () => {
+    expect(calcularCreatina(92, []).dose_g).toBe(0);
+    expect(calcularCreatina(92, undefined).dose_g).toBe(0);
+    expect(calcularCreatina(92, ['whey']).dose_g).toBe(0);
+  });
+
+  it('mensagem de números não fala de creatina quando a dose é 0', () => {
+    const dados = { idade: 61, sexo: 'masculino', peso_kg: 92, altura_cm: 175, atividade_tipo: 'sedentário' };
+    const tmb = calcularTMB(dados as Parameters<typeof calcularTMB>[0]);
+    const msg = formatarMensagemCalculos(tmb, calcularMacros(tmb.tdee_kcal, 'saude_geral', 92), calcularHidratacao(92), calcularCreatina(92, []));
+    expect(msg).not.toMatch(/creatina/i);
+  });
+});

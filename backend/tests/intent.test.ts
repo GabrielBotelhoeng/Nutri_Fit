@@ -454,3 +454,14 @@ describe('água com "foram" não é correção de refeição', () => {
     expect(classificarIntencaoRapida('foram 300ml de suco')).not.toBe('agua');
   });
 });
+
+// Agentes de teste 2026-10-23 (Carlos): "2 garrafas de água" junto com comida não era
+// reconhecida como água combinada — virava item da refeição e o contador ficava em 0.
+describe('água combinada em garrafas', () => {
+  it('detecta "2 garrafas de água" junto com comida', () => {
+    expect(mencionaAguaCombinada('almocei marmita de frango e tomei 2 garrafas de água')).toBe(true);
+  });
+  it('remove a menção da água do texto da refeição', () => {
+    expect(removerMencaoAgua('almocei marmita de frango e 2 garrafas de água')).toBe('almocei marmita de frango');
+  });
+});

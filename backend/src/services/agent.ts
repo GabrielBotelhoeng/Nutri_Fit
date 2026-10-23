@@ -218,6 +218,49 @@ export function proximaEtapaEntrevista(etapaAtual: number, dados: Record<string,
   return proxima;
 }
 
+const UNIDADES_PT: Record<string, number> = {
+  um: 1, uma: 1, dois: 2, duas: 2, tres: 3, quatro: 4, cinco: 5, seis: 6, sete: 7, oito: 8, nove: 9,
+  dez: 10, onze: 11, doze: 12, treze: 13, quatorze: 14, catorze: 14, quinze: 15, dezesseis: 16,
+  dezessete: 17, dezoito: 18, dezenove: 19,
+};
+const DEZENAS_PT: Record<string, number> = {
+  vinte: 20, trinta: 30, quarenta: 40, cinquenta: 50, sessenta: 60, setenta: 70, oitenta: 80, noventa: 90, cem: 100,
+};
+
+// Idade em dígitos (primeiro número da frase) ou por extenso ("sessenta e um").
+// Antes: replace(/\D/g, '') juntava todos os dígitos — "61 anos e 92 kg" virava 6192.
+export function parseIdade(texto: string): number | null {
+  const t = texto.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const digitos = t.match(/\d{1,3}/);
+  let idade: number | null = digitos ? parseInt(digitos[0], 10) : null;
+  if (idade === null) {
+    const palavras = t.split(/[^a-z]+/);
+    let total = 0;
+    for (const p of palavras) {
+      if (DEZENAS_PT[p] !== undefined) total += DEZENAS_PT[p];
+      else if (UNIDADES_PT[p] !== undefined) total += UNIDADES_PT[p];
+    }
+    idade = total > 0 ? total : null;
+  }
+  return idade !== null && idade >= 10 && idade <= 120 ? idade : null;
+}
+
+// Depois de recusar dose de controlado, "e quantos mg a galera usa?" não cita a
+// substância e escapava do guard. Nos 15 min seguintes, pergunta de dose mantém a recusa.
+const TTL_RECUSA_CONTROLADO_MS = 15 * 60 * 1000;
+// Só termos de DOSE — "ml"/"quanto" sozinhos pegariam "bebi 500ml de água" e "quanto comi hoje?".
+const PERGUNTA_DOSE_RE = /(?:^|\W)(mg|mcg|dose|dosagem|ciclo|como\s+(?:tomar|usar|aplicar)|quant[oa]s?\s+(?:mg|tomar|usar|aplicar|por\s+dia))(?=\W|$)/i;
+
+export function insisteEmDoseControlada(
+  texto: string,
+  pendente: { substancia: string; timestamp: string } | undefined,
+  agora = Date.now(),
+): string | null {
+  if (!pendente?.substancia || !pendente.timestamp) return null;
+  if (agora - Date.parse(pendente.timestamp) > TTL_RECUSA_CONTROLADO_MS) return null;
+  return PERGUNTA_DOSE_RE.test(texto) ? pendente.substancia : null;
+}
+
 export function parseSuplementos(texto: string): string[] {
   const t = texto.toLowerCase().trim();
   if (!NEGATIVA_INICIO_RE.test(t)) return parseListaOuVazio(texto);
@@ -529,8 +572,8 @@ async function processarRespostaEntrevista(
 
   switch (etapa) {
     case 1: {
-      const idade = parseInt(textoLower.replace(/\D/g, ''), 10);
-      if (isNaN(idade) || idade < 10 || idade > 120) return {};
+      const idade = parseIdade(texto);
+      if (idade === null) return {};
       novoDado.idade = idade;
       break;
     }
@@ -1082,8 +1125,20 @@ export async function processarMensagem(phone: string, texto: string): Promise<v
 
   // Guarda de segurança: pergunta sobre dose/ciclo de controlada dispara redirect médico
   // ANTES de qualquer intent handler. Nunca passa dose.
-  const substanciaControlada = detectarPerguntaDoseControlada(texto);
+  const substanciaControlada =
+    detectarPerguntaDoseControlada(texto) ??
+    insisteEmDoseControlada(
+      texto,
+      dadosEstado['recusa_controlado'] as { substancia: string; timestamp: string } | undefined,
+    );
   if (substanciaControlada) {
+    try {
+      await atualizarEstado(paciente.id, {
+        dados: { recusa_controlado: { substancia: substanciaControlada, timestamp: new Date().toISOString() } } as Parameters<typeof atualizarEstado>[1]['dados'],
+      });
+    } catch (err) {
+      console.error('[agent] Falha ao marcar recusa_controlado:', err);
+    }
     console.warn(
       `[agent] Paciente ${paciente.nome} perguntou sobre dose de controlada: ${substanciaControlada}`,
     );
