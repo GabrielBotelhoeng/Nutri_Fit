@@ -7,3 +7,5 @@ coverage
 *.log
 .git
 .vscode
+agentes-teste
+vitest*.config.ts
