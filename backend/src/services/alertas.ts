@@ -122,6 +122,62 @@ export function horarioNaJanela(horario: string | null | undefined, disparo: str
   return h >= inicio && h < inicio + JANELA_MIN;
 }
 
+export const MENSAGEM_REENGAJAMENTO =
+  '👋 Sumiu? Tudo bem, recomeçar faz parte. Me manda o que você comeu hoje que eu anoto pra você 💚';
+
+const REFEICAO_RECENTE_MS = 60 * 60 * 1000;
+const INATIVIDADE_MS = 48 * 60 * 60 * 1000;
+
+export interface ContextoDecisao {
+  agora: Date;
+  refeicoesCasadas: RefeicaoKey[];
+  aguaCasou: boolean;
+  suplementoCasou: boolean;
+  disparoDoReengajamento: boolean;
+  aguaHojeMl: number;
+  metaAguaMl: number;
+  ultimaRefeicaoEm: Date | null;
+  pacienteCriadoEm: Date;
+  ultimoReengajamentoEm: Date | null;
+}
+
+export interface DecisaoAlertas {
+  refeicoes: RefeicaoKey[];
+  agua: boolean;
+  suplemento: boolean;
+  reengajar: boolean;
+}
+
+// Lembrete que reage ao comportamento: não cobra o que já foi feito e, pra quem sumiu,
+// troca a rotina (que vira spam e leva a bloqueio) por UMA mensagem por sequência de inatividade.
+export function decidirAlertas(ctx: ContextoDecisao): DecisaoAlertas {
+  const agoraMs = ctx.agora.getTime();
+  const referencia = ctx.ultimaRefeicaoEm ?? ctx.pacienteCriadoEm;
+
+  if (agoraMs - referencia.getTime() >= INATIVIDADE_MS) {
+    const jaReengajado =
+      ctx.ultimoReengajamentoEm !== null &&
+      (ctx.ultimaRefeicaoEm === null || ctx.ultimoReengajamentoEm > ctx.ultimaRefeicaoEm);
+    return {
+      refeicoes: [],
+      agua: false,
+      suplemento: false,
+      reengajar: ctx.disparoDoReengajamento && !jaReengajado,
+    };
+  }
+
+  const refeicaoRecente =
+    ctx.ultimaRefeicaoEm !== null && agoraMs - ctx.ultimaRefeicaoEm.getTime() < REFEICAO_RECENTE_MS;
+  const aguaBatida = ctx.metaAguaMl > 0 && ctx.aguaHojeMl >= ctx.metaAguaMl;
+
+  return {
+    refeicoes: refeicaoRecente ? [] : ctx.refeicoesCasadas,
+    agua: ctx.aguaCasou && !aguaBatida,
+    suplemento: ctx.suplementoCasou,
+    reengajar: false,
+  };
+}
+
 export async function dispararAlertas(horario: string): Promise<void> {
   console.log(`[alertas] Verificando alertas para horario ${horario}`);
 
