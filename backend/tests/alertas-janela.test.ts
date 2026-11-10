@@ -1,17 +1,31 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { resultado, sendText } = vi.hoisted(() => ({
-  resultado: { data: [] as unknown[], error: null as null | { message: string } },
+type Resultado = { data: unknown; error: null | { message: string } };
+
+const { resultados, sendText, updates } = vi.hoisted(() => ({
+  resultados: {} as Record<string, Resultado>,
   sendText: vi.fn(),
+  updates: [] as Array<{ table: string; values: Record<string, unknown> }>,
 }));
 
 vi.mock('@supabase/supabase-js', () => {
-  const chain = {
-    select: () => chain,
-    eq: () => chain,
-    then: (resolve: (v: unknown) => unknown) => resolve(resultado),
+  function chainPara(table: string) {
+    const chain: Record<string, unknown> = {};
+    for (const m of ['select', 'eq', 'in', 'gte', 'lt', 'order', 'limit']) chain[m] = () => chain;
+    chain.update = (values: Record<string, unknown>) => {
+      updates.push({ table, values });
+      return chain;
+    };
+    chain.then = (resolve: (v: unknown) => unknown) =>
+      resolve(resultados[table] ?? { data: [], error: null });
+    return chain;
+  }
+  return {
+    createClient: vi.fn(() => ({
+      from: (t: string) => chainPara(t),
+      rpc: (fn: string) => chainPara(`rpc:${fn}`),
+    })),
   };
-  return { createClient: vi.fn(() => ({ from: () => chain })) };
 });
 vi.mock('../src/services/evolution', () => ({ sendText }));
 
@@ -58,8 +72,17 @@ describe('horarioNaJanela', () => {
   });
 });
 
+// Máximo por paciente via RPC: buscar todas as refeições estourava o max_rows do PostgREST.
+const ULTIMA = 'rpc:ultima_refeicao_por_paciente';
+
 describe('dispararAlertas', () => {
-  const paciente = { whatsapp: '5562999990000', nome: 'Teste', ativo: true, entrevista_dados: { hidratacao_ml: 2000 } };
+  const paciente = {
+    whatsapp: '5562999990000',
+    nome: 'Teste',
+    ativo: true,
+    created_at: '2026-01-01T00:00:00Z',
+    entrevista_dados: { hidratacao_ml: 2000 },
+  };
   const configBase = {
     paciente_id: 'p1',
     horario_cafe: '07:10',
@@ -74,8 +97,14 @@ describe('dispararAlertas', () => {
 
   beforeEach(() => {
     sendText.mockReset();
-    resultado.data = [configBase];
-    resultado.error = null;
+    updates.length = 0;
+    resultados.alertas_config = { data: [{ ...configBase, ultimo_reengajamento_em: null }], error: null };
+    resultados.registros_diarios = { data: [], error: null };
+    // Ativo: comeu há 4 h.
+    resultados[ULTIMA] = {
+      data: [{ paciente_id: 'p1', ultima: new Date(Date.now() - 4 * 3600_000).toISOString() }],
+      error: null,
+    };
   });
 
   it('dispara almoço, água e suplemento de 12:20 no cron de 12:15', async () => {
@@ -95,9 +124,52 @@ describe('dispararAlertas', () => {
     expect(sendText).toHaveBeenCalledTimes(2); // café + água
   });
 
-  it('erro do Supabase não envia nada', async () => {
-    resultado.error = { message: 'falhou' };
+  it('erro do Supabase ao buscar configs não envia nada', async () => {
+    resultados.alertas_config = { data: null, error: { message: 'falhou' } };
     await dispararAlertas('12:15');
     expect(sendText).not.toHaveBeenCalled();
+  });
+
+  it('água pulada quando a meta do dia já foi batida', async () => {
+    resultados.registros_diarios = { data: [{ paciente_id: 'p1', agua_ml: 2000 }], error: null };
+    await dispararAlertas('12:15');
+    const textos = sendText.mock.calls.map((c) => c[1] as string).join('\n');
+    expect(sendText).toHaveBeenCalledTimes(2); // almoço + suplemento
+    expect(textos).not.toContain('hidratar');
+  });
+
+  it('almoço pulado quando já registrou refeição há menos de 1 h', async () => {
+    resultados[ULTIMA] = {
+      data: [{ paciente_id: 'p1', ultima: new Date(Date.now() - 20 * 60_000).toISOString() }],
+      error: null,
+    };
+    await dispararAlertas('12:15');
+    const textos = sendText.mock.calls.map((c) => c[1] as string).join('\n');
+    expect(textos).not.toContain('almoço');
+    expect(sendText).toHaveBeenCalledTimes(2); // água + suplemento
+  });
+
+  it('inativo há dias recebe só o reengajamento no horário do almoço e marca a data', async () => {
+    resultados[ULTIMA] = { data: [], error: null };
+    await dispararAlertas('12:15');
+    expect(sendText).toHaveBeenCalledTimes(1);
+    expect(sendText.mock.calls[0][1]).toContain('Sumiu?');
+    expect(updates).toHaveLength(1);
+    expect(updates[0].table).toBe('alertas_config');
+    expect(updates[0].values).toHaveProperty('ultimo_reengajamento_em');
+  });
+
+  it('inativo fora do horário do almoço não recebe nada', async () => {
+    resultados[ULTIMA] = { data: [], error: null };
+    await dispararAlertas('07:00');
+    expect(sendText).not.toHaveBeenCalled();
+    expect(updates).toHaveLength(0);
+  });
+
+  it('falha ao carregar contexto mantém o comportamento antigo', async () => {
+    resultados[ULTIMA] = { data: null, error: { message: 'timeout' } };
+    await dispararAlertas('12:15');
+    expect(sendText).toHaveBeenCalledTimes(3);
+    expect(updates).toHaveLength(0);
   });
 });
