@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { apiFetch } from '../lib/api';
 import { BarraAdesao } from './AdesaoIndicadores';
 import {
@@ -152,7 +152,7 @@ function ConteudoFicha({ ficha }: { ficha: FichaAdesao }) {
 function Secao({ titulo, subtitulo, children }: { titulo: string; subtitulo?: string; children: React.ReactNode }) {
   return (
     <section>
-      <div className="flex items-baseline justify-between gap-3 mb-2">
+      <div className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3 mb-2">
         <h3 className="font-semibold" style={{ color: 'var(--color-text-primary)' }}>{titulo}</h3>
         {subtitulo && <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{subtitulo}</span>}
       </div>
@@ -182,8 +182,26 @@ function opacidadePorMeta(pct: number): number {
   return 0.2;
 }
 
+// Desenha na largura real do contêiner: com viewBox fixo o SVG encolhia no celular
+// e o texto dos eixos virava ~6 px.
+function useLargura(padrao: number) {
+  const ref = useRef<HTMLElement | null>(null);
+  const [largura, setLargura] = useState(padrao);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entrada]) => {
+      const w = Math.round(entrada.contentRect.width);
+      if (w > 0) setLargura(w);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return [ref, largura] as const;
+}
+
 function GraficoKcal({ dias, meta }: { dias: DiaAdesao[]; meta: number }) {
-  const W = 560;
+  const [ref, W] = useLargura(560);
   const H = 180;
   const topo = 12;
   const base = H - 24;
@@ -194,8 +212,8 @@ function GraficoKcal({ dias, meta }: { dias: DiaAdesao[]; meta: number }) {
   const ultimo = dias.length - 1;
 
   return (
-    <figure>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label="Calorias por dia nos últimos 14 dias, comparadas à meta">
+    <figure ref={ref}>
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="block" role="img" aria-label="Calorias por dia nos últimos 14 dias, comparadas à meta">
         <line x1={0} x2={W} y1={y(meta)} y2={y(meta)} stroke="var(--color-text-muted)" strokeDasharray="4 4" strokeWidth={1} />
         <text x={W - 4} y={y(meta) - 4} textAnchor="end" fontSize={11} fill="var(--color-text-muted)">meta</text>
         {dias.map((d, i) => {
@@ -294,6 +312,8 @@ function FaixaMeta({
 }
 
 function GraficoPeso({ pesagens, inicial }: { pesagens: { data: string; peso_kg: number }[]; inicial: number | null }) {
+  // Antes do retorno antecipado (regra dos hooks).
+  const [ref, W] = useLargura(560);
   if (pesagens.length === 0) {
     return <Vazio texto={'Sem pesagens ainda. O paciente pode mandar "pesei 78,5" no WhatsApp.'} />;
   }
@@ -301,8 +321,8 @@ function GraficoPeso({ pesagens, inicial }: { pesagens: { data: string; peso_kg:
   const atual = pesagens[pesagens.length - 1].peso_kg;
   const delta = Math.round((atual - primeiro) * 10) / 10;
   const textoDelta = delta === 0 ? 'sem variação' : `${delta > 0 ? '+' : '−'}${formatarKg(Math.abs(delta))} kg`;
+  const ultima = pesagens[pesagens.length - 1];
 
-  const W = 560;
   const H = 140;
   const pad = 16;
   const valores = pesagens.map((p) => p.peso_kg);
@@ -315,12 +335,12 @@ function GraficoPeso({ pesagens, inicial }: { pesagens: { data: string; peso_kg:
   const pontos = pesagens.map((p) => `${x(p.data)},${y(p.peso_kg)}`).join(' ');
 
   return (
-    <figure>
+    <figure ref={ref}>
       <p className="text-sm mb-2" style={{ color: 'var(--color-text-secondary)' }}>
         <strong className="tabular-nums">{formatarKg(primeiro)} → {formatarKg(atual)} kg</strong> ({textoDelta}
         {inicial !== null ? ' desde a entrevista' : ' no período'})
       </p>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label={`Peso de ${formatarKg(primeiro)} para ${formatarKg(atual)} kg`}>
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="block" role="img" aria-label={`Peso de ${formatarKg(primeiro)} para ${formatarKg(atual)} kg`}>
         {inicial !== null && (
           <>
             <line x1={0} x2={W} y1={y(inicial)} y2={y(inicial)} stroke="var(--color-border-subtle)" strokeDasharray="4 4" />
@@ -335,6 +355,17 @@ function GraficoPeso({ pesagens, inicial }: { pesagens: { data: string; peso_kg:
             <title>{`${formatarDiaMes(p.data)}: ${formatarKg(p.peso_kg)} kg`}</title>
           </circle>
         ))}
+        {/* Rótulo direto só no ponto atual; os demais ficam no tooltip. */}
+        <text
+          x={x(ultima.data) - 8}
+          y={y(ultima.peso_kg) - 10}
+          textAnchor="end"
+          fontSize={12}
+          fontWeight={600}
+          fill="var(--color-text-primary)"
+        >
+          {formatarKg(ultima.peso_kg)} kg
+        </text>
       </svg>
     </figure>
   );

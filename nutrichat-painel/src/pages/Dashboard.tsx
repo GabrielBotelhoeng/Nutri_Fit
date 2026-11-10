@@ -449,7 +449,7 @@ export function Dashboard() {
               className="hidden md:block bg-white rounded-2xl overflow-x-auto"
               style={{ border: '1px solid var(--color-border-subtle)', boxShadow: 'var(--shadow-card)' }}
             >
-              <table className="w-full min-w-[1080px] text-sm whitespace-nowrap">
+              <table className="w-full min-w-[920px] text-sm whitespace-nowrap">
                 <thead>
                   <tr style={{ background: 'var(--color-bg-muted)' }}>
                     <SortableTh ativo={ordemCampo === 'nome'} onClick={() => alternarOrdem('nome')} seta={setaOrdem('nome')}>
@@ -460,8 +460,6 @@ export function Dashboard() {
                     </SortableTh>
                     <Th>Último registro</Th>
                     <Th>Peso</Th>
-                    <Th>WhatsApp</Th>
-                    <Th>Plano</Th>
                     <SortableTh
                       ativo={ordemCampo === 'data_expiracao'}
                       onClick={() => alternarOrdem('data_expiracao')}
@@ -499,6 +497,10 @@ export function Dashboard() {
                         >
                           {p.nome}
                         </button>
+                        {/* WhatsApp abaixo do nome: libera uma coluna para Ações caber sem rolagem. */}
+                        <p className="text-xs font-normal tabular-nums" style={{ color: 'var(--color-text-muted)' }}>
+                          {formatarWhatsappBR(p.whatsapp)}
+                        </p>
                       </td>
                       <td className="px-4 py-3">
                         {p.adesao ? (
@@ -514,13 +516,10 @@ export function Dashboard() {
                         <PesoResumo adesao={p.adesao} />
                       </td>
                       <td className="px-4 py-3 tabular-nums" style={{ color: 'var(--color-text-secondary)' }}>
-                        {formatarWhatsappBR(p.whatsapp)}
-                      </td>
-                      <td className="px-4 py-3" style={{ color: 'var(--color-text-secondary)' }}>
-                        {PLANO_LABELS[p.plano as keyof typeof PLANO_LABELS] ?? p.plano}
-                      </td>
-                      <td className="px-4 py-3 tabular-nums" style={{ color: 'var(--color-text-secondary)' }}>
                         {formatarDataBR(p.data_expiracao)}
+                        <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                          {PLANO_LABELS[p.plano as keyof typeof PLANO_LABELS] ?? p.plano}
+                        </p>
                       </td>
                       <td className="px-4 py-3">
                         <StatusBadge status={p.status} title={tituloStatus(p.status)} />
