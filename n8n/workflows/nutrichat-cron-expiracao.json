@@ -16,7 +16,10 @@
       "name": "Cron 09h diario",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1,
-      "position": [200, 300]
+      "position": [
+        200,
+        300
+      ]
     },
     {
       "parameters": {
@@ -31,18 +34,34 @@
             }
           ]
         },
-        "options": {}
+        "options": {
+          "timeout": 30000
+        }
       },
       "id": "verificar-expiracao",
       "name": "Chamar Verificacao de Expiracao",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [400, 300]
+      "position": [
+        400,
+        300
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
     }
   ],
   "connections": {
     "Cron 09h diario": {
-      "main": [[{ "node": "Chamar Verificacao de Expiracao", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Chamar Verificacao de Expiracao",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": true,

@@ -99,6 +99,29 @@ export async function sincronizarAlertasDaEntrevista(
   console.log(`[alertas] sincronizado para ${pacienteId} (${payload.horarios_agua.length} horarios cadastrados)`);
 }
 
+// O cron do N8N roda de 15 em 15 min (:00/:15/:30/:45). Comparar por igualdade
+// perdia horários fora dessa grade ("almoço 12h20" nunca disparava) e disparos
+// atrasados ("12:16"). Cada disparo cobre o quarto de hora [início, início+15).
+const JANELA_MIN = 15;
+
+function paraMinutos(hhmm: string): number | null {
+  const m = /^(\d{1,2}):(\d{2})(?::\d{2})?$/.exec(hhmm.trim());
+  if (!m) return null;
+  const h = parseInt(m[1], 10);
+  const min = parseInt(m[2], 10);
+  if (h > 23 || min > 59) return null;
+  return h * 60 + min;
+}
+
+export function horarioNaJanela(horario: string | null | undefined, disparo: string): boolean {
+  if (!horario) return false;
+  const h = paraMinutos(horario);
+  const d = paraMinutos(disparo);
+  if (h === null || d === null) return false;
+  const inicio = d - (d % JANELA_MIN);
+  return h >= inicio && h < inicio + JANELA_MIN;
+}
+
 export async function dispararAlertas(horario: string): Promise<void> {
   console.log(`[alertas] Verificando alertas para horario ${horario}`);
 
@@ -142,17 +165,17 @@ export async function dispararAlertas(horario: string): Promise<void> {
 
     const refeicoesParaEnviar: RefeicaoKey[] = [];
 
-    if (config.horario_cafe === horario)         refeicoesParaEnviar.push('cafe');
-    if (config.horario_lanche_manha === horario) refeicoesParaEnviar.push('lanche_manha');
-    if (config.horario_almoco === horario)       refeicoesParaEnviar.push('almoco');
-    if (config.horario_lanche_tarde === horario) refeicoesParaEnviar.push('lanche_tarde');
-    if (config.horario_jantar === horario)       refeicoesParaEnviar.push('jantar');
+    if (horarioNaJanela(config.horario_cafe, horario))         refeicoesParaEnviar.push('cafe');
+    if (horarioNaJanela(config.horario_lanche_manha, horario)) refeicoesParaEnviar.push('lanche_manha');
+    if (horarioNaJanela(config.horario_almoco, horario))       refeicoesParaEnviar.push('almoco');
+    if (horarioNaJanela(config.horario_lanche_tarde, horario)) refeicoesParaEnviar.push('lanche_tarde');
+    if (horarioNaJanela(config.horario_jantar, horario))       refeicoesParaEnviar.push('jantar');
 
     const aguaArr = (config.horarios_agua as string[]) || [];
-    const aguaCasou = aguaArr.includes(horario);
+    const aguaCasou = aguaArr.some((h) => horarioNaJanela(h, horario));
 
     const supArr = (config.horario_suplementos as string[]) || [];
-    const suplementoCasou = supArr.includes(horario);
+    const suplementoCasou = supArr.some((h) => horarioNaJanela(h, horario));
 
     if (refeicoesParaEnviar.length === 0 && !aguaCasou && !suplementoCasou) continue;
 
