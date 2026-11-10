@@ -15,8 +15,8 @@ interface SummaryCardProps {
 const toneStyles: Record<Tone, { border: string; text: string; dot: string }> = {
   neutral: {
     border: 'var(--color-border-subtle)',
-    text: 'var(--color-text-primary)',
-    dot: 'var(--color-text-muted)',
+    text: 'var(--color-floresta)',
+    dot: 'var(--color-medio)',
   },
   success: {
     border: 'var(--color-success-soft)',
@@ -46,8 +46,8 @@ export function SummaryCard({ label, value, hint, tone = 'neutral', active, onCl
       onClick={onClick}
       aria-pressed={clickable ? !!active : undefined}
       className={[
-        'flex flex-col items-start gap-1 bg-white rounded-xl p-4 text-left w-full transition',
-        clickable ? 'cursor-pointer hover:shadow-md hover:-translate-y-0.5' : '',
+        'flex flex-col items-start gap-1 bg-white rounded-2xl p-4 text-left w-full transition',
+        clickable ? 'cursor-pointer hover:-translate-y-0.5 hover:shadow-[var(--shadow-elevated)]' : '',
       ]
         .filter(Boolean)
         .join(' ')}
@@ -56,11 +56,11 @@ export function SummaryCard({ label, value, hint, tone = 'neutral', active, onCl
         boxShadow: active ? '0 0 0 3px ' + t.border : 'var(--shadow-card)',
       }}
     >
-      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>
+      <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: 'var(--color-text-muted)' }}>
         {icon && <span aria-hidden style={{ color: t.dot }}>{icon}</span>}
         <span>{label}</span>
       </div>
-      <div className="text-2xl font-bold" style={{ color: t.text }}>{value}</div>
+      <div className="font-display text-4xl leading-none tabular-nums my-1" style={{ color: t.text }}>{value}</div>
       {hint && (
         <div className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{hint}</div>
       )}

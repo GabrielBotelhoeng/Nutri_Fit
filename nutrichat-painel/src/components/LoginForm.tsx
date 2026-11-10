@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Button } from './Button';
+import { Logo } from './Logo';
 
 export function LoginForm() {
   const [email, setEmail] = useState('');
@@ -13,59 +14,59 @@ export function LoginForm() {
     setLoading(true);
     setErro('');
     const { error } = await supabase.auth.signInWithPassword({ email, password: senha });
-    if (error) setErro('Email ou senha incorretos.');
+    if (error) setErro('E-mail ou senha incorretos.');
     setLoading(false);
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4" style={{ background: 'var(--color-bg-app)' }}>
+    <div className="min-h-screen flex items-center justify-center px-4 py-10">
       <form
         onSubmit={handleLogin}
-        className="bg-white rounded-2xl p-8 w-full max-w-sm"
-        style={{ border: '1px solid var(--color-border-subtle)', boxShadow: 'var(--shadow-modal)' }}
+        className="bg-white/90 rounded-3xl p-6 sm:p-8 w-full max-w-sm"
+        style={{ border: '1px solid var(--color-border-subtle)', boxShadow: 'var(--shadow-elevated)' }}
       >
-        <div className="flex items-center gap-2 mb-1">
-          <span aria-hidden className="text-2xl">🥗</span>
-          <span className="text-2xl font-bold" style={{ color: 'var(--color-text-primary)' }}>
-            NutriChat
-          </span>
+        <div className="mb-6">
+          <Logo tamanho="lg" />
         </div>
-        <p className="text-sm mb-6" style={{ color: 'var(--color-text-muted)' }}>
-          Painel do nutricionista
+        <h1 className="font-display text-3xl mb-1" style={{ color: 'var(--color-floresta)' }}>
+          Acesse o painel
+        </h1>
+        <p className="text-sm mb-6" style={{ color: 'var(--color-text-secondary)' }}>
+          Entre para acompanhar seus pacientes.
         </p>
 
-        <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text-primary)' }}>
-          Email
+        <label htmlFor="login-email" className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text-primary)' }}>
+          E-mail
         </label>
         <input
+          id="login-email"
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="voce@exemplo.com"
           required
           autoComplete="email"
-          className="w-full border rounded-md px-3 py-2 mb-4 text-sm"
-          style={{ borderColor: 'var(--color-border-subtle)' }}
+          className="campo mb-4"
         />
 
-        <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text-primary)' }}>
+        <label htmlFor="login-senha" className="block text-sm font-medium mb-1" style={{ color: 'var(--color-text-primary)' }}>
           Senha
         </label>
         <input
+          id="login-senha"
           type="password"
           value={senha}
           onChange={(e) => setSenha(e.target.value)}
           placeholder="••••••••"
           required
           autoComplete="current-password"
-          className="w-full border rounded-md px-3 py-2 mb-4 text-sm"
-          style={{ borderColor: 'var(--color-border-subtle)' }}
+          className="campo mb-5"
         />
 
         {erro && (
           <div
             role="alert"
-            className="mb-4 px-3 py-2 rounded-md text-sm"
+            className="mb-4 px-3 py-2 rounded-lg text-sm"
             style={{ background: 'var(--color-danger-soft)', color: 'var(--color-danger)' }}
           >
             {erro}

@@ -23,8 +23,8 @@ export function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-offwhite">
-        <p className="text-terra">Carregando...</p>
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>Carregando...</p>
       </div>
     );
   }

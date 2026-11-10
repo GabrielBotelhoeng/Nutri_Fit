@@ -8,6 +8,7 @@ import { PacienteModal } from '../components/PacienteModal';
 import { Button } from '../components/Button';
 import { SummaryCard } from '../components/SummaryCard';
 import { PLANO_LABELS, formatarDataBR } from '../lib/planos';
+import { Logo } from '../components/Logo';
 
 interface Paciente {
   id: string;
@@ -176,39 +177,42 @@ export function Dashboard() {
   const temFiltroAtivo = busca || filtroStatus !== 'todos' || filtroDieta !== 'todas';
 
   return (
-    <div style={{ background: 'var(--color-bg-app)', minHeight: '100vh' }}>
+    <div className="min-h-screen">
       <header
-        className="px-6 py-3 flex items-center justify-between text-white"
-        style={{ background: 'var(--color-floresta)' }}
+        className="sticky top-0 z-40"
+        style={{
+          background: 'rgba(240, 247, 236, 0.88)',
+          backdropFilter: 'blur(14px) saturate(140%)',
+          WebkitBackdropFilter: 'blur(14px) saturate(140%)',
+          borderBottom: '1px solid var(--color-menta)',
+        }}
       >
-        <span className="font-bold text-base flex items-center gap-2">
-          <span aria-hidden>🥗</span> NutriChat <span className="opacity-70">— Painel</span>
-        </span>
-        <button
-          onClick={() => supabase.auth.signOut()}
-          className="text-sm underline opacity-80 hover:opacity-100 cursor-pointer"
-        >
-          Sair
-        </button>
+        <div className="max-w-6xl mx-auto px-4 md:px-6 h-16 flex items-center justify-between gap-3">
+          <Logo />
+          <Button variant="ghost" size="sm" onClick={() => supabase.auth.signOut()}>
+            Sair
+          </Button>
+        </div>
       </header>
 
-      <main className="p-6 max-w-6xl mx-auto">
-        {/* Titulo + acao principal */}
-        <div className="flex flex-wrap items-end justify-between gap-4 mb-5">
+      <main className="px-4 py-6 md:px-6 md:py-8 max-w-6xl mx-auto">
+        {/* Título + ação principal */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold" style={{ color: 'var(--color-text-primary)' }}>
+            <p className="eyebrow mb-3">Painel</p>
+            <h1 className="font-display text-4xl md:text-[44px] leading-tight" style={{ color: 'var(--color-floresta)' }}>
               Pacientes
             </h1>
-            <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+            <p className="text-sm mt-1" style={{ color: 'var(--color-text-secondary)' }}>
               Gerencie o acesso, a dieta e a validade de cada paciente.
             </p>
           </div>
-          <Button onClick={abrirNovoPaciente} icon={<span>+</span>}>
+          <Button onClick={abrirNovoPaciente} icon={<span>+</span>} className="w-full sm:w-auto">
             Novo paciente
           </Button>
         </div>
 
-        {/* Cards de resumo — H1 visibilidade + H6 filtros como reconhecimento */}
+        {/* Cards de resumo — também funcionam como filtro de status */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
           <SummaryCard
             label="Total"
@@ -229,7 +233,7 @@ export function Dashboard() {
           <SummaryCard
             label="Expirando"
             value={resumo.expirando}
-            hint="Vence em ate 3 dias"
+            hint="Vence em até 3 dias"
             tone="warning"
             active={filtroStatus === 'expirando'}
             onClick={() => setFiltroStatus('expirando')}
@@ -244,46 +248,62 @@ export function Dashboard() {
           />
         </div>
 
-        {/* Barra de controle: busca + filtro dieta + refresh */}
+        {/* Barra de controle: busca + filtro do bot + atualizar */}
         <div
-          className="flex flex-wrap items-center gap-3 mb-4 p-3 rounded-xl bg-white"
-          style={{ border: '1px solid var(--color-border-subtle)' }}
+          className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center mb-4 p-3 rounded-2xl bg-white/80"
+          style={{ border: '1px solid var(--color-border-subtle)', boxShadow: 'var(--shadow-card)' }}
         >
-          <div className="relative flex-1 min-w-[220px]">
-            <span
+          <div className="relative flex-1 sm:min-w-[240px]">
+            <svg
               aria-hidden
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-sm"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              className="absolute left-3 top-1/2 -translate-y-1/2"
               style={{ color: 'var(--color-text-muted)' }}
             >
-              🔎
-            </span>
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-3.5-3.5" />
+            </svg>
             <input
               ref={buscaRef}
               type="search"
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
-              placeholder='Buscar por nome ou WhatsApp — tecle "/"'
+              placeholder="Buscar por nome ou WhatsApp"
               aria-label="Buscar pacientes"
-              className="w-full pl-8 pr-3 py-2 rounded-md text-sm border"
-              style={{ borderColor: 'var(--color-border-subtle)' }}
+              className="campo !pl-9"
             />
+            <kbd
+              aria-hidden
+              className="hidden md:inline-block absolute right-3 top-1/2 -translate-y-1/2 px-1.5 text-[11px] rounded border"
+              style={{ color: 'var(--color-text-muted)', borderColor: 'var(--color-border-subtle)' }}
+            >
+              /
+            </kbd>
           </div>
 
-          <FiltroDietaSelect value={filtroDieta} onChange={setFiltroDieta} />
+          <div className="flex items-center gap-3">
+            <FiltroDietaSelect value={filtroDieta} onChange={setFiltroDieta} />
 
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={carregarPacientes}
-            loading={carregando}
-            title="Atualizar lista"
-          >
-            Atualizar
-          </Button>
+            <Button
+              variant="secondary"
+              size="md"
+              onClick={carregarPacientes}
+              loading={carregando}
+              title="Atualizar lista"
+            >
+              Atualizar
+            </Button>
+          </div>
 
           {ultimaAtualizacao && !carregando && (
-            <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-              Atualizado {formatarHorario(ultimaAtualizacao)}
+            <span className="text-xs sm:ml-auto" style={{ color: 'var(--color-text-muted)' }}>
+              Atualizado às {formatarHorario(ultimaAtualizacao)}
             </span>
           )}
         </div>
@@ -295,7 +315,7 @@ export function Dashboard() {
               Exibindo <strong>{pacientesVisiveis.length}</strong> de <strong>{pacientes.length}</strong> pacientes
             </span>
             {temFiltroAtivo && (
-              <button onClick={limparFiltros} className="underline cursor-pointer">
+              <button onClick={limparFiltros} className="underline cursor-pointer" style={{ color: 'var(--color-medio)' }}>
                 Limpar filtros
               </button>
             )}
@@ -305,25 +325,25 @@ export function Dashboard() {
         {/* Erro de carregamento */}
         {erroCarregamento && (
           <div
-            className="mb-4 px-4 py-3 rounded-md text-sm flex items-start justify-between gap-3"
+            className="mb-4 px-4 py-3 rounded-xl text-sm flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3"
             style={{ background: 'var(--color-danger-soft)', color: 'var(--color-danger)' }}
           >
             <span>
-              <strong>Nao foi possivel carregar a lista.</strong> {erroCarregamento}
+              <strong>Não foi possível carregar a lista.</strong> {erroCarregamento}
             </span>
-            <button onClick={carregarPacientes} className="underline whitespace-nowrap font-medium cursor-pointer">
+            <button onClick={carregarPacientes} className="underline whitespace-nowrap font-medium cursor-pointer self-start">
               Tentar novamente
             </button>
           </div>
         )}
 
-        {/* Estados da tabela */}
+        {/* Estados da lista */}
         {carregando ? (
           <SkeletonTable />
         ) : erroCarregamento ? null : pacientes.length === 0 ? (
           <EmptyState
             titulo="Nenhum paciente cadastrado"
-            descricao="Comece cadastrando o primeiro paciente. O bot recebe as boas-vindas automaticamente."
+            descricao="Comece cadastrando o primeiro paciente. O bot envia as boas-vindas automaticamente."
             acao={<Button onClick={abrirNovoPaciente}>+ Cadastrar primeiro paciente</Button>}
           />
         ) : pacientesVisiveis.length === 0 ? (
@@ -337,100 +357,118 @@ export function Dashboard() {
             }
           />
         ) : (
-          <div
-            className="bg-white rounded-xl overflow-hidden"
-            style={{ border: '1px solid var(--color-border-subtle)', boxShadow: 'var(--shadow-card)' }}
-          >
-            <table className="w-full text-sm">
-              <thead>
-                <tr style={{ background: 'var(--color-bg-muted)' }}>
-                  <SortableTh
-                    ativo={ordemCampo === 'nome'}
-                    onClick={() => alternarOrdem('nome')}
-                    seta={setaOrdem('nome')}
+          <>
+            {/* Celular: lista de cards */}
+            <ul className="md:hidden flex flex-col gap-3">
+              {pacientesVisiveis.map((p) => (
+                <li key={p.id}>
+                  <button
+                    type="button"
+                    onClick={() => abrirEdicao(p)}
+                    className="w-full text-left bg-white rounded-2xl p-4 cursor-pointer transition active:scale-[0.99]"
+                    style={{ border: '1px solid var(--color-border-subtle)', boxShadow: 'var(--shadow-card)' }}
+                    aria-label={`Editar ${p.nome}`}
                   >
-                    Nome
-                  </SortableTh>
-                  <th className="text-left px-4 py-3 font-semibold" style={{ color: 'var(--color-text-secondary)' }}>
-                    WhatsApp
-                  </th>
-                  <th className="text-left px-4 py-3 font-semibold" style={{ color: 'var(--color-text-secondary)' }}>
-                    Plano
-                  </th>
-                  <SortableTh
-                    ativo={ordemCampo === 'data_expiracao'}
-                    onClick={() => alternarOrdem('data_expiracao')}
-                    seta={setaOrdem('data_expiracao')}
-                  >
-                    Expiracao
-                  </SortableTh>
-                  <SortableTh
-                    ativo={ordemCampo === 'status'}
-                    onClick={() => alternarOrdem('status')}
-                    seta={setaOrdem('status')}
-                  >
-                    Status
-                  </SortableTh>
-                  <SortableTh
-                    ativo={ordemCampo === 'rag_status'}
-                    onClick={() => alternarOrdem('rag_status')}
-                    seta={setaOrdem('rag_status')}
-                  >
-                    Bot
-                  </SortableTh>
-                  <th className="text-right px-4 py-3 font-semibold" style={{ color: 'var(--color-text-secondary)' }}>
-                    Acao
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {pacientesVisiveis.map((p) => (
-                  <tr
-                    key={p.id}
-                    className="transition-colors hover:bg-[color:var(--color-bg-muted)]"
-                    style={{ borderTop: '1px solid var(--color-border-subtle)' }}
-                  >
-                    <td className="px-4 py-3 font-medium" style={{ color: 'var(--color-text-primary)' }}>
-                      {p.nome}
-                    </td>
-                    <td className="px-4 py-3" style={{ color: 'var(--color-text-secondary)' }}>
-                      {formatarWhatsappBR(p.whatsapp)}
-                    </td>
-                    <td className="px-4 py-3" style={{ color: 'var(--color-text-secondary)' }}>
-                      {PLANO_LABELS[p.plano as keyof typeof PLANO_LABELS] ?? p.plano}
-                    </td>
-                    <td className="px-4 py-3" style={{ color: 'var(--color-text-secondary)' }}>
-                      {formatarDataBR(p.data_expiracao)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <StatusBadge
-                        status={p.status}
-                        title={
-                          p.status === 'expirando'
-                            ? 'Vence em ate 3 dias'
-                            : p.status === 'expirado'
-                              ? 'Plano vencido — o bot bloqueia mensagens'
-                              : 'Plano vigente'
-                        }
-                      />
-                    </td>
-                    <td className="px-4 py-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-semibold truncate" style={{ color: 'var(--color-text-primary)' }}>
+                          {p.nome}
+                        </p>
+                        <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+                          {formatarWhatsappBR(p.whatsapp)}
+                        </p>
+                      </div>
+                      <StatusBadge status={p.status} title={tituloStatus(p.status)} />
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                      <span>{PLANO_LABELS[p.plano as keyof typeof PLANO_LABELS] ?? p.plano}</span>
+                      <span aria-hidden style={{ color: 'var(--color-border-subtle)' }}>•</span>
+                      <span>Expira em {formatarDataBR(p.data_expiracao)}</span>
+                    </div>
+                    <div className="mt-3 flex items-center justify-between gap-3">
                       <RagBadge status={p.rag_status} />
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <Button variant="ghost" size="sm" onClick={() => abrirEdicao(p)}>
-                        Editar
-                      </Button>
-                    </td>
+                      <span className="text-sm font-medium" style={{ color: 'var(--color-medio)' }}>
+                        Editar →
+                      </span>
+                    </div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+
+            {/* Desktop: tabela (rola na horizontal se faltar espaço, sem cortar Ações) */}
+            <div
+              className="hidden md:block bg-white rounded-2xl overflow-x-auto"
+              style={{ border: '1px solid var(--color-border-subtle)', boxShadow: 'var(--shadow-card)' }}
+            >
+              <table className="w-full min-w-[760px] text-sm whitespace-nowrap">
+                <thead>
+                  <tr style={{ background: 'var(--color-bg-muted)' }}>
+                    <SortableTh ativo={ordemCampo === 'nome'} onClick={() => alternarOrdem('nome')} seta={setaOrdem('nome')}>
+                      Nome
+                    </SortableTh>
+                    <Th>WhatsApp</Th>
+                    <Th>Plano</Th>
+                    <SortableTh
+                      ativo={ordemCampo === 'data_expiracao'}
+                      onClick={() => alternarOrdem('data_expiracao')}
+                      seta={setaOrdem('data_expiracao')}
+                    >
+                      Expiração
+                    </SortableTh>
+                    <SortableTh ativo={ordemCampo === 'status'} onClick={() => alternarOrdem('status')} seta={setaOrdem('status')}>
+                      Status
+                    </SortableTh>
+                    <SortableTh
+                      ativo={ordemCampo === 'rag_status'}
+                      onClick={() => alternarOrdem('rag_status')}
+                      seta={setaOrdem('rag_status')}
+                    >
+                      Bot
+                    </SortableTh>
+                    <Th align="right">Ações</Th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {pacientesVisiveis.map((p) => (
+                    <tr
+                      key={p.id}
+                      className="transition-colors hover:bg-[color:var(--color-bg-muted)]"
+                      style={{ borderTop: '1px solid var(--color-border-subtle)' }}
+                    >
+                      <td className="px-4 py-3 font-medium" style={{ color: 'var(--color-text-primary)' }}>
+                        {p.nome}
+                      </td>
+                      <td className="px-4 py-3 tabular-nums" style={{ color: 'var(--color-text-secondary)' }}>
+                        {formatarWhatsappBR(p.whatsapp)}
+                      </td>
+                      <td className="px-4 py-3" style={{ color: 'var(--color-text-secondary)' }}>
+                        {PLANO_LABELS[p.plano as keyof typeof PLANO_LABELS] ?? p.plano}
+                      </td>
+                      <td className="px-4 py-3 tabular-nums" style={{ color: 'var(--color-text-secondary)' }}>
+                        {formatarDataBR(p.data_expiracao)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <StatusBadge status={p.status} title={tituloStatus(p.status)} />
+                      </td>
+                      <td className="px-4 py-3">
+                        <RagBadge status={p.rag_status} />
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <Button variant="ghost" size="sm" onClick={() => abrirEdicao(p)}>
+                          Editar
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
 
-        {/* Rodape com dica de atalho */}
-        <p className="text-xs mt-4 text-center" style={{ color: 'var(--color-text-muted)' }}>
+        {/* Rodapé com dica de atalho (só faz sentido com teclado) */}
+        <p className="hidden md:block text-xs mt-5 text-center" style={{ color: 'var(--color-text-muted)' }}>
           Dica: pressione <kbd className="px-1 border rounded">/</kbd> para buscar,{' '}
           <kbd className="px-1 border rounded">Esc</kbd> para fechar o modal.
         </p>
@@ -440,6 +478,23 @@ export function Dashboard() {
         <PacienteModal paciente={pacienteSelecionado} onClose={fecharModal} onSaved={carregarPacientes} />
       )}
     </div>
+  );
+}
+
+function tituloStatus(status: Paciente['status']): string {
+  if (status === 'expirando') return 'Vence em até 3 dias';
+  if (status === 'expirado') return 'Plano vencido — o bot bloqueia mensagens';
+  return 'Plano vigente';
+}
+
+function Th({ children, align = 'left' }: { children: React.ReactNode; align?: 'left' | 'right' }) {
+  return (
+    <th
+      className={`${align === 'right' ? 'text-right' : 'text-left'} px-4 py-3 text-xs font-semibold uppercase tracking-wide`}
+      style={{ color: 'var(--color-text-secondary)' }}
+    >
+      {children}
+    </th>
   );
 }
 
@@ -456,12 +511,18 @@ function SortableTh({
 }) {
   return (
     <th
-      onClick={onClick}
-      className="text-left px-4 py-3 font-semibold cursor-pointer select-none hover:opacity-80"
-      style={{ color: ativo ? 'var(--color-floresta-dark)' : 'var(--color-text-secondary)' }}
+      aria-sort={ativo ? (seta.includes('▲') ? 'ascending' : 'descending') : undefined}
+      className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide"
     >
-      {children}
-      {seta}
+      <button
+        type="button"
+        onClick={onClick}
+        className="uppercase tracking-wide font-semibold cursor-pointer select-none hover:opacity-80"
+        style={{ color: ativo ? 'var(--color-floresta)' : 'var(--color-text-secondary)' }}
+      >
+        {children}
+        {seta}
+      </button>
     </th>
   );
 }
@@ -474,16 +535,15 @@ function FiltroDietaSelect({
   onChange: (v: FiltroDieta) => void;
 }) {
   return (
-    <div className="flex items-center gap-2">
-      <label htmlFor="filtro-dieta" className="text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+    <div className="flex flex-1 sm:flex-none items-center gap-2">
+      <label htmlFor="filtro-dieta" className="text-xs font-medium whitespace-nowrap" style={{ color: 'var(--color-text-secondary)' }}>
         Bot:
       </label>
       <select
         id="filtro-dieta"
         value={value}
         onChange={(e) => onChange(e.target.value as FiltroDieta)}
-        className="border rounded-md px-2 py-1.5 text-sm bg-white"
-        style={{ borderColor: 'var(--color-border-subtle)' }}
+        className="campo min-h-[44px] sm:w-auto cursor-pointer"
       >
         <option value="todas">Todos</option>
         <option value="indexado">Pronto</option>
@@ -506,13 +566,13 @@ function EmptyState({
 }) {
   return (
     <div
-      className="text-center py-16 rounded-xl bg-white"
-      style={{ border: '1px solid var(--color-border-subtle)' }}
+      className="text-center px-6 py-14 rounded-2xl bg-white/80"
+      style={{ border: '1px solid var(--color-border-subtle)', boxShadow: 'var(--shadow-card)' }}
     >
-      <p className="text-lg font-medium mb-1" style={{ color: 'var(--color-text-primary)' }}>
+      <p className="font-display text-2xl mb-1" style={{ color: 'var(--color-floresta)' }}>
         {titulo}
       </p>
-      <p className="text-sm mb-4" style={{ color: 'var(--color-text-muted)' }}>
+      <p className="text-sm mb-5" style={{ color: 'var(--color-text-muted)' }}>
         {descricao}
       </p>
       {acao}
@@ -523,13 +583,15 @@ function EmptyState({
 function SkeletonTable() {
   return (
     <div
-      className="bg-white rounded-xl overflow-hidden"
+      className="bg-white rounded-2xl overflow-hidden"
       style={{ border: '1px solid var(--color-border-subtle)' }}
+      aria-busy="true"
+      aria-label="Carregando pacientes"
     >
       {[...Array(4)].map((_, i) => (
         <div
           key={i}
-          className="h-12 animate-pulse"
+          className="h-14 animate-pulse"
           style={{
             background: i % 2 ? 'var(--color-bg-muted)' : 'white',
             borderTop: i === 0 ? 'none' : '1px solid var(--color-border-subtle)',
