@@ -465,3 +465,29 @@ describe('água combinada em garrafas', () => {
     expect(removerMencaoAgua('almocei marmita de frango e 2 garrafas de água')).toBe('almocei marmita de frango');
   });
 });
+
+describe('classificarIntencaoRapida — peso', () => {
+  it.each([
+    'pesei 78,4',
+    'me pesei hoje: 79kg',
+    'meu peso hoje é 79',
+    'peso 80,2',
+    'tô com 80kg na balança',
+    'balança marcou 77,9',
+    'Pesei 78.4 kg',
+  ])('"%s" vira peso', (texto) => {
+    expect(classificarIntencaoRapida(texto)).toBe('peso');
+  });
+
+  it.each([
+    'comi 1kg de melancia',
+    'quanto eu devo pesar?',
+    'quero perder peso',
+    'quero baixar meu peso pra 70',
+    'meu peso ideal é 65',
+    'posso comer pão? estou acima do peso',
+    'pesei 78 hoje, tá bom?',
+  ])('"%s" NÃO vira peso', (texto) => {
+    expect(classificarIntencaoRapida(texto)).not.toBe('peso');
+  });
+});

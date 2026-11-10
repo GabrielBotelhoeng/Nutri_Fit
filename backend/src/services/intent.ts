@@ -6,7 +6,7 @@ import { comBackoff } from '../utils/retry';
 
 const claude = new Anthropic({ apiKey: env.CLAUDE_API_KEY });
 
-export type Intent = 'registrar' | 'corrigir' | 'agua' | 'consulta' | 'substituicao' | 'saldo';
+export type Intent = 'registrar' | 'corrigir' | 'agua' | 'consulta' | 'substituicao' | 'saldo' | 'peso';
 
 export interface IntentResult {
   intent: Intent;
@@ -62,10 +62,33 @@ const NUTRIENTE_DE_ALIMENTO_RE =
 // Marcadores de que a pergunta é sobre o próprio consumo ("tem no MEU dia", "EU comi").
 const CONSUMO_PROPRIO_RE = /(?:^|\W)(?:eu|meu|minha|hoje|hj|consumi|comi|bebi|tomei)(?=\W|$)/i;
 
+// Pesagem exige marcador explícito: "kg" sozinho é comida ("comi 1kg de melancia").
+// \b não é Unicode-safe ("balança"); usar (?:^|\W)/(?=\W|$).
+const PESO_MARCADOR_RE =
+  /(?:^|\W)(pesei|meu\s+peso|peso\s+(?:hoje|atual|agora|de\s+hoje)|balan[çc]a)(?=\W|$)|^peso\s*:?\s*\d/i;
+const PESO_NUMERO_RE = /\d+(?:[.,]\d+)?/;
+// Objetivo/meta não é pesagem: "quero baixar meu peso pra 70", "meu peso ideal é 65".
+const PESO_OBJETIVO_RE =
+  /(?:^|\W)(quero|queria|meta|objetivo|chegar|baixar|perder|ganhar|emagrecer|ideal|devo|deveria|preciso)(?=\W|$)/i;
+
+function ehRegistroDePeso(t: string): boolean {
+  return (
+    !PERGUNTA_RE.test(t) &&
+    PESO_MARCADOR_RE.test(t) &&
+    PESO_NUMERO_RE.test(t) &&
+    !PESO_OBJETIVO_RE.test(t)
+  );
+}
+
 // Retorna Intent quando confiante; null quando deve consultar o Haiku.
 export function classificarIntencaoRapida(texto: string): Intent | null {
   const t = texto.trim().toLowerCase();
   if (t.length === 0) return null;
+
+  // Só fast-path: o Haiku nunca devolve 'peso'.
+  if (ehRegistroDePeso(t)) {
+    return 'peso';
+  }
 
   // Antes de SALDO_RE: "quanto de proteína tem o ovo?" também casa SALDO_RE.
   if (NUTRIENTE_DE_ALIMENTO_RE.test(t) && !CONSUMO_PROPRIO_RE.test(t)) {
