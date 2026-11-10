@@ -25,6 +25,7 @@ import { carregarAdesaoLista, obterFichaAdesao } from '../src/services/adesao';
 import { hojeLocal, somarDias } from '../src/utils/datas';
 
 const ULTIMA = 'rpc:ultima_refeicao_por_paciente';
+const ULTIMAS_PESAGENS = 'rpc:ultimas_pesagens_por_paciente';
 const hoje = hojeLocal();
 const horasAtras = (h: number): string => new Date(Date.now() - h * 3600_000).toISOString();
 
@@ -48,7 +49,8 @@ describe('carregarAdesaoLista', () => {
       error: null,
     };
     resultados[ULTIMA] = { data: [{ paciente_id: 'p1', ultima: horasAtras(3) }], error: null };
-    resultados.pesagens = {
+    // Só as 2 últimas por paciente (RPC): 90 dias em lote estourava o max_rows e cortava as mais novas.
+    resultados[ULTIMAS_PESAGENS] = {
       data: [
         { paciente_id: 'p1', data: somarDias(hoje, -8), peso_kg: '79.00' },
         { paciente_id: 'p1', data: somarDias(hoje, -1), peso_kg: '78.40' },

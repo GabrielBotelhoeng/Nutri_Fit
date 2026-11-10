@@ -116,8 +116,10 @@ function agruparPesagens(linhas: Linha[]): Map<string, PesagemAdesao[]> {
   return mapa;
 }
 
-// Uma consulta por fonte pro lote todo. Registros (≤ 7/paciente) e pesagens cabem no
-// max_rows (1000) do PostgREST até ~140 pacientes — folga para single-tenant.
+// Uma consulta por fonte pro lote todo. Registros têm ≤ 7 linhas/paciente (cabem no
+// max_rows de 1000 do PostgREST até ~140 pacientes); última refeição e pesagens vêm
+// de RPCs que já devolvem poucas linhas por paciente — buscar 90 dias de pesagens em
+// lote estourava o limite e cortava justamente as mais recentes, sem erro.
 // Falha → null: a lista de pacientes sai sem adesão em vez de quebrar.
 export async function carregarAdesaoLista(
   pacientes: PacienteParaAdesao[],
@@ -136,12 +138,8 @@ export async function carregarAdesaoLista(
         .gte('data', somarDias(hoje, -7))
         .lte('data', somarDias(hoje, -1)),
       ultimaRefeicaoPorPaciente(ids),
-      supabase
-        .from('pesagens')
-        .select('paciente_id, data, peso_kg')
-        .in('paciente_id', ids)
-        .gte('data', somarDias(hoje, -JANELA_PESAGENS_DIAS))
-        .order('data', { ascending: true }),
+      // Tendência só compara a última com a anterior: 2 por paciente bastam.
+      supabase.rpc('ultimas_pesagens_por_paciente', { ids, n: 2 }),
     ]);
     if (regs.error) throw new Error(regs.error.message);
     if (pesos.error) throw new Error(pesos.error.message);
