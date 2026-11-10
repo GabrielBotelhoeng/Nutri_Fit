@@ -20,7 +20,12 @@ vi.mock('@supabase/supabase-js', () => {
       resolve(resultados[table] ?? { data: [], error: null });
     return chain;
   }
-  return { createClient: vi.fn(() => ({ from: (t: string) => chainPara(t) })) };
+  return {
+    createClient: vi.fn(() => ({
+      from: (t: string) => chainPara(t),
+      rpc: (fn: string) => chainPara(`rpc:${fn}`),
+    })),
+  };
 });
 vi.mock('../src/services/evolution', () => ({ sendText }));
 
@@ -67,6 +72,9 @@ describe('horarioNaJanela', () => {
   });
 });
 
+// Máximo por paciente via RPC: buscar todas as refeições estourava o max_rows do PostgREST.
+const ULTIMA = 'rpc:ultima_refeicao_por_paciente';
+
 describe('dispararAlertas', () => {
   const paciente = {
     whatsapp: '5562999990000',
@@ -93,8 +101,8 @@ describe('dispararAlertas', () => {
     resultados.alertas_config = { data: [{ ...configBase, ultimo_reengajamento_em: null }], error: null };
     resultados.registros_diarios = { data: [], error: null };
     // Ativo: comeu há 4 h.
-    resultados.refeicoes = {
-      data: [{ paciente_id: 'p1', registrado_em: new Date(Date.now() - 4 * 3600_000).toISOString() }],
+    resultados[ULTIMA] = {
+      data: [{ paciente_id: 'p1', ultima: new Date(Date.now() - 4 * 3600_000).toISOString() }],
       error: null,
     };
   });
@@ -131,8 +139,8 @@ describe('dispararAlertas', () => {
   });
 
   it('almoço pulado quando já registrou refeição há menos de 1 h', async () => {
-    resultados.refeicoes = {
-      data: [{ paciente_id: 'p1', registrado_em: new Date(Date.now() - 20 * 60_000).toISOString() }],
+    resultados[ULTIMA] = {
+      data: [{ paciente_id: 'p1', ultima: new Date(Date.now() - 20 * 60_000).toISOString() }],
       error: null,
     };
     await dispararAlertas('12:15');
@@ -142,7 +150,7 @@ describe('dispararAlertas', () => {
   });
 
   it('inativo há dias recebe só o reengajamento no horário do almoço e marca a data', async () => {
-    resultados.refeicoes = { data: [], error: null };
+    resultados[ULTIMA] = { data: [], error: null };
     await dispararAlertas('12:15');
     expect(sendText).toHaveBeenCalledTimes(1);
     expect(sendText.mock.calls[0][1]).toContain('Sumiu?');
@@ -152,14 +160,14 @@ describe('dispararAlertas', () => {
   });
 
   it('inativo fora do horário do almoço não recebe nada', async () => {
-    resultados.refeicoes = { data: [], error: null };
+    resultados[ULTIMA] = { data: [], error: null };
     await dispararAlertas('07:00');
     expect(sendText).not.toHaveBeenCalled();
     expect(updates).toHaveLength(0);
   });
 
   it('falha ao carregar contexto mantém o comportamento antigo', async () => {
-    resultados.refeicoes = { data: null, error: { message: 'timeout' } };
+    resultados[ULTIMA] = { data: null, error: { message: 'timeout' } };
     await dispararAlertas('12:15');
     expect(sendText).toHaveBeenCalledTimes(3);
     expect(updates).toHaveLength(0);

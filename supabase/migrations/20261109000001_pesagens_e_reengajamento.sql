@@ -15,3 +15,17 @@ ALTER TABLE pesagens ENABLE ROW LEVEL SECURITY;
 
 -- Controle do reengajamento: uma mensagem por sequência de inatividade.
 ALTER TABLE alertas_config ADD COLUMN IF NOT EXISTS ultimo_reengajamento_em TIMESTAMPTZ;
+
+-- Última refeição por paciente, numa linha cada. Buscar as refeições cruas em lote
+-- estourava o max_rows do PostgREST (1000) e fazia paciente ativo parecer inativo.
+CREATE OR REPLACE FUNCTION ultima_refeicao_por_paciente(ids UUID[])
+RETURNS TABLE (paciente_id UUID, ultima TIMESTAMPTZ)
+LANGUAGE sql STABLE
+AS $$
+  SELECT r.paciente_id, max(r.registrado_em) AS ultima
+  FROM refeicoes r
+  WHERE r.paciente_id = ANY(ids)
+  GROUP BY r.paciente_id;
+$$;
+REVOKE ALL ON FUNCTION ultima_refeicao_por_paciente(UUID[]) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION ultima_refeicao_por_paciente(UUID[]) TO service_role;

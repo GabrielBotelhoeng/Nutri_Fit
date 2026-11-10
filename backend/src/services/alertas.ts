@@ -179,21 +179,19 @@ export function decidirAlertas(ctx: ContextoDecisao): DecisaoAlertas {
   };
 }
 
-const BUSCA_REFEICOES_DIAS = 30;
-
 interface ContextoPacientes {
   aguaHoje: Map<string, number>;
   ultimaRefeicao: Map<string, Date>;
 }
 
-// Uma consulta por tabela pro lote inteiro (não N por paciente). Falha → null e o
-// disparo segue sem filtros: melhor lembrar demais do que deixar de lembrar.
-async function carregarContexto(ids: string[], agora: Date): Promise<ContextoPacientes | null> {
+// Uma consulta por fonte pro lote inteiro (não N por paciente), cada uma devolvendo
+// no máximo 1 linha por paciente — refeições cruas estouravam o max_rows do PostgREST.
+// Falha → null e o disparo segue sem filtros: melhor lembrar demais do que deixar de lembrar.
+async function carregarContexto(ids: string[]): Promise<ContextoPacientes | null> {
   try {
-    const desde = new Date(agora.getTime() - BUSCA_REFEICOES_DIAS * 24 * 3600_000).toISOString();
     const [regs, refs] = await Promise.all([
       supabase.from('registros_diarios').select('paciente_id, agua_ml').in('paciente_id', ids).eq('data', hojeLocal()),
-      supabase.from('refeicoes').select('paciente_id, registrado_em').in('paciente_id', ids).gte('registrado_em', desde),
+      supabase.rpc('ultima_refeicao_por_paciente', { ids }),
     ]);
     if (regs.error) throw new Error(regs.error.message);
     if (refs.error) throw new Error(refs.error.message);
@@ -203,10 +201,8 @@ async function carregarContexto(ids: string[], agora: Date): Promise<ContextoPac
       aguaHoje.set(r.paciente_id, Number(r.agua_ml) || 0);
     }
     const ultimaRefeicao = new Map<string, Date>();
-    for (const r of (refs.data ?? []) as Array<{ paciente_id: string; registrado_em: string }>) {
-      const em = new Date(r.registrado_em);
-      const atual = ultimaRefeicao.get(r.paciente_id);
-      if (!atual || em > atual) ultimaRefeicao.set(r.paciente_id, em);
+    for (const r of (refs.data ?? []) as Array<{ paciente_id: string; ultima: string | null }>) {
+      if (r.ultima) ultimaRefeicao.set(r.paciente_id, new Date(r.ultima));
     }
     return { aguaHoje, ultimaRefeicao };
   } catch (err) {
@@ -279,7 +275,7 @@ export async function dispararAlertas(horario: string): Promise<void> {
     return;
   }
 
-  const contexto = await carregarContexto(candidatos.map((c) => String(c.config.paciente_id)), agora);
+  const contexto = await carregarContexto(candidatos.map((c) => String(c.config.paciente_id)));
 
   let enviados = 0;
 
