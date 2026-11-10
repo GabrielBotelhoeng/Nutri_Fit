@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { env } from '../config/env';
 import { sendText } from './evolution';
 import { redactPhone, redactName } from '../utils/redact';
+import { hojeLocal } from '../utils/datas';
 
 const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
 
@@ -178,8 +179,45 @@ export function decidirAlertas(ctx: ContextoDecisao): DecisaoAlertas {
   };
 }
 
+const BUSCA_REFEICOES_DIAS = 30;
+
+interface ContextoPacientes {
+  aguaHoje: Map<string, number>;
+  ultimaRefeicao: Map<string, Date>;
+}
+
+// Uma consulta por tabela pro lote inteiro (não N por paciente). Falha → null e o
+// disparo segue sem filtros: melhor lembrar demais do que deixar de lembrar.
+async function carregarContexto(ids: string[], agora: Date): Promise<ContextoPacientes | null> {
+  try {
+    const desde = new Date(agora.getTime() - BUSCA_REFEICOES_DIAS * 24 * 3600_000).toISOString();
+    const [regs, refs] = await Promise.all([
+      supabase.from('registros_diarios').select('paciente_id, agua_ml').in('paciente_id', ids).eq('data', hojeLocal()),
+      supabase.from('refeicoes').select('paciente_id, registrado_em').in('paciente_id', ids).gte('registrado_em', desde),
+    ]);
+    if (regs.error) throw new Error(regs.error.message);
+    if (refs.error) throw new Error(refs.error.message);
+
+    const aguaHoje = new Map<string, number>();
+    for (const r of (regs.data ?? []) as Array<{ paciente_id: string; agua_ml: number | string | null }>) {
+      aguaHoje.set(r.paciente_id, Number(r.agua_ml) || 0);
+    }
+    const ultimaRefeicao = new Map<string, Date>();
+    for (const r of (refs.data ?? []) as Array<{ paciente_id: string; registrado_em: string }>) {
+      const em = new Date(r.registrado_em);
+      const atual = ultimaRefeicao.get(r.paciente_id);
+      if (!atual || em > atual) ultimaRefeicao.set(r.paciente_id, em);
+    }
+    return { aguaHoje, ultimaRefeicao };
+  } catch (err) {
+    console.error('[alertas] Falha ao carregar contexto (seguindo sem filtros):', err);
+    return null;
+  }
+}
+
 export async function dispararAlertas(horario: string): Promise<void> {
   console.log(`[alertas] Verificando alertas para horario ${horario}`);
+  const agora = new Date();
 
   // entrevista_dados vem junto pra calcular porcao de agua no disparo.
   const { data: configs, error } = await supabase
@@ -193,7 +231,8 @@ export async function dispararAlertas(horario: string): Promise<void> {
       horario_jantar,
       horarios_agua,
       horario_suplementos,
-      pacientes!inner(whatsapp, nome, ativo, entrevista_dados)
+      ultimo_reengajamento_em,
+      pacientes!inner(whatsapp, nome, ativo, created_at, entrevista_dados)
     `)
     .eq('ativo', true)
     .eq('pacientes.ativo', true);
@@ -208,50 +247,98 @@ export async function dispararAlertas(horario: string): Promise<void> {
     return;
   }
 
+  const candidatos = [];
+  for (const config of configs) {
+    const refeicoesCasadas = REFEICOES_KEYS.filter((k) =>
+      horarioNaJanela((config as unknown as Record<string, string | null>)[KEY_TO_COL[k]], horario),
+    );
+    const aguaArr = (config.horarios_agua as string[]) || [];
+    const aguaCasou = aguaArr.some((h) => horarioNaJanela(h, horario));
+    const supArr = (config.horario_suplementos as string[]) || [];
+    const suplementoCasou = supArr.some((h) => horarioNaJanela(h, horario));
+    if (refeicoesCasadas.length === 0 && !aguaCasou && !suplementoCasou) continue;
+
+    // Reengajamento sai no almoço (ou no 1º horário de refeição) pra não chegar de madrugada.
+    const horarioReengajamento =
+      config.horario_almoco ??
+      REFEICOES_KEYS.map((k) => (config as unknown as Record<string, string | null>)[KEY_TO_COL[k]]).find(Boolean) ??
+      null;
+
+    candidatos.push({
+      config,
+      aguaArr,
+      refeicoesCasadas,
+      aguaCasou,
+      suplementoCasou,
+      disparoDoReengajamento: horarioNaJanela(horarioReengajamento, horario),
+    });
+  }
+
+  if (candidatos.length === 0) {
+    console.log(`[alertas] Concluido — 0 alertas enviados para horario ${horario}`);
+    return;
+  }
+
+  const contexto = await carregarContexto(candidatos.map((c) => String(c.config.paciente_id)), agora);
+
   let enviados = 0;
 
-  for (const config of configs) {
-    const paciente = config.pacientes as unknown as {
+  for (const c of candidatos) {
+    const pacienteId = String(c.config.paciente_id);
+    const paciente = c.config.pacientes as unknown as {
       whatsapp: string;
       nome: string;
       ativo: boolean;
+      created_at: string;
       entrevista_dados: Record<string, unknown> | null;
     };
     const wpp = paciente.whatsapp;
+    const hidratacaoMl = Number(paciente.entrevista_dados?.['hidratacao_ml']) || 0;
 
-    const refeicoesParaEnviar: RefeicaoKey[] = [];
+    const decisao = contexto
+      ? decidirAlertas({
+          agora,
+          refeicoesCasadas: c.refeicoesCasadas,
+          aguaCasou: c.aguaCasou,
+          suplementoCasou: c.suplementoCasou,
+          disparoDoReengajamento: c.disparoDoReengajamento,
+          aguaHojeMl: contexto.aguaHoje.get(pacienteId) ?? 0,
+          metaAguaMl: hidratacaoMl,
+          ultimaRefeicaoEm: contexto.ultimaRefeicao.get(pacienteId) ?? null,
+          pacienteCriadoEm: new Date(paciente.created_at),
+          ultimoReengajamentoEm: c.config.ultimo_reengajamento_em
+            ? new Date(c.config.ultimo_reengajamento_em as string)
+            : null,
+        })
+      : { refeicoes: c.refeicoesCasadas, agua: c.aguaCasou, suplemento: c.suplementoCasou, reengajar: false };
 
-    if (horarioNaJanela(config.horario_cafe, horario))         refeicoesParaEnviar.push('cafe');
-    if (horarioNaJanela(config.horario_lanche_manha, horario)) refeicoesParaEnviar.push('lanche_manha');
-    if (horarioNaJanela(config.horario_almoco, horario))       refeicoesParaEnviar.push('almoco');
-    if (horarioNaJanela(config.horario_lanche_tarde, horario)) refeicoesParaEnviar.push('lanche_tarde');
-    if (horarioNaJanela(config.horario_jantar, horario))       refeicoesParaEnviar.push('jantar');
+    if (decisao.reengajar) {
+      await sendText(wpp, MENSAGEM_REENGAJAMENTO);
+      const { error: errUpd } = await supabase
+        .from('alertas_config')
+        .update({ ultimo_reengajamento_em: agora.toISOString() })
+        .eq('paciente_id', pacienteId);
+      if (errUpd) console.error('[alertas] Falha ao marcar reengajamento:', errUpd.message);
+      console.log(`[alertas] reengajamento enviado para ${redactName(paciente.nome)} (${redactPhone(wpp)})`);
+      enviados++;
+    }
 
-    const aguaArr = (config.horarios_agua as string[]) || [];
-    const aguaCasou = aguaArr.some((h) => horarioNaJanela(h, horario));
-
-    const supArr = (config.horario_suplementos as string[]) || [];
-    const suplementoCasou = supArr.some((h) => horarioNaJanela(h, horario));
-
-    if (refeicoesParaEnviar.length === 0 && !aguaCasou && !suplementoCasou) continue;
-
-    for (const tipo of refeicoesParaEnviar) {
+    for (const tipo of decisao.refeicoes) {
       await sendText(wpp, MENSAGENS_REFEICAO[tipo]);
       console.log(`[alertas] ${tipo} enviado para ${redactName(paciente.nome)} (${redactPhone(wpp)})`);
       enviados++;
     }
 
-    if (aguaCasou) {
-      const hidratacaoMl = Number(paciente.entrevista_dados?.['hidratacao_ml']) || 0;
-      const porcaoMl = aguaArr.length > 0 && hidratacaoMl > 0
-        ? Math.ceil(hidratacaoMl / aguaArr.length)
+    if (decisao.agua) {
+      const porcaoMl = c.aguaArr.length > 0 && hidratacaoMl > 0
+        ? Math.ceil(hidratacaoMl / c.aguaArr.length)
         : null;
       await sendText(wpp, mensagemAgua(porcaoMl));
       console.log(`[alertas] agua (${porcaoMl ?? 'porcao padrao'}ml) enviado para ${redactName(paciente.nome)} (${redactPhone(wpp)})`);
       enviados++;
     }
 
-    if (suplementoCasou) {
+    if (decisao.suplemento) {
       await sendText(wpp, MENSAGENS_REFEICAO['suplemento']);
       console.log(`[alertas] suplemento enviado para ${redactName(paciente.nome)} (${redactPhone(wpp)})`);
       enviados++;
