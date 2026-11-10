@@ -113,7 +113,10 @@ export function Dashboard() {
       else if (p.status === 'expirado') expirados++;
       if (p.adesao?.precisa_atencao) atencao++;
     }
-    return { total, ativos, expirando, expirados, atencao };
+    // Backend sem adesão (falha ou migration ausente) manda null em todos: "0" no card
+    // diria "ninguém precisa de atenção", que é mentira — mostra indisponível.
+    const adesaoIndisponivel = total > 0 && pacientes.every((p) => !p.adesao);
+    return { total, ativos, expirando, expirados, atencao, adesaoIndisponivel };
   }, [pacientes]);
 
   const pacientesVisiveis = useMemo(() => {
@@ -235,9 +238,9 @@ export function Dashboard() {
           <div className="col-span-2 md:col-span-1">
             <SummaryCard
               label="Atenção"
-              value={resumo.atencao}
-              hint="Sem registrar há 2+ dias ou adesão baixa"
-              tone={resumo.atencao > 0 ? 'danger' : 'neutral'}
+              value={resumo.adesaoIndisponivel ? '—' : resumo.atencao}
+              hint={resumo.adesaoIndisponivel ? 'Adesão indisponível no momento' : 'Sem registrar há 2+ dias ou adesão baixa'}
+              tone={!resumo.adesaoIndisponivel && resumo.atencao > 0 ? 'danger' : 'neutral'}
               active={filtroStatus === 'atencao'}
               onClick={() => setFiltroStatus('atencao')}
             />
