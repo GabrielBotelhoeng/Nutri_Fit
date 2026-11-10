@@ -281,4 +281,36 @@ describe('formatarMensagemRelatorio', () => {
     expect(msg).toContain('2450 kcal');
     expect(msg).toContain('790 kcal');
   });
+
+  it('inclui a linha de peso quando informada', () => {
+    const msg = formatarMensagemRelatorio({
+      nomePaciente: 'Ana',
+      dataInicio: '2026-03-29',
+      dataFim: '2026-04-04',
+      dias: diasBase,
+      metas,
+      mediaAtual: 1700,
+      mediaAnterior: 0,
+      streak: undefined,
+      incentivo: 'Continue firme!',
+      pesoLinha: '⚖️ *Peso:* 78,4 kg (−0,6 kg na semana)',
+    });
+    expect(msg).toContain('⚖️ *Peso:* 78,4 kg (−0,6 kg na semana)');
+    expect(msg.indexOf('⚖️')).toBeLessThan(msg.indexOf('💚 Continue firme!'));
+  });
+
+  it('sem pesoLinha não mostra nada de peso', () => {
+    const msg = formatarMensagemRelatorio({
+      nomePaciente: 'Ana',
+      dataInicio: '2026-03-29',
+      dataFim: '2026-04-04',
+      dias: diasBase,
+      metas,
+      mediaAtual: 1700,
+      mediaAnterior: 0,
+      streak: undefined,
+      incentivo: 'Continue firme!',
+    });
+    expect(msg).not.toContain('⚖️');
+  });
 });
