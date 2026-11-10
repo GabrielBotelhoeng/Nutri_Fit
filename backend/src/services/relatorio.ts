@@ -6,6 +6,7 @@ import { hojeLocal, somarDias } from '../utils/datas';
 import { obterMetas, type MacrosDiarios } from './calculos';
 import { calcularStreak, type StreakInfo } from './meal';
 import { redactName } from '../utils/redact';
+import { pesagensDesde, formatarLinhaPesoRelatorio } from './peso';
 
 const claude = new Anthropic({ apiKey: env.CLAUDE_API_KEY });
 const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
@@ -159,6 +160,7 @@ interface DadosMensagem {
   mediaAnterior: number;
   streak: StreakInfo | undefined;
   incentivo: string;
+  pesoLinha?: string;
 }
 
 export function formatarMensagemRelatorio(d: DadosMensagem): string {
@@ -236,6 +238,7 @@ export function formatarMensagemRelatorio(d: DadosMensagem): string {
     `• Carbo: ${Math.round(mC)}g / ${d.metas.carbo_g}g (${pctC}%)\n` +
     `• Gordura: ${Math.round(mG)}g / ${d.metas.gordura_g}g (${pctG}%)\n\n` +
     hidratacaoLinha +
+    (d.pesoLinha ? `\n${d.pesoLinha}` : '') +
     linhaStreakTop +
     `\n\n💚 ${d.incentivo}`
   );
@@ -321,6 +324,13 @@ export async function gerarRelatorioSemanal(): Promise<void> {
         delta_semana_pct: deltaPct,
       }).catch(() => 'Continue assim, uma refeição de cada vez! 💚');
 
+      // Peso é complemento: falha na busca não derruba o relatório.
+      const pesagens = await pesagensDesde(String(p.id), somarDias(hoje, -14)).catch((err) => {
+        console.error(`[relatorio] Falha ao buscar pesagens de ${redactName(p.nome as string)}:`, err);
+        return [];
+      });
+      const pesoLinha = formatarLinhaPesoRelatorio(pesagens, hoje);
+
       const mensagem = formatarMensagemRelatorio({
         nomePaciente: String(p.nome),
         dataInicio: inicioSemanaAtual,
@@ -331,6 +341,7 @@ export async function gerarRelatorioSemanal(): Promise<void> {
         mediaAnterior,
         streak,
         incentivo,
+        pesoLinha,
       });
 
       await sendText(String(p.whatsapp), mensagem);
