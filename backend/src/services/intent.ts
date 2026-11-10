@@ -71,12 +71,18 @@ const PESO_NUMERO_RE = /\d+(?:[.,]\d+)?/;
 const PESO_OBJETIVO_RE =
   /(?:^|\W)(quero|queria|meta|objetivo|chegar|baixar|perder|ganhar|emagrecer|ideal|devo|deveria|preciso)(?=\W|$)/i;
 
+// Paciente de nutri pesa COMIDA na balança: "pesei 120g de frango" é refeição, não pesagem.
+const PESO_UNIDADE_ALIMENTO_RE = /\d+(?:[.,]\d+)?\s*(g|gr|gramas?|ml|litros?|copos?)(?=\W|$)/i;
+
 function ehRegistroDePeso(t: string): boolean {
   return (
     !PERGUNTA_RE.test(t) &&
     PESO_MARCADOR_RE.test(t) &&
     PESO_NUMERO_RE.test(t) &&
-    !PESO_OBJETIVO_RE.test(t)
+    !PESO_OBJETIVO_RE.test(t) &&
+    !PESO_UNIDADE_ALIMENTO_RE.test(t) &&
+    // Mensagem mista ("pesei 78, no café comi 2 ovos") segue o fluxo de refeição.
+    !VERBO_REGISTRO_RE.test(t)
   );
 }
 

@@ -12,7 +12,17 @@ export interface Pesagem {
 export const MSG_PESO_INVALIDO =
   '⚖️ Não entendi o peso. Me manda só o número, ex: "pesei 78,5".';
 
-const round1 = (n: number): number => Math.round(n * 10) / 10;
+// Primeiro número plausível como peso corporal (30–300). Pegar o primeiro número da
+// frase errava em "hoje às 7h pesei 78,4" (lia 7).
+export function extrairPesoDaMensagem(texto: string): number | null {
+  for (const m of texto.matchAll(/\d+(?:[.,]\d+)?/g)) {
+    const n = parseFloat(m[0].replace(',', '.'));
+    if (n >= 30 && n <= 300) return n;
+  }
+  return null;
+}
+
+const round1 =(n: number): number => Math.round(n * 10) / 10;
 const fmtKg = (n: number): string => n.toFixed(1).replace('.', ',');
 // "−" (U+2212) em vez de "-": no WhatsApp o hífen some no meio do texto.
 const fmtDelta = (d: number): string => `${d > 0 ? '+' : '−'}${fmtKg(Math.abs(d))}`;

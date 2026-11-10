@@ -491,3 +491,14 @@ describe('classificarIntencaoRapida — peso', () => {
     expect(classificarIntencaoRapida(texto)).not.toBe('peso');
   });
 });
+
+describe('classificarIntencaoRapida — comida pesada na balança não é peso corporal', () => {
+  it.each([
+    'comi 150g de arroz, pesei na balança',
+    'pesei 120g de frango no almoço',
+    'almocei 200g de frango pesado na balança',
+    'pesei 78 hoje, no café comi 2 ovos',
+  ])('"%s" NÃO vira peso', (texto) => {
+    expect(classificarIntencaoRapida(texto)).not.toBe('peso');
+  });
+});

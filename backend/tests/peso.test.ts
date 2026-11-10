@@ -142,3 +142,23 @@ describe('parsePeso nas mensagens de pesagem', () => {
     expect(parsePeso('pesei 450')).toBeNull();
   });
 });
+
+import { extrairPesoDaMensagem } from '../src/services/peso';
+
+describe('extrairPesoDaMensagem', () => {
+  it.each([
+    ['pesei 78,4', 78.4],
+    ['Pesei 78.4 kg', 78.4],
+    ['hoje às 7h pesei 78,4', 78.4],
+    ['dia 10 me pesei: 79kg', 79],
+    ['balança marcou 77,9', 77.9],
+  ])('"%s" → %d', (texto, esperado) => {
+    expect(extrairPesoDaMensagem(texto)).toBe(esperado);
+  });
+
+  it('sem número entre 30 e 300 devolve null', () => {
+    expect(extrairPesoDaMensagem('pesei 12')).toBeNull();
+    expect(extrairPesoDaMensagem('pesei 450')).toBeNull();
+    expect(extrairPesoDaMensagem('pesei hoje')).toBeNull();
+  });
+});

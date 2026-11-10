@@ -46,7 +46,7 @@ import {
   ConversaMensagem,
 } from './conversaHistorico';
 import { hojeLocal } from '../utils/datas';
-import { registrarPeso, formatarRespostaPeso, MSG_PESO_INVALIDO } from './peso';
+import { registrarPeso, formatarRespostaPeso, extrairPesoDaMensagem, MSG_PESO_INVALIDO } from './peso';
 
 const claude = new Anthropic({ apiKey: env.CLAUDE_API_KEY });
 
@@ -1176,7 +1176,7 @@ export async function processarMensagem(phone: string, texto: string): Promise<v
   }
 
   if (intent === 'peso') {
-    const pesoKg = parsePeso(texto);
+    const pesoKg = extrairPesoDaMensagem(texto);
     if (pesoKg === null) {
       await sendText(phone, MSG_PESO_INVALIDO);
       return;
