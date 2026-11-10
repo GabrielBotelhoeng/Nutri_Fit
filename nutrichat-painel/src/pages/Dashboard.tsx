@@ -11,6 +11,7 @@ import { PLANO_LABELS, formatarDataBR } from '../lib/planos';
 import { Logo } from '../components/Logo';
 import type { ResumoAdesao } from '../lib/adesao';
 import { BarraAdesao, UltimoRegistro, PesoResumo } from '../components/AdesaoIndicadores';
+import { AdesaoModal } from '../components/AdesaoModal';
 
 interface Paciente {
   id: string;
@@ -181,6 +182,9 @@ export function Dashboard() {
     setModalAberto(false);
     setPacienteSelecionado(undefined);
   }
+
+  // Estável: o modal reinstala o listener de Esc quando onClose muda.
+  const fecharFicha = useCallback(() => setFichaPaciente(null), []);
 
   function limparFiltros() {
     setBusca('');
@@ -552,6 +556,8 @@ export function Dashboard() {
       {modalAberto && (
         <PacienteModal paciente={pacienteSelecionado} onClose={fecharModal} onSaved={carregarPacientes} />
       )}
+
+      {fichaPaciente && <AdesaoModal paciente={fichaPaciente} onClose={fecharFicha} />}
     </div>
   );
 }
