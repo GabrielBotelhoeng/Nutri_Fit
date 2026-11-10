@@ -9,6 +9,9 @@ import { Button } from '../components/Button';
 import { SummaryCard } from '../components/SummaryCard';
 import { PLANO_LABELS, formatarDataBR } from '../lib/planos';
 import { Logo } from '../components/Logo';
+import type { ResumoAdesao } from '../lib/adesao';
+import { BarraAdesao, UltimoRegistro, PesoResumo } from '../components/AdesaoIndicadores';
+import { AdesaoModal } from '../components/AdesaoModal';
 
 interface Paciente {
   id: string;
@@ -19,11 +22,12 @@ interface Paciente {
   ativo: boolean;
   status: 'ativo' | 'expirando' | 'expirado';
   rag_status: RagStatus;
+  adesao: ResumoAdesao | null;
 }
 
-type OrdemCampo = 'nome' | 'data_expiracao' | 'status' | 'rag_status';
+type OrdemCampo = 'nome' | 'data_expiracao' | 'status' | 'rag_status' | 'adesao';
 type OrdemDir = 'asc' | 'desc';
-type FiltroStatus = 'todos' | 'ativo' | 'expirando' | 'expirado';
+type FiltroStatus = 'todos' | 'ativo' | 'expirando' | 'expirado' | 'atencao';
 type FiltroDieta = 'todas' | 'indexado' | 'processando' | 'falhou' | 'sem_dieta';
 
 // Pesos para ordenacao categorica — maior = mais "saudavel".
@@ -53,6 +57,7 @@ export function Dashboard() {
   const [ordemCampo, setOrdemCampo] = useState<OrdemCampo>('nome');
   const [ordemDir, setOrdemDir] = useState<OrdemDir>('asc');
   const [ultimaAtualizacao, setUltimaAtualizacao] = useState<Date | null>(null);
+  const [fichaPaciente, setFichaPaciente] = useState<{ id: string; nome: string } | null>(null);
 
   const buscaRef = useRef<HTMLInputElement>(null);
 
@@ -85,7 +90,7 @@ export function Dashboard() {
   // Atalho "/" foca a busca. Ignora quando ja esta digitando em input.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== '/' || modalAberto) return;
+      if (e.key !== '/' || modalAberto || fichaPaciente) return;
       const el = document.activeElement;
       const tag = el?.tagName?.toLowerCase();
       if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
@@ -94,26 +99,35 @@ export function Dashboard() {
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [modalAberto]);
+  }, [modalAberto, fichaPaciente]);
 
   const resumo = useMemo(() => {
     const total = pacientes.length;
     let ativos = 0;
     let expirando = 0;
     let expirados = 0;
+    let atencao = 0;
     for (const p of pacientes) {
       if (p.status === 'ativo') ativos++;
       else if (p.status === 'expirando') expirando++;
       else if (p.status === 'expirado') expirados++;
+      if (p.adesao?.precisa_atencao) atencao++;
     }
-    return { total, ativos, expirando, expirados };
+    // Backend sem adesão (falha ou migration ausente) manda null em todos: "0" no card
+    // diria "ninguém precisa de atenção", que é mentira — mostra indisponível.
+    const adesaoIndisponivel = total > 0 && pacientes.every((p) => !p.adesao);
+    return { total, ativos, expirando, expirados, atencao, adesaoIndisponivel };
   }, [pacientes]);
 
   const pacientesVisiveis = useMemo(() => {
     const termo = busca.trim().toLowerCase();
     const apenasDigitosBusca = termo.replace(/\D/g, '');
     const filtrados = pacientes.filter((p) => {
-      if (filtroStatus !== 'todos' && p.status !== filtroStatus) return false;
+      if (filtroStatus === 'atencao') {
+        if (!p.adesao?.precisa_atencao) return false;
+      } else if (filtroStatus !== 'todos' && p.status !== filtroStatus) {
+        return false;
+      }
       if (filtroDieta !== 'todas' && p.rag_status !== filtroDieta) return false;
       if (!termo) return true;
       if (p.nome.toLowerCase().includes(termo)) return true;
@@ -135,6 +149,10 @@ export function Dashboard() {
           break;
         case 'rag_status':
           diff = ragPeso[a.rag_status] - ragPeso[b.rag_status];
+          break;
+        case 'adesao':
+          // Sem dado (null) vai pro fim na ordem crescente de "quem precisa de atenção".
+          diff = (a.adesao?.dias_com_registro_7d ?? 99) - (b.adesao?.dias_com_registro_7d ?? 99);
           break;
       }
       return diff * sinal;
@@ -167,6 +185,9 @@ export function Dashboard() {
     setModalAberto(false);
     setPacienteSelecionado(undefined);
   }
+
+  // Estável: o modal reinstala o listener de Esc quando onClose muda.
+  const fecharFicha = useCallback(() => setFichaPaciente(null), []);
 
   function limparFiltros() {
     setBusca('');
@@ -213,7 +234,17 @@ export function Dashboard() {
         </div>
 
         {/* Cards de resumo — também funcionam como filtro de status */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
+          <div className="col-span-2 md:col-span-1">
+            <SummaryCard
+              label="Atenção"
+              value={resumo.adesaoIndisponivel ? '—' : resumo.atencao}
+              hint={resumo.adesaoIndisponivel ? 'Adesão indisponível no momento' : 'Sem registrar há 2+ dias ou adesão baixa'}
+              tone={!resumo.adesaoIndisponivel && resumo.atencao > 0 ? 'danger' : 'neutral'}
+              active={filtroStatus === 'atencao'}
+              onClick={() => setFiltroStatus('atencao')}
+            />
+          </div>
           <SummaryCard
             label="Total"
             value={resumo.total}
@@ -362,12 +393,9 @@ export function Dashboard() {
             <ul className="md:hidden flex flex-col gap-3">
               {pacientesVisiveis.map((p) => (
                 <li key={p.id}>
-                  <button
-                    type="button"
-                    onClick={() => abrirEdicao(p)}
-                    className="w-full text-left bg-white rounded-2xl p-4 cursor-pointer transition active:scale-[0.99]"
+                  <div
+                    className="bg-white rounded-2xl p-4"
                     style={{ border: '1px solid var(--color-border-subtle)', boxShadow: 'var(--shadow-card)' }}
-                    aria-label={`Editar ${p.nome}`}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -385,13 +413,36 @@ export function Dashboard() {
                       <span aria-hidden style={{ color: 'var(--color-border-subtle)' }}>•</span>
                       <span>Expira em {formatarDataBR(p.data_expiracao)}</span>
                     </div>
+                    {p.adesao && (
+                      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
+                        <BarraAdesao dias={p.adesao.dias_com_registro_7d} />
+                        <UltimoRegistro adesao={p.adesao} />
+                        <PesoResumo adesao={p.adesao} />
+                      </div>
+                    )}
                     <div className="mt-3 flex items-center justify-between gap-3">
                       <RagBadge status={p.rag_status} />
-                      <span className="text-sm font-medium" style={{ color: 'var(--color-medio)' }}>
-                        Editar →
-                      </span>
+                      <div className="flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setFichaPaciente({ id: p.id, nome: p.nome })}
+                          className="min-h-[44px]"
+                        >
+                          Adesão
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => abrirEdicao(p)}
+                          className="min-h-[44px]"
+                          aria-label={`Editar ${p.nome}`}
+                        >
+                          Editar
+                        </Button>
+                      </div>
                     </div>
-                  </button>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -401,14 +452,17 @@ export function Dashboard() {
               className="hidden md:block bg-white rounded-2xl overflow-x-auto"
               style={{ border: '1px solid var(--color-border-subtle)', boxShadow: 'var(--shadow-card)' }}
             >
-              <table className="w-full min-w-[760px] text-sm whitespace-nowrap">
+              <table className="w-full min-w-[920px] text-sm whitespace-nowrap">
                 <thead>
                   <tr style={{ background: 'var(--color-bg-muted)' }}>
                     <SortableTh ativo={ordemCampo === 'nome'} onClick={() => alternarOrdem('nome')} seta={setaOrdem('nome')}>
                       Nome
                     </SortableTh>
-                    <Th>WhatsApp</Th>
-                    <Th>Plano</Th>
+                    <SortableTh ativo={ordemCampo === 'adesao'} onClick={() => alternarOrdem('adesao')} seta={setaOrdem('adesao')}>
+                      Adesão 7d
+                    </SortableTh>
+                    <Th>Último registro</Th>
+                    <Th>Peso</Th>
                     <SortableTh
                       ativo={ordemCampo === 'data_expiracao'}
                       onClick={() => alternarOrdem('data_expiracao')}
@@ -436,17 +490,39 @@ export function Dashboard() {
                       className="transition-colors hover:bg-[color:var(--color-bg-muted)]"
                       style={{ borderTop: '1px solid var(--color-border-subtle)' }}
                     >
-                      <td className="px-4 py-3 font-medium" style={{ color: 'var(--color-text-primary)' }}>
-                        {p.nome}
+                      <td className="px-4 py-3 font-medium">
+                        <button
+                          type="button"
+                          onClick={() => setFichaPaciente({ id: p.id, nome: p.nome })}
+                          className="underline-offset-4 hover:underline cursor-pointer text-left"
+                          style={{ color: 'var(--color-text-primary)' }}
+                          title="Ver adesão"
+                        >
+                          {p.nome}
+                        </button>
+                        {/* WhatsApp abaixo do nome: libera uma coluna para Ações caber sem rolagem. */}
+                        <p className="text-xs font-normal tabular-nums" style={{ color: 'var(--color-text-muted)' }}>
+                          {formatarWhatsappBR(p.whatsapp)}
+                        </p>
                       </td>
-                      <td className="px-4 py-3 tabular-nums" style={{ color: 'var(--color-text-secondary)' }}>
-                        {formatarWhatsappBR(p.whatsapp)}
+                      <td className="px-4 py-3">
+                        {p.adesao ? (
+                          <BarraAdesao dias={p.adesao.dias_com_registro_7d} />
+                        ) : (
+                          <span style={{ color: 'var(--color-text-muted)' }}>—</span>
+                        )}
                       </td>
-                      <td className="px-4 py-3" style={{ color: 'var(--color-text-secondary)' }}>
-                        {PLANO_LABELS[p.plano as keyof typeof PLANO_LABELS] ?? p.plano}
+                      <td className="px-4 py-3 text-sm">
+                        <UltimoRegistro adesao={p.adesao} />
+                      </td>
+                      <td className="px-4 py-3 text-sm">
+                        <PesoResumo adesao={p.adesao} />
                       </td>
                       <td className="px-4 py-3 tabular-nums" style={{ color: 'var(--color-text-secondary)' }}>
                         {formatarDataBR(p.data_expiracao)}
+                        <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                          {PLANO_LABELS[p.plano as keyof typeof PLANO_LABELS] ?? p.plano}
+                        </p>
                       </td>
                       <td className="px-4 py-3">
                         <StatusBadge status={p.status} title={tituloStatus(p.status)} />
@@ -455,9 +531,14 @@ export function Dashboard() {
                         <RagBadge status={p.rag_status} />
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <Button variant="ghost" size="sm" onClick={() => abrirEdicao(p)}>
-                          Editar
-                        </Button>
+                        <div className="inline-flex gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => setFichaPaciente({ id: p.id, nome: p.nome })}>
+                            Adesão
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => abrirEdicao(p)}>
+                            Editar
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -477,6 +558,8 @@ export function Dashboard() {
       {modalAberto && (
         <PacienteModal paciente={pacienteSelecionado} onClose={fecharModal} onSaved={carregarPacientes} />
       )}
+
+      {fichaPaciente && <AdesaoModal paciente={fichaPaciente} onClose={fecharFicha} />}
     </div>
   );
 }

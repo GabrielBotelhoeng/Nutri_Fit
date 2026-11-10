@@ -10,6 +10,7 @@ import {
   salvarHorariosDieta,
 } from '../services/rag';
 import { enviarBoasVindas } from '../services/agent';
+import { carregarAdesaoLista, obterFichaAdesao } from '../services/adesao';
 
 export const pacientesRouter = Router();
 
@@ -147,7 +148,7 @@ pacientesRouter.post('/', upload.single('dieta'), async (req: Request, res: Resp
 pacientesRouter.get('/', async (_req: Request, res: Response) => {
   const { data: pacientes, error } = await supabase
     .from('pacientes')
-    .select('id, nome, whatsapp, plano, data_expiracao, ativo, created_at')
+    .select('id, nome, whatsapp, plano, data_expiracao, ativo, created_at, peso_inicial:entrevista_dados->peso_kg')
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -189,12 +190,27 @@ pacientesRouter.get('/', async (_req: Request, res: Response) => {
   }
 
   const lista = (pacientes ?? []).map((p) => ({
-    ...p,
+    id: p.id,
+    nome: p.nome,
+    whatsapp: p.whatsapp,
+    plano: p.plano,
+    data_expiracao: p.data_expiracao,
+    ativo: p.ativo,
+    created_at: p.created_at,
     status: calcularStatus(p),
     rag_status: ragStatusPorPaciente.get(p.id) ?? 'sem_dieta',
   }));
 
-  res.json(lista);
+  const adesao = await carregarAdesaoLista(
+    (pacientes ?? []).map((p, i) => ({
+      id: p.id,
+      created_at: p.created_at,
+      expirado: lista[i].status === 'expirado',
+      peso_inicial_kg: Number((p as { peso_inicial?: unknown }).peso_inicial) || null,
+    })),
+  );
+
+  res.json(lista.map((p) => ({ ...p, adesao: adesao?.get(p.id) ?? null })));
 });
 
 pacientesRouter.patch('/:id', async (req: Request, res: Response) => {
@@ -219,6 +235,20 @@ pacientesRouter.patch('/:id', async (req: Request, res: Response) => {
   }
 
   res.json({ sucesso: true });
+});
+
+pacientesRouter.get('/:id/adesao', async (req: Request, res: Response) => {
+  try {
+    const ficha = await obterFichaAdesao(req.params.id);
+    if (!ficha) {
+      res.status(404).json({ error: 'Paciente não encontrado' });
+      return;
+    }
+    res.json(ficha);
+  } catch (err) {
+    console.error('[pacientes] Erro ao montar ficha de adesão:', err);
+    res.status(500).json({ error: 'Falha ao carregar a adesão do paciente' });
+  }
 });
 
 pacientesRouter.get('/:id/dieta', async (req: Request, res: Response) => {
