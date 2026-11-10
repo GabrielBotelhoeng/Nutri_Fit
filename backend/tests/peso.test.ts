@@ -116,3 +116,29 @@ describe('registrarPeso', () => {
     expect(r.anterior).toBeNull();
   });
 });
+
+vi.mock('@anthropic-ai/sdk', () => ({
+  default: class {
+    messages = { create: vi.fn() };
+  },
+}));
+vi.mock('../src/services/evolution', () => ({ sendText: vi.fn() }));
+vi.mock('../src/services/rag', () => ({ query: vi.fn() }));
+
+import { parsePeso } from '../src/services/agent';
+
+describe('parsePeso nas mensagens de pesagem', () => {
+  it.each([
+    ['pesei 78,4', 78.4],
+    ['Pesei 78.4 kg', 78.4],
+    ['me pesei hoje: 79kg', 79],
+    ['balança marcou 77,9', 77.9],
+  ])('"%s" → %d', (texto, esperado) => {
+    expect(parsePeso(texto)).toBe(esperado);
+  });
+
+  it('fora de 30–300 devolve null', () => {
+    expect(parsePeso('pesei 12')).toBeNull();
+    expect(parsePeso('pesei 450')).toBeNull();
+  });
+});

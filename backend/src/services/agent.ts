@@ -46,6 +46,7 @@ import {
   ConversaMensagem,
 } from './conversaHistorico';
 import { hojeLocal } from '../utils/datas';
+import { registrarPeso, formatarRespostaPeso, MSG_PESO_INVALIDO } from './peso';
 
 const claude = new Anthropic({ apiKey: env.CLAUDE_API_KEY });
 
@@ -1172,6 +1173,24 @@ export async function processarMensagem(phone: string, texto: string): Promise<v
       await registrarAguaContador(paciente.id, aguaMl);
     }
     textoParaRefeicao = removerMencaoAgua(texto);
+  }
+
+  if (intent === 'peso') {
+    const pesoKg = parsePeso(texto);
+    if (pesoKg === null) {
+      await sendText(phone, MSG_PESO_INVALIDO);
+      return;
+    }
+    try {
+      const { anterior } = await registrarPeso(paciente.id, pesoKg);
+      // Peso da entrevista é o ponto de partida. Metas NÃO são recalculadas (decisão do nutri).
+      const inicialKg = Number(dadosEstado['peso_kg']) || null;
+      await sendText(phone, formatarRespostaPeso(pesoKg, anterior, inicialKg));
+    } catch (err) {
+      console.error('[agent] Falha ao registrar peso:', err);
+      await sendText(phone, '⚖️ Não consegui salvar seu peso agora. Tenta de novo daqui a pouco?');
+    }
+    return;
   }
 
   if (intent === 'agua') {
